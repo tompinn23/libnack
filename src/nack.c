@@ -306,9 +306,10 @@ void nack__emit_mouse_button(nack_window *w, int button, bool down, double x, do
         uint64_t now = nack_time_ns();
         double ddx = x - w->last_click_x;
         double ddy = y - w->last_click_y;
-        bool near = (ddx * ddx + ddy * ddy) <=
-                    (NACK_DOUBLE_CLICK_SLOP * NACK_DOUBLE_CLICK_SLOP);
-        if (button == w->last_click_button && near &&
+        /* Not named `near`: windows.h still defines that as a macro. */
+        bool within_slop = (ddx * ddx + ddy * ddy) <=
+                           (NACK_DOUBLE_CLICK_SLOP * NACK_DOUBLE_CLICK_SLOP);
+        if (button == w->last_click_button && within_slop &&
             now - w->last_click_time_ns <= NACK_DOUBLE_CLICK_NS) {
             w->click_count++;
         } else {
