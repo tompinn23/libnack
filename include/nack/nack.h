@@ -340,6 +340,13 @@ NACK_API void nack_framebuffer_desc_defaults(nack_framebuffer_desc *desc);
 /* Windows                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * Creates a window. On Wayland the window does not become visible until a
+ * frame has been presented to it, because a surface with no committed buffer
+ * is never mapped; X11 and Win32 will show an empty window instead. Present at
+ * least one frame (nack_gl_swap_buffers) after creating the window, or it will
+ * appear to do nothing on a Wayland session.
+ */
 NACK_API nack_window *nack_window_create(const nack_window_desc *desc);
 NACK_API void         nack_window_destroy(nack_window *window);
 

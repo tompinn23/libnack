@@ -11,3 +11,5 @@ function(nack_example name)
 endfunction()
 
 nack_example(hello_window)
+nack_example(gl_triangle)
+nack_example(text_grid)

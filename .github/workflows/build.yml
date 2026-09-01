@@ -1,0 +1,102 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: xcb + wayland
+            flags: ""
+          - name: xcb only
+            flags: "-DNACK_ENABLE_WAYLAND=OFF"
+          - name: wayland only
+            flags: "-DNACK_ENABLE_XCB=OFF"
+          - name: pure xcb (no Xlib fallback)
+            flags: "-DNACK_ENABLE_WAYLAND=OFF -DNACK_XCB_XLIB_FALLBACK=OFF"
+    name: linux (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build \
+            libxcb1-dev libx11-xcb-dev libxcb-xkb-dev libxcb-cursor-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev wayland-protocols \
+            libegl-dev libgl-dev
+      - name: Configure
+        run: cmake -S . -B build -G Ninja ${{ matrix.flags }}
+      - name: Build
+        run: cmake --build build
+
+  linux-run:
+    runs-on: ubuntu-latest
+    name: linux (headless smoke test)
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build xvfb libgl1-mesa-dri \
+            libxcb1-dev libx11-xcb-dev libxcb-xkb-dev libxcb-cursor-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev wayland-protocols \
+            libegl-dev libgl-dev
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja
+          cmake --build build
+      - name: Run examples under Xvfb
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          # Each example is started, given time to create a window and render,
+          # then stopped; a crash or a failed context shows up as a non-zero
+          # exit before the timeout fires.
+          for example in hello_window gl_triangle text_grid; do
+            echo "== $example =="
+            xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+              timeout --preserve-status 10 ./build/examples/$example \
+              && status=$? || status=$?
+            # 124/143 mean the timeout stopped a healthy program.
+            if [ "$status" -ne 0 ] && [ "$status" -ne 124 ] && [ "$status" -ne 143 ]; then
+              echo "$example exited with $status"
+              exit 1
+            fi
+          done
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build
+      - name: Build
+        run: cmake --build build --config Release
+
+  windows-mingw:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -G "MinGW Makefiles"
+      - name: Build
+        run: cmake --build build
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build
+      - name: Build
+        run: cmake --build build
