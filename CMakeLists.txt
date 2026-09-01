@@ -42,7 +42,7 @@ if(UNIX AND NOT APPLE)
     find_package(PkgConfig REQUIRED)
 
     pkg_check_modules(EGL REQUIRED IMPORTED_TARGET egl)
-    list(APPEND NACK_SOURCES src/common/nack_egl.c)
+    list(APPEND NACK_SOURCES src/common/nack_egl.c src/common/nack_xkb_keys.c)
     list(APPEND NACK_LIBRARIES PkgConfig::EGL ${CMAKE_DL_LIBS})
 
     if(NACK_ENABLE_XCB)
@@ -105,6 +105,7 @@ if(UNIX AND NOT APPLE)
             src/wayland/nack_wayland.c
             src/wayland/nack_wayland_input.c
             src/wayland/nack_wayland_clipboard.c
+            src/wayland/nack_wayland_decor.c
             ${NACK_WAYLAND_GENERATED})
         list(APPEND NACK_LIBRARIES PkgConfig::WAYLAND)
         list(APPEND NACK_DEFINITIONS NACK_HAS_WAYLAND=1)

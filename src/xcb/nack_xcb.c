@@ -1,5 +1,6 @@
 /* libnack - XCB backend. */
 #include "nack_xcb.h"
+#include "../common/nack_xkb_keys.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -29,95 +30,6 @@ nack_xcb_state nack__xcb;
 
 #define NACK_NET_WM_STATE_REMOVE 0
 #define NACK_NET_WM_STATE_ADD    1
-
-/* ------------------------------------------------------------------ */
-/* Key name table (XKB names -> nack_key)                             */
-/* ------------------------------------------------------------------ */
-
-static const struct { const char *name; nack_key key; } nack__xkb_key_names[] = {
-    { "TLDE", NACK_KEY_GRAVE },      { "AE01", NACK_KEY_1 },
-    { "AE02", NACK_KEY_2 },          { "AE03", NACK_KEY_3 },
-    { "AE04", NACK_KEY_4 },          { "AE05", NACK_KEY_5 },
-    { "AE06", NACK_KEY_6 },          { "AE07", NACK_KEY_7 },
-    { "AE08", NACK_KEY_8 },          { "AE09", NACK_KEY_9 },
-    { "AE10", NACK_KEY_0 },          { "AE11", NACK_KEY_MINUS },
-    { "AE12", NACK_KEY_EQUAL },      { "BKSP", NACK_KEY_BACKSPACE },
-    { "TAB",  NACK_KEY_TAB },        { "AD01", NACK_KEY_Q },
-    { "AD02", NACK_KEY_W },          { "AD03", NACK_KEY_E },
-    { "AD04", NACK_KEY_R },          { "AD05", NACK_KEY_T },
-    { "AD06", NACK_KEY_Y },          { "AD07", NACK_KEY_U },
-    { "AD08", NACK_KEY_I },          { "AD09", NACK_KEY_O },
-    { "AD10", NACK_KEY_P },          { "AD11", NACK_KEY_LEFT_BRACKET },
-    { "AD12", NACK_KEY_RIGHT_BRACKET }, { "BKSL", NACK_KEY_BACKSLASH },
-    { "RTRN", NACK_KEY_ENTER },      { "CAPS", NACK_KEY_CAPS_LOCK },
-    { "AC01", NACK_KEY_A },          { "AC02", NACK_KEY_S },
-    { "AC03", NACK_KEY_D },          { "AC04", NACK_KEY_F },
-    { "AC05", NACK_KEY_G },          { "AC06", NACK_KEY_H },
-    { "AC07", NACK_KEY_J },          { "AC08", NACK_KEY_K },
-    { "AC09", NACK_KEY_L },          { "AC10", NACK_KEY_SEMICOLON },
-    { "AC11", NACK_KEY_APOSTROPHE }, { "LFSH", NACK_KEY_LEFT_SHIFT },
-    { "LSGT", NACK_KEY_NON_US_BACKSLASH },
-    { "AB01", NACK_KEY_Z },          { "AB02", NACK_KEY_X },
-    { "AB03", NACK_KEY_C },          { "AB04", NACK_KEY_V },
-    { "AB05", NACK_KEY_B },          { "AB06", NACK_KEY_N },
-    { "AB07", NACK_KEY_M },          { "AB08", NACK_KEY_COMMA },
-    { "AB09", NACK_KEY_PERIOD },     { "AB10", NACK_KEY_SLASH },
-    { "RTSH", NACK_KEY_RIGHT_SHIFT },{ "LCTL", NACK_KEY_LEFT_CTRL },
-    { "LWIN", NACK_KEY_LEFT_SUPER }, { "LALT", NACK_KEY_LEFT_ALT },
-    { "SPCE", NACK_KEY_SPACE },      { "RALT", NACK_KEY_RIGHT_ALT },
-    { "RWIN", NACK_KEY_RIGHT_SUPER },{ "RCTL", NACK_KEY_RIGHT_CTRL },
-    { "MENU", NACK_KEY_MENU },       { "COMP", NACK_KEY_APPLICATION },
-    { "ESC",  NACK_KEY_ESCAPE },
-    { "FK01", NACK_KEY_F1 },  { "FK02", NACK_KEY_F2 },  { "FK03", NACK_KEY_F3 },
-    { "FK04", NACK_KEY_F4 },  { "FK05", NACK_KEY_F5 },  { "FK06", NACK_KEY_F6 },
-    { "FK07", NACK_KEY_F7 },  { "FK08", NACK_KEY_F8 },  { "FK09", NACK_KEY_F9 },
-    { "FK10", NACK_KEY_F10 }, { "FK11", NACK_KEY_F11 }, { "FK12", NACK_KEY_F12 },
-    { "FK13", NACK_KEY_F13 }, { "FK14", NACK_KEY_F14 }, { "FK15", NACK_KEY_F15 },
-    { "FK16", NACK_KEY_F16 }, { "FK17", NACK_KEY_F17 }, { "FK18", NACK_KEY_F18 },
-    { "FK19", NACK_KEY_F19 }, { "FK20", NACK_KEY_F20 }, { "FK21", NACK_KEY_F21 },
-    { "FK22", NACK_KEY_F22 }, { "FK23", NACK_KEY_F23 }, { "FK24", NACK_KEY_F24 },
-    { "PRSC", NACK_KEY_PRINT_SCREEN }, { "SCLK", NACK_KEY_SCROLL_LOCK },
-    { "PAUS", NACK_KEY_PAUSE },      { "INS",  NACK_KEY_INSERT },
-    { "HOME", NACK_KEY_HOME },       { "PGUP", NACK_KEY_PAGE_UP },
-    { "DELE", NACK_KEY_DELETE },     { "END",  NACK_KEY_END },
-    { "PGDN", NACK_KEY_PAGE_DOWN },  { "UP",   NACK_KEY_UP },
-    { "LEFT", NACK_KEY_LEFT },       { "DOWN", NACK_KEY_DOWN },
-    { "RGHT", NACK_KEY_RIGHT },      { "NMLK", NACK_KEY_NUM_LOCK },
-    { "KPDV", NACK_KEY_KP_DIVIDE },  { "KPMU", NACK_KEY_KP_MULTIPLY },
-    { "KPSU", NACK_KEY_KP_SUBTRACT },{ "KPAD", NACK_KEY_KP_ADD },
-    { "KPEN", NACK_KEY_KP_ENTER },   { "KPEQ", NACK_KEY_KP_EQUAL },
-    { "KP1",  NACK_KEY_KP_1 }, { "KP2", NACK_KEY_KP_2 }, { "KP3", NACK_KEY_KP_3 },
-    { "KP4",  NACK_KEY_KP_4 }, { "KP5", NACK_KEY_KP_5 }, { "KP6", NACK_KEY_KP_6 },
-    { "KP7",  NACK_KEY_KP_7 }, { "KP8", NACK_KEY_KP_8 }, { "KP9", NACK_KEY_KP_9 },
-    { "KP0",  NACK_KEY_KP_0 }, { "KPDL", NACK_KEY_KP_DECIMAL },
-    { "MUTE", NACK_KEY_MUTE }, { "VOL-", NACK_KEY_VOLUME_DOWN },
-    { "VOL+", NACK_KEY_VOLUME_UP },
-    { NULL, NACK_KEY_UNKNOWN }
-};
-
-static void nack__xcb_build_keycode_table(void)
-{
-    memset(nack__xcb.keycodes, 0, sizeof nack__xcb.keycodes);
-    if (!nack__xcb.xkb_keymap)
-        return;
-
-    xkb_keycode_t min = xkb_keymap_min_keycode(nack__xcb.xkb_keymap);
-    xkb_keycode_t max = xkb_keymap_max_keycode(nack__xcb.xkb_keymap);
-    if (max > 255)
-        max = 255;
-
-    for (xkb_keycode_t kc = min; kc <= max; ++kc) {
-        const char *name = xkb_keymap_key_get_name(nack__xcb.xkb_keymap, kc);
-        if (!name)
-            continue;
-        for (size_t i = 0; nack__xkb_key_names[i].name; ++i) {
-            if (strcmp(name, nack__xkb_key_names[i].name) == 0) {
-                nack__xcb.keycodes[kc] = nack__xkb_key_names[i].key;
-                break;
-            }
-        }
-    }
-}
 
 static uint32_t nack__xcb_mods_from_state(void)
 {
@@ -179,7 +91,7 @@ static bool nack__xcb_load_keymap(void)
         return false;
     }
 
-    nack__xcb_build_keycode_table();
+    nack__xkb_build_keycodes(nack__xcb.xkb_keymap, nack__xcb.keycodes);
     return true;
 }
 
