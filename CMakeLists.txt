@@ -22,6 +22,9 @@ cmake_dependent_option(NACK_ENABLE_XCB
     "Build the XCB backend" ON "UNIX;NOT APPLE" OFF)
 cmake_dependent_option(NACK_ENABLE_WAYLAND
     "Build the Wayland backend" ON "UNIX;NOT APPLE" OFF)
+option(NACK_WIN32_USE_SDK_HEADERS
+    "Use <windows.h> instead of libnack's hand-rolled Win32 declarations" OFF)
+
 cmake_dependent_option(NACK_XCB_XLIB_FALLBACK
     "Allow falling back to an Xlib Display for EGL when EGL_EXT_platform_xcb is missing (needed for the NVIDIA driver)"
     ON "NACK_ENABLE_XCB" OFF)
@@ -119,7 +122,10 @@ elseif(WIN32)
     list(APPEND NACK_SOURCES
         src/win32/nack_win32.c
         src/win32/nack_wgl.c)
-    list(APPEND NACK_LIBRARIES user32 gdi32 shell32 opengl32 dwmapi imm32)
+    list(APPEND NACK_LIBRARIES user32 gdi32 shell32 opengl32)
+    if(NACK_WIN32_USE_SDK_HEADERS)
+        list(APPEND NACK_DEFINITIONS NACK_WIN32_USE_SDK_HEADERS=1)
+    endif()
 
 elseif(APPLE)
     list(APPEND NACK_SOURCES
@@ -180,6 +186,44 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
 elseif(MSVC)
     target_compile_options(nack PRIVATE /W4 /wd4100)
     target_compile_definitions(nack PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+
+# --------------------------------------------------------------------------
+# Tests
+# --------------------------------------------------------------------------
+
+# The hand-rolled Win32 declarations are only trustworthy if they are checked
+# against the real headers, so the check is a build target rather than a
+# one-off exercise.
+if(PROJECT_IS_TOP_LEVEL)
+    enable_testing()
+
+    add_executable(nack_smoke tests/smoke.c)
+    target_link_libraries(nack_smoke PRIVATE nack)
+    set_target_properties(nack_smoke PROPERTIES
+        C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
+    add_test(NAME smoke COMMAND nack_smoke)
+
+    if(WIN32)
+        add_executable(nack_win32_smoke tests/win32_smoke.c)
+        target_link_libraries(nack_win32_smoke PRIVATE nack)
+        set_target_properties(nack_win32_smoke PROPERTIES
+            C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
+        add_test(NAME win32_smoke COMMAND nack_win32_smoke)
+    endif()
+endif()
+
+if(WIN32 AND NOT NACK_WIN32_USE_SDK_HEADERS AND PROJECT_IS_TOP_LEVEL)
+    add_executable(nack_win32_abi_check
+        tests/win32_abi_main.c
+        tests/win32_abi_sdk.c
+        tests/win32_abi_nack.c)
+    target_include_directories(nack_win32_abi_check PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    set_target_properties(nack_win32_abi_check PROPERTIES
+        C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
+    add_test(NAME win32_abi COMMAND nack_win32_abi_check)
 endif()
 
 # --------------------------------------------------------------------------

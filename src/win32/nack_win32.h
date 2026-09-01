@@ -3,18 +3,21 @@
 
 #include "../nack_internal.h"
 
-#ifndef WIN32_LEAN_AND_MEAN
-#  define WIN32_LEAN_AND_MEAN
+#if defined(NACK_WIN32_USE_SDK_HEADERS)
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  ifndef UNICODE
+#    define UNICODE 1
+#  endif
+#  ifndef _UNICODE
+#    define _UNICODE 1
+#  endif
+#  include <windows.h>
+#  include <windowsx.h>
+#else
+#  include "nack_win32_api.h"
 #endif
-#ifndef UNICODE
-#  define UNICODE 1
-#endif
-#ifndef _UNICODE
-#  define _UNICODE 1
-#endif
-
-#include <windows.h>
-#include <windowsx.h>
 
 #define NACK_WIN32_CLASS_NAME L"nack_window_class"
 

@@ -1004,9 +1004,19 @@ static void nack__win32_drain(void)
     MSG msg;
     while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
         if (msg.message == WM_QUIT) {
+            size_t i;
             nack__emit_simple(NULL, NACK_EVENT_QUIT);
-            for (size_t i = 0; i < nack__g.window_count; ++i)
+            for (i = 0; i < nack__g.window_count; ++i)
                 nack__g.windows[i]->should_close = true;
+            continue;
+        }
+        /*
+         * nack_wakeup posts a thread message, which has no target window.
+         * DispatchMessageW would silently drop it, so it has to become an
+         * event here rather than in the window procedure.
+         */
+        if (msg.message == NACK_WM_WAKEUP && msg.hwnd == NULL) {
+            nack__emit_simple(NULL, NACK_EVENT_WAKEUP);
             continue;
         }
         TranslateMessage(&msg);

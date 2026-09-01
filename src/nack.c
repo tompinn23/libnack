@@ -4,7 +4,11 @@
 #include <stdio.h>
 
 #if defined(NACK_PLATFORM_WIN32)
-#  include <windows.h>
+#  if defined(NACK_WIN32_USE_SDK_HEADERS)
+#    include <windows.h>
+#  else
+#    include "win32/nack_win32_api.h"
+#  endif
 #else
 #  include <time.h>
 #endif
@@ -124,12 +128,12 @@ bool nack__codepoint_is_text(uint32_t cp)
 uint64_t nack_time_ns(void)
 {
 #if defined(NACK_PLATFORM_WIN32)
-    static LARGE_INTEGER freq;
-    if (freq.QuadPart == 0)
-        QueryPerformanceFrequency(&freq);
-    LARGE_INTEGER now;
+    static int64_t frequency;
+    int64_t now;
+    if (frequency == 0)
+        QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&now);
-    return (uint64_t)((now.QuadPart / (double)freq.QuadPart) * 1e9);
+    return (uint64_t)(((double)now / (double)frequency) * 1e9);
 #else
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);

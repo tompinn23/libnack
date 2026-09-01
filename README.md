@@ -126,6 +126,15 @@ nothing. Gate optional functionality on the context version or on
 
 ## Platform notes
 
+**No windows.h.** The Win32 backend declares the seventy-odd functions and
+handful of structures it uses itself, rather than including `windows.h` and its
+namespace pollution (`near`, `far`, `min`, `max`, `CreateWindow`, and so on).
+Those declarations are not trusted: `tests/win32_abi_check` evaluates every
+structure size, member offset and constant on both sides — once against the
+real SDK, once against the hand-rolled header — and fails the build if any of
+the 226 facts disagree. Configure with `-DNACK_WIN32_USE_SDK_HEADERS=ON` to
+fall back to `windows.h` if a future SDK ever diverges.
+
 **X11 goes through XCB, not Xlib.** Xlib is still linked for one reason: EGL on
 the proprietary NVIDIA driver requires an Xlib `Display*`, and
 `EGL_EXT_platform_xcb` is Mesa-only. Where that extension is present the
@@ -184,11 +193,23 @@ false/NULL there.
 
 ## Testing
 
-The XCB and Wayland backends are exercised against Xvfb, sway and Weston:
-window creation, GL 3.3 core contexts with pixel readback, event-loop timeouts,
-thread wakeups, clipboard round trips including a 200 KB payload over INCR, and
-key events with text separated from Ctrl chords. The Win32 backend is
-cross-compiled with MinGW. CI additionally builds on Windows and macOS.
+```sh
+cmake --build build && ctest --test-dir build --output-on-failure
+```
+
+`tests/smoke.c` runs on any backend: window creation, a GL 3.3 core context
+with the cleared colour read back out of the framebuffer, event-loop timeouts,
+cross-thread wakeups, and clipboard round trips including a 200 KB payload
+large enough to exercise X11's INCR protocol. It is run here against Xvfb, sway
+and Weston.
+
+`tests/win32_smoke.c` drives the Win32 backend end to end and runs under Wine
+as well as on Windows; it is what caught `nack_wakeup` posting a thread message
+that `DispatchMessageW` then discarded. `tests/win32_abi_check` compares the
+hand-rolled Win32 declarations against the SDK.
+
+The Cocoa backend is the one that has not been run: it is written and reviewed
+but has no hardware here, so CI building it on macOS is the first real check.
 
 ## Licence
 

@@ -82,6 +82,22 @@ jobs:
         run: cmake -S . -B build
       - name: Build
         run: cmake --build build --config Release
+      # The hand-rolled Win32 declarations are only safe if they agree with
+      # the SDK, so the comparison runs on every build.
+      - name: Check Win32 ABI against the SDK
+        run: ctest --test-dir build -C Release -R win32_abi --output-on-failure
+      - name: Win32 backend smoke test
+        run: ctest --test-dir build -C Release -R win32_smoke --output-on-failure
+
+  windows-sdk-headers:
+    name: windows (windows.h fallback)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DNACK_WIN32_USE_SDK_HEADERS=ON
+      - name: Build
+        run: cmake --build build --config Release
 
   windows-mingw:
     runs-on: windows-latest
@@ -91,6 +107,8 @@ jobs:
         run: cmake -S . -B build -G "MinGW Makefiles"
       - name: Build
         run: cmake --build build
+      - name: Check Win32 ABI against the SDK
+        run: ctest --test-dir build -R win32_abi --output-on-failure
 
   macos:
     runs-on: macos-latest
