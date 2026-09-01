@@ -88,8 +88,12 @@ jobs:
       # the SDK, so the comparison runs on every build.
       - name: Check Win32 ABI against the SDK
         run: ctest --test-dir build -C Release -R win32_abi --output-on-failure
-      - name: Console smoke test
-        run: ctest --test-dir build -C Release -R smoke --output-on-failure
+      # The runner has no GPU, so opengl32.dll is the 1.1 software path and a
+      # 3.3 core context cannot be created; the smoke test reports that as a
+      # skip. Installing Mesa's llvmpipe here would give the Win32 renderer
+      # real coverage.
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
 
   windows-sdk-headers:
     name: windows (windows.h fallback)

@@ -12,6 +12,7 @@
 #include "nack_gfx.h"
 #include "nack_console_internal.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -44,7 +45,10 @@ bool nack__gfx_init(struct nack_window *window)
 {
     const struct nack_gfx_backend *candidates[3];
     const char *preferred = getenv("NACK_RENDERER");
+    char reason[256];
     size_t count = 0, i, j;
+
+    reason[0] = '\0';
 
     if (preferred && !*preferred)
         preferred = NULL;
@@ -93,6 +97,13 @@ bool nack__gfx_init(struct nack_window *window)
         nack__log("nack: the %s renderer is unavailable: %s", nack__gfx->name,
                   why ? why : "no reason given");
         /*
+         * Keep the last renderer's complaint. If every candidate fails, that
+         * is the only account of why anywhere, and "no renderer could be
+         * started" on its own tells a user nothing they can act on.
+         */
+        snprintf(reason, sizeof reason, "%s: %s", nack__gfx->name,
+                 why ? why : "no reason given");
+        /*
          * Every backend's shutdown copes with a half-built state, and has to
          * put the window back as it found it so the next one can have it.
          */
@@ -100,7 +111,8 @@ bool nack__gfx_init(struct nack_window *window)
         nack__gfx = NULL;
     }
 
-    return nack__error("no renderer could be started");
+    return nack__error("no renderer could be started (%s)",
+                       reason[0] ? reason : "none were compiled in");
 }
 
 void nack__gfx_shutdown(void)

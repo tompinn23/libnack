@@ -265,7 +265,33 @@ if(PROJECT_IS_TOP_LEVEL)
         ${CMAKE_CURRENT_SOURCE_DIR}/src)
     set_target_properties(nack_png_test PROPERTIES
         C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
-    add_test(NAME png COMMAND nack_png_test)
+
+    #
+    # The PNG fixtures are generated rather than checked in: a decoder tested
+    # against images whose expected output came from the same decoder proves
+    # nothing, so the pixels come from Python's zlib instead. Without an
+    # interpreter the test finds no fixtures and reports itself skipped.
+    #
+    set(NACK_PNG_FIXTURES ${CMAKE_CURRENT_BINARY_DIR}/png-fixtures)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_FOUND)
+        add_custom_command(
+            OUTPUT ${NACK_PNG_FIXTURES}/expected.bin
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tools/mkpng.py
+                    ${NACK_PNG_FIXTURES}
+            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/mkpng.py
+            COMMENT "Generating PNG decoder fixtures")
+        add_custom_target(nack_png_fixtures
+            DEPENDS ${NACK_PNG_FIXTURES}/expected.bin)
+        add_dependencies(nack_png_test nack_png_fixtures)
+    else()
+        message(STATUS
+            "No Python 3 interpreter: the PNG decoder test will be skipped")
+    endif()
+
+    add_test(NAME png COMMAND nack_png_test ${NACK_PNG_FIXTURES})
+    set_tests_properties(png PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 
 if(WIN32 AND NOT NACK_WIN32_USE_SDK_HEADERS AND PROJECT_IS_TOP_LEVEL)

@@ -1,6 +1,11 @@
-/* Decodes generated PNGs and compares against known pixel data.
- * Run tools/mkpng.py first to produce /tmp/pngs. */
-/* Decodes the generated PNGs and compares against the known pixel data. */
+/*
+ * Decodes the generated PNGs and compares against the known pixel data.
+ *
+ * The fixtures are produced by tools/mkpng.py, which the build runs into the
+ * build tree; the directory arrives as argv[1]. Missing fixtures are reported
+ * as a skip rather than a failure, since that means the generator did not run
+ * (no Python), not that the decoder is wrong.
+ */
 #include "console/nack_png.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,20 +25,27 @@ static unsigned char *slurp(const char *path, size_t *size)
     return buf;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    const char *dir = argc > 1 ? argv[1] : ".";
+    char expected_path[512];
     size_t esz;
-    unsigned char *exp = slurp("/tmp/pngs/expected.bin", &esz);
+    unsigned char *exp;
     size_t off = 0;
     unsigned count, i;
     int failures = 0;
 
-    if (!exp) { fprintf(stderr, "no expected.bin\n"); return 1; }
+    snprintf(expected_path, sizeof expected_path, "%s/expected.bin", dir);
+    exp = slurp(expected_path, &esz);
+    if (!exp) {
+        fprintf(stderr, "no fixtures in %s; run tools/mkpng.py, skipping\n", dir);
+        return 77;
+    }
     memcpy(&count, exp + off, 4); off += 4;
 
     for (i = 0; i < count; ++i) {
         unsigned namelen, w, h, x, y;
-        char name[64], path[128];
+        char name[64], path[576];
         unsigned char *png, *rgba;
         size_t psz;
         const char *err = NULL;
@@ -44,7 +56,7 @@ int main(void)
         memcpy(&w, exp + off, 4); off += 4;
         memcpy(&h, exp + off, 4); off += 4;
 
-        snprintf(path, sizeof path, "/tmp/pngs/%s", name);
+        snprintf(path, sizeof path, "%s/%s", dir, name);
         png = slurp(path, &psz);
         if (!png) { printf("%-12s MISSING\n", name); failures++; off += (size_t)w*h*4; continue; }
 
@@ -84,7 +96,12 @@ int main(void)
             printf("junk input accepted\n"); failures++;
         } else printf("%-12s ok  (rejected: %s)\n", "junk", err);
 
-        size_t psz; unsigned char *png = slurp("/tmp/pngs/rgba8.png", &psz);
+        char path[576];
+        size_t psz;
+        unsigned char *png;
+
+        snprintf(path, sizeof path, "%s/rgba8.png", dir);
+        png = slurp(path, &psz);
         if (png) {
             if (nack__png_decode(png, psz / 2, &w, &h, &err) != NULL) {
                 printf("truncated PNG accepted\n"); failures++;

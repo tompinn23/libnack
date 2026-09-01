@@ -1,6 +1,18 @@
 """Generate PNGs with known pixel content, across colour types, bit depths and
-row filters, plus the expected RGBA output for each."""
-import zlib, struct, os, random
+row filters, plus the expected RGBA output for each.
+
+Usage: mkpng.py <output directory>. The build runs this into the build tree so
+tests/png_test.c has fixtures to compare against; nothing is checked in,
+because the point is that they are reproducible.
+"""
+import zlib, struct, os, random, sys
+
+if len(sys.argv) != 2:
+    sys.exit("usage: mkpng.py <output directory>")
+OUT = sys.argv[1]
+
+def out(name):
+    return os.path.join(OUT, name)
 
 def chunk(tag, data):
     return (struct.pack(">I", len(data)) + tag + data +
@@ -47,7 +59,7 @@ def write_png(path, w, h, colour, depth, rows_bytes, bpp, filters, palette=None,
     body += chunk(b"IEND", b"")
     open(path, "wb").write(body)
 
-os.makedirs("/tmp/pngs", exist_ok=True)
+os.makedirs(OUT, exist_ok=True)
 random.seed(7)
 cases = []
 W, H = 23, 17          # deliberately not a multiple of anything
@@ -59,22 +71,22 @@ allf = [0,1,2,3,4]
 
 # colour 6: RGBA8
 rows = [bytearray(b for p in row for b in p) for row in pix]
-write_png("/tmp/pngs/rgba8.png", W, H, 6, 8, rows, 4, allf)
+write_png(out("rgba8.png"), W, H, 6, 8, rows, 4, allf)
 cases.append(("rgba8.png", W, H, [[p for p in row] for row in pix]))
 
 # colour 2: RGB8
 rows = [bytearray(b for p in row for b in p[:3]) for row in pix]
-write_png("/tmp/pngs/rgb8.png", W, H, 2, 8, rows, 3, allf)
+write_png(out("rgb8.png"), W, H, 2, 8, rows, 3, allf)
 cases.append(("rgb8.png", W, H, [[(p[0],p[1],p[2],255) for p in row] for row in pix]))
 
 # colour 0: grey8
 rows = [bytearray(p[0] for p in row) for row in pix]
-write_png("/tmp/pngs/grey8.png", W, H, 0, 8, rows, 1, allf)
+write_png(out("grey8.png"), W, H, 0, 8, rows, 1, allf)
 cases.append(("grey8.png", W, H, [[(p[0],p[0],p[0],255) for p in row] for row in pix]))
 
 # colour 4: grey+alpha 8
 rows = [bytearray(b for p in row for b in (p[0], p[3])) for row in pix]
-write_png("/tmp/pngs/greya8.png", W, H, 4, 8, rows, 2, allf)
+write_png(out("greya8.png"), W, H, 4, 8, rows, 2, allf)
 cases.append(("greya8.png", W, H, [[(p[0],p[0],p[0],p[3]) for p in row] for row in pix]))
 
 # colour 3: palette 8-bit with tRNS
@@ -83,7 +95,7 @@ palb = bytes(b for c in pal for b in c)
 alpha = bytes([255, 0] + [255]*14)
 idx = [[random.randrange(16) for _ in range(W)] for _ in range(H)]
 rows = [bytearray(row) for row in idx]
-write_png("/tmp/pngs/pal8.png", W, H, 3, 8, rows, 1, allf, palette=palb, trns=alpha)
+write_png(out("pal8.png"), W, H, 3, 8, rows, 1, allf, palette=palb, trns=alpha)
 cases.append(("pal8.png", W, H,
               [[(pal[i][0], pal[i][1], pal[i][2], alpha[i]) for i in row] for row in idx]))
 
@@ -97,7 +109,7 @@ for row in idx4:
         lo = row[i+1] if i+1 < W else 0
         b.append((hi << 4) | lo)
     rows.append(b)
-write_png("/tmp/pngs/pal4.png", W, H, 3, 4, rows, 1, [0], palette=palb, trns=alpha)
+write_png(out("pal4.png"), W, H, 3, 4, rows, 1, [0], palette=palb, trns=alpha)
 cases.append(("pal4.png", W, H,
               [[(pal[i][0], pal[i][1], pal[i][2], alpha[i]) for i in row] for row in idx4]))
 
@@ -113,7 +125,7 @@ for row in idx1:
                 v |= 1 << (7-k)
         b.append(v)
     rows.append(b)
-write_png("/tmp/pngs/pal1.png", W, H, 3, 1, rows, 1, [0], palette=palb, trns=alpha)
+write_png(out("pal1.png"), W, H, 3, 1, rows, 1, [0], palette=palb, trns=alpha)
 cases.append(("pal1.png", W, H,
               [[(pal[i][0], pal[i][1], pal[i][2], alpha[i]) for i in row] for row in idx1]))
 
@@ -121,10 +133,10 @@ cases.append(("pal1.png", W, H,
 BW, BH = 300, 200
 big = [[((x*7+y*3) % 256, (x*x+y) % 256, (x^y) % 256, 255) for x in range(BW)] for y in range(BH)]
 rows = [bytearray(b for p in row for b in p) for row in big]
-write_png("/tmp/pngs/big.png", BW, BH, 6, 8, rows, 4, allf)
+write_png(out("big.png"), BW, BH, 6, 8, rows, 4, allf)
 cases.append(("big.png", BW, BH, big))
 
-with open("/tmp/pngs/expected.bin", "wb") as f:
+with open(out("expected.bin"), "wb") as f:
     f.write(struct.pack("<I", len(cases)))
     for name, w, h, px in cases:
         nb = name.encode()

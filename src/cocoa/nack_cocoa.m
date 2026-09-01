@@ -908,6 +908,9 @@ static void nack__cocoa_set_cursor_mode(struct nack_window *w,
 /* Event loop                                                         */
 /* ------------------------------------------------------------------ */
 
+/* Marks the dummy event nack__cocoa_wakeup posts as ours. */
+#define NACK_COCOA_WAKEUP_SUBTYPE 0x4E41   /* 'NA' */
+
 static void nack__cocoa_drain(NSDate *deadline)
 {
     for (;;) {
@@ -917,7 +920,18 @@ static void nack__cocoa_drain(NSDate *deadline)
                                               dequeue:YES];
         if (!event)
             break;
-        [NSApp sendEvent:event];
+        /*
+         * Our own wakeup event becomes a queued NACK_WIN_EVENT_WAKEUP rather
+         * than going to AppKit, which has nothing to do with it. Breaking the
+         * wait is only half of what nack__win_wakeup promises; the caller is
+         * waiting for the event itself.
+         */
+        if ([event type] == NSEventTypeApplicationDefined &&
+            [event subtype] == (short)NACK_COCOA_WAKEUP_SUBTYPE) {
+            nack__emit_simple(NULL, NACK_WIN_EVENT_WAKEUP);
+        } else {
+            [NSApp sendEvent:event];
+        }
         /* Only the first iteration may block; drain the rest immediately. */
         deadline = [NSDate distantPast];
     }
@@ -952,7 +966,7 @@ static void nack__cocoa_wakeup(void)
                                            timestamp:0
                                         windowNumber:0
                                              context:nil
-                                             subtype:0
+                                             subtype:(short)NACK_COCOA_WAKEUP_SUBTYPE
                                                data1:0
                                                data2:0];
         [NSApp postEvent:event atStart:YES];

@@ -40,14 +40,17 @@ int main(void)
         if (!why)
             why = "no reason given";
         /*
-         * No display is the build machine's problem, not the library's, so
-         * report it to ctest as a skip. Anything else - a renderer that will
-         * not start, above all - is a real failure and has to be one, because
-         * this is the only test that runs the whole stack.
+         * What the machine cannot provide is reported to ctest as a skip: no
+         * display at all, or a driver with no OpenGL 3.3 in it (a Windows CI
+         * runner with no GPU has only the 1.1 software path). Everything else
+         * - a shader that will not compile, missing entry points a 3.3 driver
+         * is required to have - is our bug and has to fail, because this is
+         * the only test that runs the whole stack.
          */
         if (strncmp(why, "cannot open a window", 20) == 0 ||
-            strncmp(why, "cannot create a window", 22) == 0) {
-            printf("no display available (%s), skipping\n", why);
+            strncmp(why, "cannot create a window", 22) == 0 ||
+            strstr(why, "cannot create an OpenGL 3.3 context") != NULL) {
+            printf("skipping: %s\n", why);
             return 77;
         }
         fprintf(stderr, "nack_init failed: %s\n", why);
