@@ -1,5 +1,5 @@
 /*
- * A character-struct cell struct grid: the shape a terminal emulator or a libtcod-style
+ * A character-cell grid: the shape a terminal emulator or a libtcod-style
  * console sits on top of.
  *
  * What it demonstrates, in the order it matters for a terminal:
@@ -11,9 +11,9 @@
  *     physical key events used for control chords.
  *   - Clipboard paste and copy, including the primary selection on Unix.
  *   - The framebuffer is sized in physical pixels, so glyphs stay crisp on a
- *     HiDPI display while the struct cell struct grid is reasoned about in logical ones.
+ *     HiDPI display while the cell grid is reasoned about in logical ones.
  *
- * Rendering is one textured quad per struct cell out of an 8x8 bitmap font. That is
+ * Rendering is one textured quad per cell out of an 8x8 bitmap font. That is
  * the least interesting part and a real terminal would want a proper shaper,
  * but it makes the plumbing visible.
  */
@@ -71,7 +71,8 @@ static bool grid_resize(struct grid *g, int cols, int rows)
     if (cols < 1) cols = 1;
     if (rows < 1) rows = 1;
 
-    struct cell *cells = (struct cell *)calloc((size_t)cols * (size_t)rows, sizeof *cells);
+    struct cell *cells =
+        (struct cell *)calloc((size_t)cols * (size_t)rows, sizeof *cells);
     if (!cells)
         return false;
 
@@ -184,7 +185,7 @@ static GLuint build_font_texture(void)
 
 static const char *vertex_source =
     "#version 330 core\n"
-    "layout(location = 0) in vec2 a_position;\n"   /* in struct cell pixels        */
+    "layout(location = 0) in vec2 a_position;\n"   /* in cell pixels               */
     "layout(location = 1) in vec2 a_uv;\n"
     "layout(location = 2) in vec3 a_colour;\n"
     "uniform vec2 u_viewport;\n"
@@ -289,7 +290,7 @@ int main(void)
 
     struct nack_window_desc window_desc;
     nack_window_desc_defaults(&window_desc);
-    window_desc.title = "libnack - text struct grid";
+    window_desc.title = "libnack - text grid";
     window_desc.width = g.cols * CELL_PIXELS_W;
     window_desc.height = g.rows * CELL_PIXELS_H;
     /* The two hints that make a window behave like a terminal. */
@@ -363,7 +364,7 @@ int main(void)
         return 1;
     }
 
-    grid_write(&g, "libnack text struct grid\n", 5);
+    grid_write(&g, "libnack text grid\n", 5);
     grid_write(&g, "type; ctrl+v pastes, ctrl+c copies, esc quits\n\n", 7);
 
     bool dirty = true;
@@ -436,7 +437,7 @@ int main(void)
                     int col = (int)event.data.button.x / CELL_PIXELS_W;
                     int row = (int)event.data.button.y / CELL_PIXELS_H;
                     char note[64];
-                    snprintf(note, sizeof note, "\n[click struct cell %d,%d x%d]\n",
+                    snprintf(note, sizeof note, "\n[click cell %d,%d x%d]\n",
                              col, row, event.data.button.click_count);
                     grid_write(&g, note, 4);
                     dirty = true;

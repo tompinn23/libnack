@@ -492,7 +492,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 
     case WM_SIZING: {
         /*
-         * Windows has no resize-increment hint, so snapping to the struct cell struct grid
+         * Windows has no resize-increment hint, so snapping to the cell grid
          * has to happen here, on the rectangle the user is dragging.
          */
         if (w->inc_width <= 1 && w->inc_height <= 1)

@@ -529,7 +529,7 @@ void nack__cocoa_update_size(struct nack_window *w)
                          actualRange:(NSRangePointer)actualRange
 {
     (void)range; (void)actualRange;
-    /* Where an IME candidate window should appear. Without per-struct cell caret
+    /* Where an IME candidate window should appear. Without per-cell caret
      * tracking the window origin is the best available answer. */
     const NSRect frame = [self frame];
     return [[self window] convertRectToScreen:

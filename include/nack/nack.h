@@ -3,7 +3,7 @@
  *
  * Backends: Win32, Cocoa, Wayland, X11.
  *
- * The API is deliberately shaped for the needs of a struct grid/terminal renderer:
+ * The API is deliberately shaped for the needs of a grid/terminal renderer:
  * blocking event waits with timeouts, thread-safe wakeups, size increments,
  * per-monitor DPI scaling, clipboard access and UTF-8 text input.
  *
@@ -342,11 +342,10 @@ NACK_API void nack_framebuffer_desc_defaults(struct nack_framebuffer_desc *desc)
 /* -------------------------------------------------------------------------- */
 
 /*
- * Creates a window. On Wayland the window does not become visible until a
- * frame has been presented to it, because a surface with no committed buffer
- * is never mapped; X11 and Win32 will show an empty window instead. Present at
- * least one frame (nack_gl_swap_buffers) after creating the window, or it will
- * appear to do nothing on a Wayland session.
+ * Creates a window. A visible window appears on every backend as soon as it is
+ * shown, even before anything has been drawn into it: on Wayland, where a
+ * surface with no committed buffer would never be mapped at all, the library
+ * commits a blank frame and retires it on the first nack_gl_swap_buffers.
  */
 NACK_API struct nack_window *nack_window_create(const struct nack_window_desc *desc);
 NACK_API void         nack_window_destroy(struct nack_window *window);

@@ -41,13 +41,31 @@ enum nack_wl_decor_part {
     NACK_WL_DECOR_COUNT
 };
 
-struct nack_wl_decor {
-    struct wl_surface *surface;
-    struct wl_subsurface *subsurface;
+/* Title bar buttons, laid out right aligned in this order. */
+enum nack_wl_decor_button {
+    NACK_WL_BUTTON_NONE = -1,
+    NACK_WL_BUTTON_MINIMIZE = 0,
+    NACK_WL_BUTTON_MAXIMIZE,
+    NACK_WL_BUTTON_CLOSE,
+    NACK_WL_BUTTON_COUNT
+};
+
+/*
+ * A wl_shm buffer and its mapping. Used for the decoration surfaces and for
+ * the placeholder frame that maps a window before the client has drawn.
+ */
+struct nack_wl_shm_buffer {
     struct wl_buffer *buffer;
     uint32_t *pixels;
     size_t size;
-    int width, height;
+    int width, height;          /* device pixels */
+};
+
+struct nack_wl_decor {
+    struct wl_surface *surface;
+    struct wl_subsurface *subsurface;
+    struct nack_wl_shm_buffer buf;
+    int width, height;          /* logical pixels */
 };
 
 struct nack_wl_window {
@@ -81,7 +99,17 @@ struct nack_wl_window {
 
     struct nack_wl_decor decor[NACK_WL_DECOR_COUNT];
     bool client_side_decorations;
-    bool decor_close_hover;
+    enum nack_wl_decor_button decor_hover;
+    int decor_scale;            /* integer scale the decorations render at */
+
+    /*
+     * Wayland maps a surface only once a buffer has been committed to it, so
+     * a window that has not drawn yet is invisible rather than merely empty.
+     * This blank frame is committed when the window is shown and dropped as
+     * soon as the client presents its own.
+     */
+    struct nack_wl_shm_buffer placeholder;
+    bool presented;
 };
 
 struct nack_wayland_state {
@@ -175,6 +203,9 @@ void nack__wl_input_shutdown(void);
 void nack__wl_pump_key_repeat(void);
 double nack__wl_next_repeat_timeout(void);
 void nack__wl_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape);
+/* Sets the pointer image directly, regardless of which window has focus; the
+ * decorations use it to show resize cursors while over a border. */
+void nack__wl_apply_cursor_shape(enum nack_cursor_shape shape);
 void nack__wl_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode);
 void nack__wl_update_cursor(struct nack_window *w);
 void nack__wl_load_cursor_theme(int scale);
@@ -188,6 +219,14 @@ bool nack__wl_primary_set(const char *utf8);
 const char *nack__wl_primary_get(void);
 
 /* nack_wayland_decor.c */
+bool nack__wl_shm_buffer_alloc(struct nack_wl_shm_buffer *buf, int width,
+                               int height);
+void nack__wl_shm_buffer_release(struct nack_wl_shm_buffer *buf);
+
+/* Commits a blank frame so the surface maps before the client has drawn. */
+void nack__wl_present_placeholder(struct nack_window *w);
+void nack__wl_drop_placeholder(struct nack_window *w);
+
 bool nack__wl_decor_enable(struct nack_window *w);
 void nack__wl_decor_destroy(struct nack_window *w);
 void nack__wl_decor_resize(struct nack_window *w);
@@ -199,6 +238,8 @@ void nack__wl_decor_pointer_motion(struct nack_window *w, double x, double y);
 bool nack__wl_decor_pointer_button(struct nack_window *w, int button, bool down,
                                    uint32_t serial);
 void nack__wl_decor_pointer_leave(struct nack_window *w);
+/* Recomputes the decoration scale after a DPI change. */
+void nack__wl_decor_update_scale(struct nack_window *w, int scale);
 int  nack__wl_decor_titlebar_height(const struct nack_window *w);
 int  nack__wl_decor_border(const struct nack_window *w);
 

@@ -208,6 +208,8 @@ static void keyboard_enter(void *data, struct wl_keyboard *keyboard, uint32_t se
         if (ww && ww->surface == surface) {
             nack__wl.keyboard_focus = w;
             nack__emit_focus(w, true);
+            /* The title bar is drawn differently when active. */
+            nack__wl_decor_redraw(w);
             return;
         }
     }
@@ -222,8 +224,10 @@ static void keyboard_leave(void *data, struct wl_keyboard *keyboard, uint32_t se
     if (nack__wl.compose_state)
         xkb_compose_state_reset(nack__wl.compose_state);
     if (nack__wl.keyboard_focus) {
-        nack__emit_focus(nack__wl.keyboard_focus, false);
+        struct nack_window *w = nack__wl.keyboard_focus;
         nack__wl.keyboard_focus = NULL;
+        nack__emit_focus(w, false);
+        nack__wl_decor_redraw(w);
     }
 }
 
@@ -347,28 +351,26 @@ static struct wl_cursor *nack__wl_get_cursor(enum nack_cursor_shape shape)
     return cursor;
 }
 
-void nack__wl_update_cursor(struct nack_window *w)
+void nack__wl_apply_cursor_shape(enum nack_cursor_shape shape)
 {
-    if (!nack__wl.pointer || nack__wl.pointer_focus != w)
+    struct wl_cursor *cursor;
+    struct wl_cursor_image *image;
+    struct wl_buffer *buffer;
+    int scale;
+
+    if (!nack__wl.pointer)
         return;
 
-    if (w->cursor_mode != NACK_CURSOR_MODE_NORMAL) {
-        /* A null surface hides the pointer for this surface. */
-        wl_pointer_set_cursor(nack__wl.pointer, nack__wl.pointer_enter_serial,
-                              NULL, 0, 0);
-        return;
-    }
-
-    struct wl_cursor *cursor = nack__wl_get_cursor(w->cursor_shape);
+    cursor = nack__wl_get_cursor(shape);
     if (!cursor || !nack__wl.cursor_surface || cursor->image_count == 0)
         return;
 
-    struct wl_cursor_image *image = cursor->images[0];
-    struct wl_buffer *buffer = wl_cursor_image_get_buffer(image);
+    image = cursor->images[0];
+    buffer = wl_cursor_image_get_buffer(image);
     if (!buffer)
         return;
 
-    int scale = nack__wl.cursor_theme_scale > 0 ? nack__wl.cursor_theme_scale : 1;
+    scale = nack__wl.cursor_theme_scale > 0 ? nack__wl.cursor_theme_scale : 1;
     wl_surface_set_buffer_scale(nack__wl.cursor_surface, scale);
     wl_surface_attach(nack__wl.cursor_surface, buffer, 0, 0);
     wl_surface_damage_buffer(nack__wl.cursor_surface, 0, 0,
@@ -379,6 +381,21 @@ void nack__wl_update_cursor(struct nack_window *w)
                           nack__wl.cursor_surface,
                           (int32_t)image->hotspot_x / scale,
                           (int32_t)image->hotspot_y / scale);
+}
+
+void nack__wl_update_cursor(struct nack_window *w)
+{
+    if (!nack__wl.pointer || nack__wl.pointer_focus != w)
+        return;
+
+    if (w->cursor_mode != NACK_CURSOR_MODE_NORMAL) {
+        /* A null surface hides the pointer over this surface. */
+        wl_pointer_set_cursor(nack__wl.pointer, nack__wl.pointer_enter_serial,
+                              NULL, 0, 0);
+        return;
+    }
+
+    nack__wl_apply_cursor_shape(w->cursor_shape);
 }
 
 void nack__wl_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape)
