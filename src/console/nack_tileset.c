@@ -1,6 +1,6 @@
 /* Tileset loading, atlas upload and codepoint mapping. */
 #include "nack_console_internal.h"
-#include "nack_png.h"
+#include "nack_image.h"
 #include "nack_font8x8.h"
 
 #include <stdio.h>
@@ -308,7 +308,7 @@ struct nack_tileset *nack__tileset_builtin(void)
 /* Public entry points                                                */
 /* ------------------------------------------------------------------ */
 
-struct nack_tileset *nack_tileset_load_memory(const void *png, size_t size,
+struct nack_tileset *nack_tileset_load_memory(const void *data, size_t size,
                                               int tile_width, int tile_height,
                                               enum nack_tileset_layout layout)
 {
@@ -322,7 +322,7 @@ struct nack_tileset *nack_tileset_load_memory(const void *png, size_t size,
         return NULL;
     }
 
-    rgba = nack__png_decode(png, size, &width, &height, &error);
+    rgba = nack__image_decode(data, size, &width, &height, &error);
     if (!rgba) {
         nack__error("cannot decode tileset: %s", error ? error : "unknown");
         return NULL;

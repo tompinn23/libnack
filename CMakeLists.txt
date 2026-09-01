@@ -42,7 +42,7 @@ set(NACK_SOURCES
     src/common/nack_proc_cache.c
     src/console/nack_api.c
     src/console/nack_console.c
-    src/console/nack_png.c
+    src/console/nack_image.c
     src/console/nack_render.c
     src/console/nack_tileset.c
     src/console/nack_gfx.c
@@ -56,7 +56,24 @@ if(APPLE AND NOT NACK_MACOS_OPENGL_ONLY)
     list(APPEND NACK_SOURCES src/console/nack_gfx_metal.m)
 endif()
 
+#
+# Vendored decoders. Image decoding is parsing untrusted input, so it uses
+# libraries that have been attacked for years rather than something written
+# here: LodePNG for PNG, TurboJPEG for JPEG. Both build from source in-tree,
+# so the library still needs nothing installed on the machine.
+#
+add_subdirectory(third_party/lodepng)
+add_subdirectory(third_party/libjpeg-turbo)
+
 set(NACK_LIBRARIES "")
+# Their objects go straight into libnack rather than being separate archives a
+# consumer would have to link too: from the outside, decoding images is part of
+# what the library does.
+set(NACK_VENDORED_OBJECTS
+    $<TARGET_OBJECTS:nack_lodepng> $<TARGET_OBJECTS:nack_jpeg>)
+set(NACK_VENDORED_INCLUDES
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lodepng
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libjpeg-turbo/src)
 set(NACK_DEFINITIONS "")
 
 if(UNIX AND NOT APPLE)
@@ -179,7 +196,8 @@ add_library(nack_objects OBJECT ${NACK_SOURCES})
 target_include_directories(nack_objects
     PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
-            ${CMAKE_CURRENT_BINARY_DIR})
+            ${CMAKE_CURRENT_BINARY_DIR}
+            ${NACK_VENDORED_INCLUDES})
 target_link_libraries(nack_objects PRIVATE ${NACK_LIBRARIES})
 target_compile_definitions(nack_objects PRIVATE ${NACK_DEFINITIONS})
 
@@ -203,14 +221,16 @@ elseif(MSVC)
 endif()
 
 if(NACK_BUILD_SHARED)
-    add_library(nack SHARED $<TARGET_OBJECTS:nack_objects>)
+    add_library(nack SHARED $<TARGET_OBJECTS:nack_objects>
+                            ${NACK_VENDORED_OBJECTS})
     target_compile_definitions(nack_objects PUBLIC NACK_SHARED PRIVATE NACK_BUILD)
     target_compile_definitions(nack PUBLIC NACK_SHARED)
     set_target_properties(nack_objects PROPERTIES
         C_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN ON)
 else()
-    add_library(nack STATIC $<TARGET_OBJECTS:nack_objects>)
+    add_library(nack STATIC $<TARGET_OBJECTS:nack_objects>
+                            ${NACK_VENDORED_OBJECTS})
 endif()
 
 add_library(nack::nack ALIAS nack)
@@ -239,7 +259,8 @@ if(PROJECT_IS_TOP_LEVEL)
     # Links the objects rather than the library: the test reads the
     # framebuffer back through an internal hook to check that frames actually
     # rendered, and a shared build would have hidden that symbol.
-    add_executable(nack_smoke tests/console_smoke.c $<TARGET_OBJECTS:nack_objects>)
+    add_executable(nack_smoke tests/console_smoke.c
+        $<TARGET_OBJECTS:nack_objects> ${NACK_VENDORED_OBJECTS})
     target_link_libraries(nack_smoke PRIVATE ${NACK_LIBRARIES})
     target_include_directories(nack_smoke PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -260,10 +281,11 @@ if(PROJECT_IS_TOP_LEVEL)
         ENVIRONMENT "NACK_RENDERER=test-fail"
         SKIP_RETURN_CODE 77)
 
-    add_executable(nack_png_test tests/png_test.c src/console/nack_png.c)
-    target_include_directories(nack_png_test PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    set_target_properties(nack_png_test PROPERTIES
+    add_executable(nack_image_test tests/image_test.c src/console/nack_image.c
+        ${NACK_VENDORED_OBJECTS})
+    target_include_directories(nack_image_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src ${NACK_VENDORED_INCLUDES})
+    set_target_properties(nack_image_test PROPERTIES
         C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
 
     #
@@ -284,14 +306,14 @@ if(PROJECT_IS_TOP_LEVEL)
             COMMENT "Generating PNG decoder fixtures")
         add_custom_target(nack_png_fixtures
             DEPENDS ${NACK_PNG_FIXTURES}/expected.bin)
-        add_dependencies(nack_png_test nack_png_fixtures)
+        add_dependencies(nack_image_test nack_png_fixtures)
     else()
         message(STATUS
-            "No Python 3 interpreter: the PNG decoder test will be skipped")
+            "No Python 3 interpreter: the image decoder test will be skipped")
     endif()
 
-    add_test(NAME png COMMAND nack_png_test ${NACK_PNG_FIXTURES})
-    set_tests_properties(png PROPERTIES SKIP_RETURN_CODE 77)
+    add_test(NAME image COMMAND nack_image_test ${NACK_PNG_FIXTURES})
+    set_tests_properties(image PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 
 if(WIN32 AND NOT NACK_WIN32_USE_SDK_HEADERS AND PROJECT_IS_TOP_LEVEL)

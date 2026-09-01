@@ -265,7 +265,8 @@ enum nack_tileset_layout {
 struct nack_tileset;
 
 /*
- * Loads a PNG. tile_width and tile_height may be 0 for a CP437 sheet, in which
+ * Loads a PNG or a JPEG, whichever the file turns out to be. tile_width and
+ * tile_height may be 0 for a CP437 sheet, in which
  * case they are inferred by dividing the image into 16 by 16 glyphs.
  *
  * A greyscale or white-on-transparent sheet is treated as a font: glyphs are
@@ -277,7 +278,7 @@ NACK_API struct nack_tileset *nack_tileset_load(const char *path,
                                                 enum nack_tileset_layout layout);
 
 /* Same, from memory, so tilesets can be embedded in the executable. */
-NACK_API struct nack_tileset *nack_tileset_load_memory(const void *png, size_t size,
+NACK_API struct nack_tileset *nack_tileset_load_memory(const void *data, size_t size,
                                                        int tile_width, int tile_height,
                                                        enum nack_tileset_layout layout);
 
@@ -315,7 +316,7 @@ struct nack_config {
     const char *title;
     int columns, rows;
 
-    /* Path to a tileset PNG. NULL uses the built-in 8x8 font, so a game can
+    /* Path to a tileset image. NULL uses the built-in 8x8 font, so a game can
      * start without shipping any assets. */
     const char *tileset;
     int tile_width, tile_height;

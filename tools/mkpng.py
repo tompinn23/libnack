@@ -37,16 +37,43 @@ def filter_row(ftype, row, prev, bpp):
         out.append(f & 0xFF)
     return out
 
-def write_png(path, w, h, colour, depth, rows_bytes, bpp, filters, palette=None, trns=None):
+# Adam7: (x start, y start, x step, y step) for each of the seven passes.
+ADAM7 = [(0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4),
+         (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2)]
+
+def interlace(w, h, pixels, bpp):
+    """Splits 8-bit-per-sample pixel rows into the seven Adam7 sub-images,
+    each filtered on its own, which is what the interlaced format is."""
     raw = bytearray()
-    prev = None
-    for y, row in enumerate(rows_bytes):
-        ft = filters[y % len(filters)]
-        raw.append(ft)
-        raw += filter_row(ft, row, prev, bpp)
-        prev = row
+    for xs, ys, xstep, ystep in ADAM7:
+        prev = None
+        for y in range(ys, h, ystep):
+            row = bytearray()
+            for x in range(xs, w, xstep):
+                row += pixels[y][x * bpp:(x + 1) * bpp]
+            if not row:
+                continue
+            raw.append(0)                      # filter type 0, none
+            raw += filter_row(0, row, prev, bpp)
+            prev = row
+        # A pass with no rows at all contributes nothing, not even a filter byte.
+    return raw
+
+def write_png(path, w, h, colour, depth, rows_bytes, bpp, filters, palette=None,
+              trns=None, interlaced=False):
+    if interlaced:
+        raw = interlace(w, h, rows_bytes, bpp)
+    else:
+        raw = bytearray()
+        prev = None
+        for y, row in enumerate(rows_bytes):
+            ft = filters[y % len(filters)]
+            raw.append(ft)
+            raw += filter_row(ft, row, prev, bpp)
+            prev = row
     body = b"\x89PNG\r\n\x1a\n"
-    body += chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, depth, colour, 0, 0, 0))
+    body += chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, depth, colour, 0, 0,
+                                       1 if interlaced else 0))
     if palette is not None:
         body += chunk(b"PLTE", bytes(palette))
     if trns is not None:
@@ -73,6 +100,11 @@ allf = [0,1,2,3,4]
 rows = [bytearray(b for p in row for b in p) for row in pix]
 write_png(out("rgba8.png"), W, H, 6, 8, rows, 4, allf)
 cases.append(("rgba8.png", W, H, [[p for p in row] for row in pix]))
+
+# The same image again, Adam7 interlaced. The decoder libnack used to carry
+# rejected these outright; LodePNG does not, so this is here to keep that true.
+write_png(out("rgba8i.png"), W, H, 6, 8, rows, 4, allf, interlaced=True)
+cases.append(("rgba8i.png", W, H, [[p for p in row] for row in pix]))
 
 # colour 2: RGB8
 rows = [bytearray(b for p in row for b in p[:3]) for row in pix]
