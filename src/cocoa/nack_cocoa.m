@@ -195,7 +195,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 {
     (void)sender;
     _nackWindow->should_close = true;
-    nack__emit_simple(_nackWindow, NACK_EVENT_WINDOW_CLOSE);
+    nack__emit_simple(_nackWindow, NACK_WIN_EVENT_WINDOW_CLOSE);
     /* Never close the window here: the application decides when to destroy
      * it, exactly as on the other backends. */
     return NO;
@@ -221,7 +221,7 @@ void nack__cocoa_update_size(struct nack_window *w)
     if (x != _nackWindow->pos_x || y != _nackWindow->pos_y) {
         _nackWindow->pos_x = x;
         _nackWindow->pos_y = y;
-        struct nack_event *ev = nack__event_begin(NACK_EVENT_WINDOW_MOVE, _nackWindow);
+        struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_WINDOW_MOVE, _nackWindow);
         ev->data.move.x = x;
         ev->data.move.y = y;
         nack__push_event(ev);
@@ -244,14 +244,14 @@ void nack__cocoa_update_size(struct nack_window *w)
 {
     (void)notification;
     _nackWindow->minimized = true;
-    nack__emit_simple(_nackWindow, NACK_EVENT_WINDOW_MINIMIZE);
+    nack__emit_simple(_nackWindow, NACK_WIN_EVENT_WINDOW_MINIMIZE);
 }
 
 - (void)windowDidDeminiaturize:(NSNotification *)notification
 {
     (void)notification;
     _nackWindow->minimized = false;
-    nack__emit_simple(_nackWindow, NACK_EVENT_WINDOW_RESTORE);
+    nack__emit_simple(_nackWindow, NACK_WIN_EVENT_WINDOW_RESTORE);
 }
 
 - (void)windowDidChangeBackingProperties:(NSNotification *)notification
@@ -326,7 +326,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (void)drawRect:(NSRect)rect
 {
     (void)rect;
-    nack__emit_simple(_nackWindow, NACK_EVENT_WINDOW_EXPOSE);
+    nack__emit_simple(_nackWindow, NACK_WIN_EVENT_WINDOW_EXPOSE);
 }
 
 /* ---- Mouse ---- */
@@ -382,7 +382,7 @@ void nack__cocoa_update_size(struct nack_window *w)
         cw->virtual_x += dx;
         cw->virtual_y += dy;
 
-        struct nack_event *ev = nack__event_begin(NACK_EVENT_MOUSE_MOVE, _nackWindow);
+        struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_MOUSE_MOVE, _nackWindow);
         ev->data.motion.x = cw->virtual_x;
         ev->data.motion.y = cw->virtual_y;
         ev->data.motion.dx = dx;
@@ -405,13 +405,13 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (void)mouseEntered:(NSEvent *)event
 {
     (void)event;
-    nack__emit_simple(_nackWindow, NACK_EVENT_MOUSE_ENTER);
+    nack__emit_simple(_nackWindow, NACK_WIN_EVENT_MOUSE_ENTER);
 }
 
 - (void)mouseExited:(NSEvent *)event
 {
     (void)event;
-    nack__emit_simple(_nackWindow, NACK_EVENT_MOUSE_LEAVE);
+    nack__emit_simple(_nackWindow, NACK_WIN_EVENT_MOUSE_LEAVE);
 }
 
 - (void)cursorUpdate:(NSEvent *)event
@@ -593,7 +593,7 @@ void nack__cocoa_update_size(struct nack_window *w)
     (void)sender;
     for (size_t i = 0; i < nack__g.window_count; ++i)
         nack__g.windows[i]->should_close = true;
-    nack__emit_simple(NULL, NACK_EVENT_QUIT);
+    nack__emit_simple(NULL, NACK_WIN_EVENT_QUIT);
     /* Let the application shut down in its own event loop rather than having
      * AppKit tear the process down underneath it. */
     return NSTerminateCancel;
@@ -1040,7 +1040,7 @@ static void nack__cocoa_create_menu_bar(void)
     [bar release];
 }
 
-static bool nack__cocoa_init(const struct nack_init_desc *desc)
+static bool nack__cocoa_init(const struct nack_win_init_desc *desc)
 {
     (void)desc;
     memset(&nack__cocoa, 0, sizeof nack__cocoa);
@@ -1121,7 +1121,7 @@ static const struct nack_backend_vt nack__cocoa_vt_template = {
 };
 
 static struct nack_gl_context *nack__cocoa_gl_create(struct nack_window *w,
-                                              const struct nack_gl_desc *desc);
+                                              const struct nack__gl_desc *desc);
 
 const struct nack_backend_vt *nack__backend_cocoa(void)
 {
@@ -1138,7 +1138,7 @@ const struct nack_backend_vt *nack__backend_cocoa(void)
 }
 
 static struct nack_gl_context *nack__cocoa_gl_create(struct nack_window *w,
-                                              const struct nack_gl_desc *desc)
+                                              const struct nack__gl_desc *desc)
 {
     return nack__nsgl_create_context(w, desc, nack__backend_cocoa());
 }

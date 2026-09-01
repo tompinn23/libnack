@@ -594,7 +594,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
             xcb_atom_t protocol = (xcb_atom_t)event->data.data32[0];
             if (protocol == nack__xcb.atom.WM_DELETE_WINDOW) {
                 w->should_close = true;
-                nack__emit_simple(w, NACK_EVENT_WINDOW_CLOSE);
+                nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_CLOSE);
             } else if (protocol == nack__xcb.atom.NET_WM_PING) {
                 /* Answer the WM's liveness probe, or it marks us as hung. */
                 xcb_client_message_event_t reply = *event;
@@ -618,7 +618,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
         if (event->x != w->pos_x || event->y != w->pos_y) {
             w->pos_x = event->x;
             w->pos_y = event->y;
-            struct nack_event *ev = nack__event_begin(NACK_EVENT_WINDOW_MOVE, w);
+            struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_WINDOW_MOVE, w);
             ev->data.move.x = event->x;
             ev->data.move.y = event->y;
             nack__push_event(ev);
@@ -632,7 +632,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
             break;
         struct nack_window *w = nack__xcb_lookup(event->window);
         if (w)
-            nack__emit_simple(w, NACK_EVENT_WINDOW_EXPOSE);
+            nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_EXPOSE);
         break;
     }
 
@@ -673,7 +673,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
             break;
         w->mouse_x = event->event_x;
         w->mouse_y = event->event_y;
-        nack__emit_simple(w, NACK_EVENT_MOUSE_ENTER);
+        nack__emit_simple(w, NACK_WIN_EVENT_MOUSE_ENTER);
         break;
     }
 
@@ -681,7 +681,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
         xcb_leave_notify_event_t *event = (xcb_leave_notify_event_t *)generic;
         struct nack_window *w = nack__xcb_lookup(event->event);
         if (w)
-            nack__emit_simple(w, NACK_EVENT_MOUSE_LEAVE);
+            nack__emit_simple(w, NACK_WIN_EVENT_MOUSE_LEAVE);
         break;
     }
 
@@ -707,7 +707,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
             w->mouse_x = x;
             w->mouse_y = y;
 
-            struct nack_event *ev = nack__event_begin(NACK_EVENT_MOUSE_MOVE, w);
+            struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_MOUSE_MOVE, w);
             ev->data.motion.x = xw->virtual_x;
             ev->data.motion.y = xw->virtual_y;
             ev->data.motion.dx = dx;
@@ -807,13 +807,13 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
         bool maximized = max_v && max_h;
         if (maximized != w->maximized) {
             w->maximized = maximized;
-            nack__emit_simple(w, maximized ? NACK_EVENT_WINDOW_MAXIMIZE
-                                           : NACK_EVENT_WINDOW_RESTORE);
+            nack__emit_simple(w, maximized ? NACK_WIN_EVENT_WINDOW_MAXIMIZE
+                                           : NACK_WIN_EVENT_WINDOW_RESTORE);
         }
         if (hidden != w->minimized) {
             w->minimized = hidden;
-            nack__emit_simple(w, hidden ? NACK_EVENT_WINDOW_MINIMIZE
-                                        : NACK_EVENT_WINDOW_RESTORE);
+            nack__emit_simple(w, hidden ? NACK_WIN_EVENT_WINDOW_MINIMIZE
+                                        : NACK_WIN_EVENT_WINDOW_RESTORE);
         }
         break;
     }
@@ -881,7 +881,7 @@ static void nack__xcb_pump_events(double timeout)
         char scratch[64];
         while (read(nack__xcb.wakeup_pipe[0], scratch, sizeof scratch) > 0)
             ;
-        nack__emit_simple(NULL, NACK_EVENT_WAKEUP);
+        nack__emit_simple(NULL, NACK_WIN_EVENT_WAKEUP);
     }
 
     nack__xcb_drain();
@@ -961,7 +961,7 @@ static bool nack__xcb_window_create(struct nack_window *w,
     if (nack__egl.initialized) {
         EGLConfig config;
         EGLint egl_visual = 0;
-        if (nack__egl_choose_config(&w->framebuffer, NACK_GL_PROFILE_CORE, 3,
+        if (nack__egl_choose_config(&w->framebuffer, NACK__GL_PROFILE_CORE, 3,
                                     &config, &egl_visual)) {
             xw->config = config;
             xw->has_config = true;
@@ -1233,7 +1233,7 @@ static bool nack__xcb_ensure_surface(struct nack_window *w, EGLConfig config)
 }
 
 static struct nack_gl_context *nack__xcb_gl_create(struct nack_window *w,
-                                                   const struct nack_gl_desc *desc)
+                                                   const struct nack__gl_desc *desc)
 {
     if (!nack__egl.initialized) {
         nack__fail(NACK_ERROR_UNSUPPORTED, "EGL is not available");
@@ -1261,7 +1261,7 @@ static bool nack__xcb_gl_make_current(struct nack_window *w, struct nack_gl_cont
         return nack__egl_make_current(EGL_NO_SURFACE, NULL);
     if (!w)
         return nack__fail(NACK_ERROR_INVALID_ARGUMENT,
-                          "nack_gl_make_current needs a window for this context");
+                          "nack__gl_make_current needs a window for this context");
     struct nack_xcb_window *xw = nack__xcb_win(w);
     if (xw->surface == EGL_NO_SURFACE &&
         !nack__xcb_ensure_surface(w, ((struct nack_egl_context *)ctx->native)->config))
@@ -1334,7 +1334,7 @@ static bool nack__xcb_connect(void)
     return true;
 }
 
-static bool nack__xcb_init(const struct nack_init_desc *desc)
+static bool nack__xcb_init(const struct nack_win_init_desc *desc)
 {
     (void)desc;
     memset(&nack__xcb, 0, sizeof nack__xcb);

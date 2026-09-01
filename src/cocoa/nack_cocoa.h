@@ -61,7 +61,7 @@ static inline struct nack_cocoa_window *nack__cocoa_win(struct nack_window *w)
 }
 
 /* nack_nsgl.m */
-struct nack_gl_context *nack__nsgl_create_context(struct nack_window *w, const struct nack_gl_desc *desc,
+struct nack_gl_context *nack__nsgl_create_context(struct nack_window *w, const struct nack__gl_desc *desc,
                                            const struct nack_backend_vt *vt);
 void  nack__nsgl_destroy_context(struct nack_gl_context *ctx);
 bool  nack__nsgl_make_current(struct nack_window *w, struct nack_gl_context *ctx);

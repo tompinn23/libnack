@@ -127,12 +127,12 @@ void nack__egl_terminate(void)
     memset(&nack__egl, 0, sizeof nack__egl);
 }
 
-bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack_gl_profile profile,
+bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack__gl_profile profile,
                              int gl_major, EGLConfig *out_config,
                              EGLint *out_visual_id)
 {
     EGLint renderable = EGL_OPENGL_BIT;
-    if (profile == NACK_GL_PROFILE_ES)
+    if (profile == NACK__GL_PROFILE_ES)
         renderable = (gl_major >= 3) ? EGL_OPENGL_ES3_BIT : EGL_OPENGL_ES2_BIT;
 
     EGLint attribs[] = {
@@ -185,10 +185,10 @@ bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack_g
     return true;
 }
 
-struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const struct nack_gl_desc *desc,
+struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const struct nack__gl_desc *desc,
                                           EGLConfig config, const struct nack_backend_vt *vt)
 {
-    EGLenum api = (desc->profile == NACK_GL_PROFILE_ES) ? EGL_OPENGL_ES_API
+    EGLenum api = (desc->profile == NACK__GL_PROFILE_ES) ? EGL_OPENGL_ES_API
                                                         : EGL_OPENGL_API;
     if (!eglBindAPI(api)) {
         nack__fail(NACK_ERROR_CONTEXT_CREATION, "eglBindAPI failed: %s",
@@ -207,9 +207,9 @@ struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const st
             attribs[n++] = EGL_CONTEXT_MINOR_VERSION;
             attribs[n++] = desc->minor;
         }
-        if (desc->profile != NACK_GL_PROFILE_ES) {
+        if (desc->profile != NACK__GL_PROFILE_ES) {
             attribs[n++] = EGL_CONTEXT_OPENGL_PROFILE_MASK;
-            attribs[n++] = (desc->profile == NACK_GL_PROFILE_CORE)
+            attribs[n++] = (desc->profile == NACK__GL_PROFILE_CORE)
                                ? EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT
                                : EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT;
         }
@@ -225,7 +225,7 @@ struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const st
             attribs[n++] = EGL_CONTEXT_OPENGL_ROBUST_ACCESS;
             attribs[n++] = EGL_TRUE;
         }
-    } else if (desc->profile == NACK_GL_PROFILE_ES && desc->major > 0) {
+    } else if (desc->profile == NACK__GL_PROFILE_ES && desc->major > 0) {
         attribs[n++] = EGL_CONTEXT_CLIENT_VERSION;
         attribs[n++] = desc->major;
     }
@@ -240,8 +240,8 @@ struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const st
         nack__fail(NACK_ERROR_CONTEXT_CREATION,
                    "eglCreateContext failed for GL %d.%d %s: %s",
                    desc->major, desc->minor,
-                   desc->profile == NACK_GL_PROFILE_CORE ? "core"
-                       : desc->profile == NACK_GL_PROFILE_ES ? "es" : "compat",
+                   desc->profile == NACK__GL_PROFILE_CORE ? "core"
+                       : desc->profile == NACK__GL_PROFILE_ES ? "es" : "compat",
                    nack__egl_error_string(eglGetError()));
         return NULL;
     }
@@ -259,7 +259,7 @@ struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const st
     native->config = config;
     eglGetConfigAttrib(nack__egl.display, config, EGL_NATIVE_VISUAL_ID,
                        &native->visual_id);
-    native->is_es = (desc->profile == NACK_GL_PROFILE_ES);
+    native->is_es = (desc->profile == NACK__GL_PROFILE_ES);
     ctx->native = native;
     ctx->vt = vt;
     ctx->owner = w;

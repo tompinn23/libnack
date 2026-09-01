@@ -24,13 +24,14 @@
 #endif
 
 #include "nack/nack.h"
+#include "nack_window.h"
 
 #include <limits.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define NACK_EVENT_QUEUE_CAP 512
+#define NACK_WIN_EVENT_QUEUE_CAP 512
 #define NACK_MAX_WINDOWS 64
 
 #if defined(_WIN32)
@@ -94,7 +95,7 @@ struct nack_backend_vt {
     const char *name;
     enum nack_backend id;
 
-    bool (*init)(const struct nack_init_desc *desc);
+    bool (*init)(const struct nack_win_init_desc *desc);
     void (*shutdown)(void);
 
     bool (*window_create)(struct nack_window *w, const struct nack_window_desc *desc);
@@ -120,7 +121,7 @@ struct nack_backend_vt {
     void (*pump_events)(double timeout);
     void (*wakeup)(void);
 
-    struct nack_gl_context *(*gl_create)(struct nack_window *w, const struct nack_gl_desc *desc);
+    struct nack_gl_context *(*gl_create)(struct nack_window *w, const struct nack__gl_desc *desc);
     void  (*gl_destroy)(struct nack_gl_context *ctx);
     bool  (*gl_make_current)(struct nack_window *w, struct nack_gl_context *ctx);
     void  (*gl_swap_buffers)(struct nack_window *w);
@@ -145,7 +146,7 @@ struct nack_state {
     void (*log_fn)(const char *, void *);
     void *log_user_data;
 
-    struct nack_event queue[NACK_EVENT_QUEUE_CAP];
+    struct nack_win_event queue[NACK_WIN_EVENT_QUEUE_CAP];
     size_t queue_head, queue_tail;
 
     struct nack_window *windows[NACK_MAX_WINDOWS];
@@ -170,8 +171,8 @@ void nack__log(const char *fmt, ...);
 bool nack__fail(enum nack_result code, const char *fmt, ...);
 
 /* Event queue */
-void nack__push_event(const struct nack_event *ev);
-struct nack_event *nack__event_begin(enum nack_event_type type, struct nack_window *w);
+void nack__push_event(const struct nack_win_event *ev);
+struct nack_win_event *nack__event_begin(enum nack_win_event_type type, struct nack_window *w);
 bool nack__queue_empty(void);
 
 /* Convenience emitters used by backends */
@@ -185,7 +186,7 @@ void nack__emit_mouse_button(struct nack_window *w, int button, bool down, doubl
 void nack__emit_mouse_move(struct nack_window *w, double x, double y, uint32_t mods);
 void nack__emit_scroll(struct nack_window *w, double dx, double dy, uint32_t mods,
                        bool precise);
-void nack__emit_simple(struct nack_window *w, enum nack_event_type type);
+void nack__emit_simple(struct nack_window *w, enum nack_win_event_type type);
 void nack__emit_focus(struct nack_window *w, bool focused);
 void nack__emit_scale(struct nack_window *w, float scale);
 

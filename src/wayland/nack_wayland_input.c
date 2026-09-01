@@ -105,7 +105,7 @@ static void nack__wl_start_repeat(struct nack_window *w, uint32_t raw_key)
     nack__wl.repeat_key = raw_key + 1;   /* +1 so 0 stays the idle marker */
     nack__wl.repeat_window = w;
     nack__wl.repeat_next_ns =
-        nack_time_ns() + (uint64_t)nack__wl.repeat_delay * 1000000ull;
+        nack__win_time_ns() + (uint64_t)nack__wl.repeat_delay * 1000000ull;
 }
 
 static void nack__wl_stop_repeat(void)
@@ -118,7 +118,7 @@ double nack__wl_next_repeat_timeout(void)
 {
     if (!nack__wl.repeat_key || !nack__wl.repeat_window)
         return -1.0;
-    uint64_t now = nack_time_ns();
+    uint64_t now = nack__win_time_ns();
     if (now >= nack__wl.repeat_next_ns)
         return 0.0;
     return (double)(nack__wl.repeat_next_ns - now) / 1e9;
@@ -129,7 +129,7 @@ void nack__wl_pump_key_repeat(void)
     if (!nack__wl.repeat_key || !nack__wl.repeat_window)
         return;
 
-    uint64_t now = nack_time_ns();
+    uint64_t now = nack__win_time_ns();
     uint64_t interval = nack__wl.repeat_rate > 0
                             ? 1000000000ull / (uint64_t)nack__wl.repeat_rate
                             : 0;
@@ -428,7 +428,7 @@ static void relative_pointer_motion(void *data,
     ww->virtual_x += ddx;
     ww->virtual_y += ddy;
 
-    struct nack_event *ev = nack__event_begin(NACK_EVENT_MOUSE_MOVE, w);
+    struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_MOUSE_MOVE, w);
     ev->data.motion.x = ww->virtual_x;
     ev->data.motion.y = ww->virtual_y;
     ev->data.motion.dx = ddx;
@@ -527,7 +527,7 @@ static void pointer_enter(void *data, struct wl_pointer *pointer, uint32_t seria
     w->mouse_x = wl_fixed_to_double(sx);
     w->mouse_y = wl_fixed_to_double(sy);
     nack__wl_update_cursor(w);
-    nack__emit_simple(w, NACK_EVENT_MOUSE_ENTER);
+    nack__emit_simple(w, NACK_WIN_EVENT_MOUSE_ENTER);
 }
 
 static void pointer_leave(void *data, struct wl_pointer *pointer, uint32_t serial,
@@ -540,7 +540,7 @@ static void pointer_leave(void *data, struct wl_pointer *pointer, uint32_t seria
         nack__wl.decor_focus = NULL;
     }
     if (nack__wl.pointer_focus) {
-        nack__emit_simple(nack__wl.pointer_focus, NACK_EVENT_MOUSE_LEAVE);
+        nack__emit_simple(nack__wl.pointer_focus, NACK_WIN_EVENT_MOUSE_LEAVE);
         nack__wl.pointer_focus = NULL;
     }
 }

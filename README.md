@@ -1,49 +1,120 @@
 # libnack
 
-A small cross-platform windowing and OpenGL context library in C99, built to
-sit under a terminal emulator or a libtcod/BearLibTerminal-style console.
+A cell console for roguelikes, in C99. You get a grid of cells to draw glyphs
+and tiles into, in the spirit of libtcod and BearLibTerminal.
 
-| Platform | Backend | Contexts |
+libnack owns the window, the OpenGL context and the renderer. None of that is
+exposed, because none of it is what a roguelike wants to think about. The whole
+API is the console.
+
+```c
+#include "nack/nack.h"
+
+int main(void)
+{
+    struct nack_config config;
+    nack_config_defaults(&config);
+    config.title = "my roguelike";
+    config.columns = 80;
+    config.rows = 50;
+    nack_init(&config);
+
+    while (!nack_should_close()) {
+        nack_clear(NULL);
+        nack_put(NULL, x, y, '@', NACK_WHITE, NACK_BLACK);
+        nack_print(NULL, 0, 49, NACK_GREY, NACK_BLACK, "you are in a maze");
+        nack_present();
+
+        struct nack_event event;
+        while (nack_poll_event(&event)) {
+            if (event.type == NACK_EVENT_KEY_DOWN &&
+                event.data.key.key == NACK_KEY_H)
+                x--;
+        }
+    }
+    nack_shutdown();
+}
+```
+
+| Platform | Windowing | Contexts |
 | --- | --- | --- |
-| Linux, BSD | XCB | EGL |
-| Linux, BSD | Wayland (xdg-shell) | EGL |
+| Linux, BSD | Wayland (xdg-shell) or XCB, chosen at run time | EGL |
 | Windows | Win32 | WGL |
 | macOS | Cocoa | NSOpenGL |
 
-On Unix the backend is chosen at run time, so one binary runs on both Wayland
-and X11. `NACK_BACKEND=wayland` or `NACK_BACKEND=x11` overrides the choice.
+## Why it looks like this
 
-## Why the API looks like this
-
-Most windowing libraries assume a game loop: run flat out, redraw every frame.
-A terminal is the opposite. It is idle almost always, wakes on a keystroke or
-on output from a child process, redraws once, and goes back to sleep. The API
-is shaped around that:
-
-- **`nack_wait_event` blocks.** An idle window costs no CPU. There is also
-  `nack_wait_event_timeout` for cursor blink, and `nack_wakeup`, which is safe
-  to call from another thread when the PTY has produced output.
-- **Text is separate from keys.** `NACK_EVENT_TEXT` carries UTF-8 that has
-  already been through the platform's compose and IME machinery. Ctrl and
-  Command chords produce key events and no text, so a terminal can turn them
-  into control bytes without having to filter stray characters.
+- **A console, not a terminal.** Cells are addressed directly and redrawn as
+  you like. There is no scrollback, no reflow and no PTY; it is a grid you
+  paint, which is what a roguelike wants.
+- **Turn-based games can sleep.** `nack_wait_event` blocks until the player
+  does something, so a game waiting on input costs no CPU at all. Real-time
+  games call `nack_poll_event` in a loop and present every frame instead. Both
+  work; neither is privileged.
+- **The mouse arrives in cells.** `event.data.mouse.x` is a column, not a
+  pixel, already through the letterbox and scale transform. Pixel positions are
+  there too if you want them.
 - **Keys are physical.** `nack_key` values are USB HID usage codes describing
-  the position of a key, not the symbol on it, so a keybinding does not move
-  when the layout changes.
-- **Size increments are first class.** `nack_window_set_size_increments` makes
-  the window snap to whole cells, so a resize never leaves a half column.
-- **Logical and physical sizes are distinct.** The cell grid is reasoned about
-  in logical pixels; the framebuffer is sized in physical ones, so glyphs stay
-  crisp on a HiDPI display.
+  the position of a key, so a movement binding does not move when the player
+  changes layout. The numeric keypad is distinct from the number row, because
+  eight-way movement needs it. Text, for entering a character's name, arrives
+  separately as `NACK_EVENT_TEXT` after the platform's dead-key and IME
+  handling; Ctrl chords produce key events and no text.
+- **Whole-pixel scaling by default.** The console is scaled to the window by a
+  whole number and letterboxed, so tiles stay crisp. `NACK_SCALE_FIT` and
+  `NACK_SCALE_STRETCH` are there if you would rather fill the window.
+
+## Tilesets
+
+The built-in 8x8 CP437 font means a game runs before it ships any assets,
+including box drawing and block characters. Beyond that:
+
+```c
+/* A CP437 sheet: the classic roguelike tileset layout. */
+struct nack_tileset *font =
+    nack_tileset_load("terminal16x16.png", 16, 16, NACK_LAYOUT_CP437);
+nack_set_font(font);
+
+/* Graphical tiles, drawn by index rather than by codepoint. */
+struct nack_tileset *tiles =
+    nack_tileset_load("creatures.png", 32, 32, NACK_LAYOUT_ROW_MAJOR);
+nack_put_tile(NULL, x, y, tiles, ORC_TILE, NACK_WHITE, NACK_BLACK);
+
+/* Unicode past CP437's 256 slots. */
+nack_tileset_map_range(font, 0x4E00, 0x4E7F, 256);
+```
+
+A sheet that only contains greys is treated as a font and tinted by each cell's
+foreground colour; a sheet with real colour in it is treated as artwork and
+drawn as it is, tinted only if you ask. Foreground and background are 24-bit
+with alpha, per cell.
+
+PNG decoding is built in, so there is no image library to link.
+
+## Consoles
+
+Every drawing call takes a console, and `NULL` means the root console — the one
+that gets presented. Offscreen consoles are for composing:
+
+```c
+struct nack_console *panel = nack_console_new(20, 10);
+nack_draw_box(panel, 0, 0, 20, 10, NACK_GREY, NACK_BLACK, "inventory");
+nack_print(panel, 2, 2, NACK_WHITE, NACK_BLACK, "a) rusty sword");
+nack_blit(panel, 0, 0, 20, 10, NULL, 30, 20, 1.0f, 0.9f);
+```
+
+The last two arguments are foreground and background alpha, so a translucent
+overlay is a blit with a low background alpha.
 
 ## Building
 
 ```sh
 cmake -S . -B build
 cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
-Dependencies on Linux:
+On Linux:
 
 ```sh
 sudo apt install libxcb1-dev libx11-xcb-dev libxcb-xkb-dev libxcb-cursor-dev \
@@ -51,166 +122,65 @@ sudo apt install libxcb1-dev libx11-xcb-dev libxcb-xkb-dev libxcb-cursor-dev \
                  libwayland-dev wayland-protocols libegl-dev libgl-dev
 ```
 
-Either backend can be turned off with `-DNACK_ENABLE_XCB=OFF` or
-`-DNACK_ENABLE_WAYLAND=OFF`.
-
 Use it from CMake with `add_subdirectory(libnack)` and link `nack::nack`.
+Either Unix backend can be turned off with `-DNACK_ENABLE_XCB=OFF` or
+`-DNACK_ENABLE_WAYLAND=OFF`; `NACK_BACKEND=wayland` or `x11` in the environment
+overrides the run-time choice.
 
-## Usage
+## Examples
 
-```c
-#include "nack/nack.h"
-
-nack_init(&(struct nack_init_desc){ .app_id = "my.terminal" });
-
-struct nack_window_desc desc;
-nack_window_desc_defaults(&desc);
-desc.title = "terminal";
-desc.width  = 80 * cell_width;
-desc.height = 25 * cell_height;
-desc.width_increment  = cell_width;    /* snap to whole cells */
-desc.height_increment = cell_height;
-
-struct nack_window *window = nack_window_create(&desc);
-
-struct nack_gl_desc gl;
-nack_gl_desc_defaults(&gl);             /* 3.3 core */
-struct nack_gl_context *ctx = nack_gl_context_create(window, &gl);
-nack_gl_make_current(window, ctx);
-
-while (!nack_window_should_close(window)) {
-    struct nack_event event;
-    if (!nack_wait_event(&event))       /* sleeps until something happens */
-        break;
-    do {
-        switch (event.type) {
-        case NACK_EVENT_TEXT:           /* already composed UTF-8 */
-            pty_write(event.data.text.utf8);
-            break;
-        case NACK_EVENT_KEY_DOWN:
-            if (event.data.key.mods & NACK_MOD_CTRL &&
-                event.data.key.key == NACK_KEY_C)
-                pty_write("\003");
-            break;
-        case NACK_EVENT_WINDOW_RESIZE:
-            reflow(event.data.size.width / cell_width,
-                   event.data.size.height / cell_height);
-            break;
-        default:
-            break;
-        }
-    } while (nack_poll_event(&event));  /* drain the rest without blocking */
-
-    render();
-    nack_gl_swap_buffers(window);
-}
-```
-
-### Loading OpenGL
-
-libnack ships no loader. `nack_gl_get_proc_address` is a plain getter meant to
-be handed to whichever one you already use:
-
-```c
-gladLoadGLLoader((GLADloadproc)nack_gl_get_proc_address);
-```
-
-Lookups are memoised, so resolving several hundred names at startup is cheap
-and a second load costs almost nothing.
-
-One caveat that is not libnack's to fix: on any driver using libglvnd,
-`eglGetProcAddress` returns a non-NULL dispatch stub for *every* `gl`-prefixed
-name, whether the function exists or not. A non-NULL pointer therefore proves
-nothing. Gate optional functionality on the context version or on
-`nack_gl_extension_supported`, never on the pointer alone.
+- `hello` — the smallest useful program.
+- `roguelike` — a playable fragment: generated dungeon, field of view with
+  remembered terrain, eight-way movement from vi keys, arrows and the keypad,
+  a sidebar composed offscreen and blitted, a message log, and a blocking event
+  loop that idles at zero CPU.
 
 ## Platform notes
 
 **No windows.h.** The Win32 backend declares the seventy-odd functions and
-handful of structures it uses itself, rather than including `windows.h` and its
-namespace pollution (`near`, `far`, `min`, `max`, `CreateWindow`, and so on).
-Those declarations are not trusted: `tests/win32_abi_check` evaluates every
-structure size, member offset and constant on both sides — once against the
-real SDK, once against the hand-rolled header — and fails the build if any of
-the 226 facts disagree. Configure with `-DNACK_WIN32_USE_SDK_HEADERS=ON` to
-fall back to `windows.h` if a future SDK ever diverges.
+structures it uses itself, rather than dragging in `windows.h` and its
+namespace pollution. Those declarations are checked rather than trusted:
+`tests/win32_abi_check` compares every structure size, member offset and
+constant against the real SDK and fails the build if any of the 226 facts
+disagree. `-DNACK_WIN32_USE_SDK_HEADERS=ON` falls back to `windows.h`.
 
-**X11 goes through XCB, not Xlib.** Xlib is still linked for one reason: EGL on
-the proprietary NVIDIA driver requires an Xlib `Display*`, and
-`EGL_EXT_platform_xcb` is Mesa-only. Where that extension is present the
-connection stays pure XCB; where it is not, an XCB connection is borrowed from
-an Xlib display rather than running two connections. Building with
-`-DNACK_XCB_XLIB_FALLBACK=OFF` drops the Xlib dependency entirely, at the cost
-of EGL on NVIDIA. GLX is not used at all.
+**X11 goes through XCB, not Xlib.** Xlib is linked for one reason: EGL on the
+proprietary NVIDIA driver needs an Xlib `Display*`, and `EGL_EXT_platform_xcb`
+is Mesa-only. Where that extension exists the connection stays pure XCB.
+`-DNACK_XCB_XLIB_FALLBACK=OFF` drops the dependency, at the cost of EGL on
+NVIDIA. GLX is not used.
 
 **Wayland decorations.** xdg-decoration is optional and some compositors never
-implement it (Mutter, and WSLg among others). Where it is missing, or where the
-compositor asks the client to draw, libnack draws its own frame: a title bar
-with the window title and minimise, maximise and close buttons, resize borders
-with the corners and the matching resize cursors, drag to move, and
-double-click to maximise. It follows the window's scale factor so it stays
-sharp on a HiDPI display. It is deliberately plain — no theming, no shadows,
-no rounded corners — and exists so a window is usable, not so it passes for
-native. `NACK_WAYLAND_FORCE_CSD=1` exercises that path on a compositor that
-does support the protocol.
-
-**Windows are mapped before the first frame.** On Wayland a surface with no
-committed buffer is never mapped, so a window that had not drawn yet would be
-invisible rather than merely empty, unlike X11 and Win32. libnack commits a
-blank frame when the window is shown and drops it once the client presents, so
-`nack_window_show` means the same thing everywhere.
-
-**Key repeat** is generated by the client on Wayland, as the protocol requires,
-using the compositor's advertised rate and delay. X11 uses detectable
-auto-repeat so a held key does not produce spurious release events.
-
-**Clipboard.** The X11 backend implements both directions of ICCCM including
-INCR, so pasting more than a screenful of text works. Wayland uses
-`wl_data_device`, with the primary selection where the compositor offers it.
-Windows and macOS have no primary selection, so `nack_primary_*` returns
-false/NULL there.
+implement it (Mutter and WSLg among them). Where it is missing, libnack draws
+its own frame: title bar with the window title, minimise, maximise and close
+buttons, resize borders with the right cursors, drag to move, double-click to
+maximise, following the display's scale factor. `NACK_WAYLAND_FORCE_CSD=1`
+exercises it on a compositor that does support the protocol.
 
 ## What is not implemented
 
 - Drag and drop.
-- Multi-window IME preedit display (dead keys and compose work; a candidate
-  window for CJK input does not).
+- IME candidate windows (dead keys and compose work; CJK input methods do not
+  show their candidate list).
 - Monitor enumeration and video mode switching; fullscreen uses the monitor the
   window is already on.
-- Gamepad or touch input.
-
-## Examples
-
-- `hello_window` — window creation and the event stream.
-- `gl_triangle` — a 3.3 core context and a shader.
-- `text_grid` — a character-cell grid with cell snapping, UTF-8 input,
-  clipboard, and a blocking event loop. This is the one that shows the shape a
-  terminal would take.
-
-```sh
-./build/examples/text_grid
-```
+- Gamepad and touch input.
+- Sound. libnack draws; it does not make noise.
 
 ## Testing
 
-```sh
-cmake --build build && ctest --test-dir build --output-on-failure
-```
+`tests/console_smoke.c` drives the console API and verifies frames by reading
+pixels back out of the framebuffer, not merely by checking that `nack_present`
+returned. `tests/png_test.c` decodes generated PNGs across every colour type,
+bit depth and row filter and compares them pixel for pixel against known data.
+`tests/win32_abi_check` compares the hand-rolled Win32 declarations with the
+SDK.
 
-`tests/smoke.c` runs on any backend: window creation, a GL 3.3 core context
-with the cleared colour read back out of the framebuffer, event-loop timeouts,
-cross-thread wakeups, and clipboard round trips including a 200 KB payload
-large enough to exercise X11's INCR protocol. It is run here against Xvfb, sway
-and Weston.
-
-`tests/win32_smoke.c` drives the Win32 backend end to end and runs under Wine
-as well as on Windows; it is what caught `nack_wakeup` posting a thread message
-that `DispatchMessageW` then discarded. `tests/win32_abi_check` compares the
-hand-rolled Win32 declarations against the SDK.
-
-The Cocoa backend is the one that has not been run: it is written and reviewed
-but has no hardware here, so CI building it on macOS is the first real check.
+Run here against Xvfb, sway and Weston, and cross-compiled for Windows with
+MinGW and exercised under Wine. The Cocoa backend is built by CI but has not
+been run on hardware.
 
 ## Licence
 
-MIT.
+MIT. The built-in font derives from Daniel Hepper's font8x8, which is public
+domain.

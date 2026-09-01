@@ -43,13 +43,13 @@ extern struct nack_egl_state nack__egl;
 bool nack__egl_init(EGLenum platform, void *native_display, const EGLAttrib *attribs);
 void nack__egl_terminate(void);
 
-bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack_gl_profile profile,
+bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack__gl_profile profile,
                              int gl_major, EGLConfig *out_config,
                              EGLint *out_visual_id);
 
 /* Creates the EGLContext. The window's surface is created separately so the
  * backend can pick the right native window representation. */
-struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const struct nack_gl_desc *desc,
+struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const struct nack__gl_desc *desc,
                                           EGLConfig config, const struct nack_backend_vt *vt);
 void nack__egl_destroy_context(struct nack_gl_context *ctx);
 

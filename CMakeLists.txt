@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(libnack
-    VERSION 0.1.0
-    DESCRIPTION "Cross-platform windowing and OpenGL context library"
+    VERSION 0.2.0
+    DESCRIPTION "A cell console for roguelikes"
     LANGUAGES C)
 
 if(APPLE)
@@ -36,7 +36,13 @@ cmake_dependent_option(NACK_XCB_XLIB_FALLBACK
 set(NACK_SOURCES
     src/nack.c
     src/nack_keys.c
-    src/common/nack_proc_cache.c)
+    src/common/nack_proc_cache.c
+    src/console/nack_api.c
+    src/console/nack_console.c
+    src/console/nack_gl.c
+    src/console/nack_png.c
+    src/console/nack_render.c
+    src/console/nack_tileset.c)
 
 set(NACK_LIBRARIES "")
 set(NACK_DEFINITIONS "")
@@ -144,14 +150,49 @@ endif()
 # Library
 # --------------------------------------------------------------------------
 
+#
+# Compiled once as an object library so the tests can link the objects
+# directly. A shared build hides internal symbols, and the smoke test needs one
+# of them to read the framebuffer back; linking objects keeps that possible
+# without exporting anything the API does not promise.
+#
+add_library(nack_objects OBJECT ${NACK_SOURCES})
+
+target_include_directories(nack_objects
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+            ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(nack_objects PRIVATE ${NACK_LIBRARIES})
+target_compile_definitions(nack_objects PRIVATE ${NACK_DEFINITIONS})
+
+set_target_properties(nack_objects PROPERTIES
+    C_STANDARD 99
+    C_STANDARD_REQUIRED ON
+    C_EXTENSIONS ON          # POSIX interfaces (poll, pipe) need the GNU dialect
+    POSITION_INDEPENDENT_CODE ON)
+
+if(APPLE)
+    set_target_properties(nack_objects PROPERTIES OBJC_STANDARD 11)
+endif()
+
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(nack_objects PRIVATE
+        -Wall -Wextra -Wshadow -Wstrict-prototypes -Wmissing-prototypes
+        -Wno-unused-parameter)
+elseif(MSVC)
+    target_compile_options(nack_objects PRIVATE /W4 /wd4100)
+    target_compile_definitions(nack_objects PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+
 if(NACK_BUILD_SHARED)
-    add_library(nack SHARED ${NACK_SOURCES})
-    target_compile_definitions(nack PUBLIC NACK_SHARED PRIVATE NACK_BUILD)
-    set_target_properties(nack PROPERTIES
+    add_library(nack SHARED $<TARGET_OBJECTS:nack_objects>)
+    target_compile_definitions(nack_objects PUBLIC NACK_SHARED PRIVATE NACK_BUILD)
+    target_compile_definitions(nack PUBLIC NACK_SHARED)
+    set_target_properties(nack_objects PROPERTIES
         C_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN ON)
 else()
-    add_library(nack STATIC ${NACK_SOURCES})
+    add_library(nack STATIC $<TARGET_OBJECTS:nack_objects>)
 endif()
 
 add_library(nack::nack ALIAS nack)
@@ -159,34 +200,13 @@ add_library(nack::nack ALIAS nack)
 target_include_directories(nack
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_BINARY_DIR})
-
-target_link_libraries(nack PRIVATE ${NACK_LIBRARIES})
-target_compile_definitions(nack PRIVATE ${NACK_DEFINITIONS})
+        $<INSTALL_INTERFACE:include>)
+target_link_libraries(nack PUBLIC ${NACK_LIBRARIES})
 
 set_target_properties(nack PROPERTIES
-    C_STANDARD 99
-    C_STANDARD_REQUIRED ON
-    C_EXTENSIONS ON          # POSIX interfaces (poll, pipe) need the GNU dialect
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
     POSITION_INDEPENDENT_CODE ON)
-
-if(APPLE)
-    set_target_properties(nack PROPERTIES OBJC_STANDARD 11)
-endif()
-
-if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(nack PRIVATE
-        -Wall -Wextra -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-        -Wno-unused-parameter)
-elseif(MSVC)
-    target_compile_options(nack PRIVATE /W4 /wd4100)
-    target_compile_definitions(nack PRIVATE _CRT_SECURE_NO_WARNINGS)
-endif()
 
 # --------------------------------------------------------------------------
 # Tests
@@ -198,19 +218,25 @@ endif()
 if(PROJECT_IS_TOP_LEVEL)
     enable_testing()
 
-    add_executable(nack_smoke tests/smoke.c)
-    target_link_libraries(nack_smoke PRIVATE nack)
+    # Links the objects rather than the library: the test reads the
+    # framebuffer back through an internal hook to check that frames actually
+    # rendered, and a shared build would have hidden that symbol.
+    add_executable(nack_smoke tests/console_smoke.c $<TARGET_OBJECTS:nack_objects>)
+    target_link_libraries(nack_smoke PRIVATE ${NACK_LIBRARIES})
+    target_include_directories(nack_smoke PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_BINARY_DIR})
     set_target_properties(nack_smoke PROPERTIES
         C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
     add_test(NAME smoke COMMAND nack_smoke)
 
-    if(WIN32)
-        add_executable(nack_win32_smoke tests/win32_smoke.c)
-        target_link_libraries(nack_win32_smoke PRIVATE nack)
-        set_target_properties(nack_win32_smoke PROPERTIES
-            C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
-        add_test(NAME win32_smoke COMMAND nack_win32_smoke)
-    endif()
+    add_executable(nack_png_test tests/png_test.c src/console/nack_png.c)
+    target_include_directories(nack_png_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    set_target_properties(nack_png_test PROPERTIES
+        C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
+    add_test(NAME png COMMAND nack_png_test)
 endif()
 
 if(WIN32 AND NOT NACK_WIN32_USE_SDK_HEADERS AND PROJECT_IS_TOP_LEVEL)

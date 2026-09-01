@@ -4,7 +4,7 @@
  * eglGetProcAddress / wglGetProcAddress / dlsym are not free, and a loader
  * such as glad resolves several hundred names at startup - and does it again
  * for every context. Memoising the result keeps repeated loads cheap and makes
- * nack_gl_get_proc_address safe to call from a hot path.
+ * nack__gl_get_proc_address safe to call from a hot path.
  *
  * Negative results are cached too: an unsupported extension otherwise costs a
  * full failed lookup every time it is queried.

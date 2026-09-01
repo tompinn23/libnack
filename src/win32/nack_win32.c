@@ -379,7 +379,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
     switch (msg) {
     case WM_CLOSE:
         w->should_close = true;
-        nack__emit_simple(w, NACK_EVENT_WINDOW_CLOSE);
+        nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_CLOSE);
         return 0;   /* the application decides when to destroy the window */
 
     case WM_ERASEBKGND:
@@ -389,7 +389,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
         PAINTSTRUCT paint;
         BeginPaint(hwnd, &paint);
         EndPaint(hwnd, &paint);
-        nack__emit_simple(w, NACK_EVENT_WINDOW_EXPOSE);
+        nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_EXPOSE);
         return 0;
     }
 
@@ -417,13 +417,13 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
         bool maximized = (wparam == SIZE_MAXIMIZED);
         if (minimized != w->minimized) {
             w->minimized = minimized;
-            nack__emit_simple(w, minimized ? NACK_EVENT_WINDOW_MINIMIZE
-                                           : NACK_EVENT_WINDOW_RESTORE);
+            nack__emit_simple(w, minimized ? NACK_WIN_EVENT_WINDOW_MINIMIZE
+                                           : NACK_WIN_EVENT_WINDOW_RESTORE);
         }
         if (maximized != w->maximized) {
             w->maximized = maximized;
-            nack__emit_simple(w, maximized ? NACK_EVENT_WINDOW_MAXIMIZE
-                                           : NACK_EVENT_WINDOW_RESTORE);
+            nack__emit_simple(w, maximized ? NACK_WIN_EVENT_WINDOW_MAXIMIZE
+                                           : NACK_WIN_EVENT_WINDOW_RESTORE);
         }
         if (!minimized) {
             int width = LOWORD(lparam), height = HIWORD(lparam);
@@ -440,7 +440,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
         if (x != w->pos_x || y != w->pos_y) {
             w->pos_x = x;
             w->pos_y = y;
-            struct nack_event *ev = nack__event_begin(NACK_EVENT_WINDOW_MOVE, w);
+            struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_WINDOW_MOVE, w);
             ev->data.move.x = x;
             ev->data.move.y = y;
             nack__push_event(ev);
@@ -466,7 +466,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
     case WM_TIMER:
         if (wparam == 1 && ww->in_size_move) {
             nack__win32_update_size(w);
-            nack__emit_simple(w, NACK_EVENT_WINDOW_EXPOSE);
+            nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_EXPOSE);
         }
         return 0;
 
@@ -644,7 +644,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 
         if (!ww->cursor_tracked) {
             nack__win32_track_mouse_leave(w);
-            nack__emit_simple(w, NACK_EVENT_MOUSE_ENTER);
+            nack__emit_simple(w, NACK_WIN_EVENT_MOUSE_ENTER);
         }
 
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED) {
@@ -655,7 +655,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
             if (dx == 0 && dy == 0)
                 return 0;   /* this is the recentring move, not user input */
 
-            struct nack_event *ev = nack__event_begin(NACK_EVENT_MOUSE_MOVE, w);
+            struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_MOUSE_MOVE, w);
             w->mouse_x += dx;
             w->mouse_y += dy;
             ev->data.motion.x = w->mouse_x;
@@ -675,7 +675,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 
     case WM_MOUSELEAVE:
         ww->cursor_tracked = false;
-        nack__emit_simple(w, NACK_EVENT_MOUSE_LEAVE);
+        nack__emit_simple(w, NACK_WIN_EVENT_MOUSE_LEAVE);
         return 0;
 
     case WM_LBUTTONDOWN: case WM_LBUTTONUP:
@@ -1008,18 +1008,18 @@ static void nack__win32_drain(void)
     while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
         if (msg.message == WM_QUIT) {
             size_t i;
-            nack__emit_simple(NULL, NACK_EVENT_QUIT);
+            nack__emit_simple(NULL, NACK_WIN_EVENT_QUIT);
             for (i = 0; i < nack__g.window_count; ++i)
                 nack__g.windows[i]->should_close = true;
             continue;
         }
         /*
-         * nack_wakeup posts a thread message, which has no target window.
+         * nack__win_wakeup posts a thread message, which has no target window.
          * DispatchMessageW would silently drop it, so it has to become an
          * event here rather than in the window procedure.
          */
         if (msg.message == NACK_WM_WAKEUP && msg.hwnd == NULL) {
-            nack__emit_simple(NULL, NACK_EVENT_WAKEUP);
+            nack__emit_simple(NULL, NACK_WIN_EVENT_WAKEUP);
             continue;
         }
         TranslateMessage(&msg);
@@ -1166,7 +1166,7 @@ static void nack__win32_load_dpi_functions(void)
     }
 }
 
-static bool nack__win32_init(const struct nack_init_desc *desc)
+static bool nack__win32_init(const struct nack_win_init_desc *desc)
 {
     (void)desc;
     memset(&nack__win32, 0, sizeof nack__win32);
@@ -1255,7 +1255,7 @@ static const struct nack_backend_vt nack__win32_vt = {
 };
 
 static struct nack_gl_context *nack__win32_gl_create(struct nack_window *w,
-                                              const struct nack_gl_desc *desc)
+                                              const struct nack__gl_desc *desc)
 {
     return nack__wgl_create_context(w, desc, &nack__win32_vt);
 }

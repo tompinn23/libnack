@@ -38,7 +38,7 @@ static char *nack__wl_read_pipe(int fd)
         return NULL;
     }
 
-    double deadline = nack_time_seconds() + NACK_WL_READ_TIMEOUT_MS / 1000.0;
+    double deadline = nack__win_time_seconds() + NACK_WL_READ_TIMEOUT_MS / 1000.0;
     for (;;) {
         if (length + 1 >= capacity) {
             size_t grown_size = capacity * 2;
@@ -64,7 +64,7 @@ static char *nack__wl_read_pipe(int fd)
         if (errno != EAGAIN && errno != EWOULDBLOCK)
             break;
 
-        double remaining = deadline - nack_time_seconds();
+        double remaining = deadline - nack__win_time_seconds();
         if (remaining <= 0.0)
             break;
         struct pollfd pfd = { fd, POLLIN, 0 };

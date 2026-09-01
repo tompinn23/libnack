@@ -754,7 +754,7 @@ bool nack__wl_decor_pointer_button(struct nack_window *w, int button, bool down,
     switch (pressed) {
     case NACK_WL_BUTTON_CLOSE:
         w->should_close = true;
-        nack__emit_simple(w, NACK_EVENT_WINDOW_CLOSE);
+        nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_CLOSE);
         return true;
     case NACK_WL_BUTTON_MINIMIZE:
         xdg_toplevel_set_minimized(ww->xdg_toplevel);

@@ -285,7 +285,7 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
         wp_viewport_set_destination(ww->viewport, w->width, w->height);
 
     if (size_changed || !ww->configured) {
-        struct nack_event *ev = nack__event_begin(NACK_EVENT_WINDOW_RESIZE, w);
+        struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_WINDOW_RESIZE, w);
         ev->data.size.width = w->width;
         ev->data.size.height = w->height;
         ev->data.size.fb_width = w->fb_width;
@@ -295,8 +295,8 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 
     if (ww->pending_maximized != w->maximized) {
         w->maximized = ww->pending_maximized;
-        nack__emit_simple(w, w->maximized ? NACK_EVENT_WINDOW_MAXIMIZE
-                                          : NACK_EVENT_WINDOW_RESTORE);
+        nack__emit_simple(w, w->maximized ? NACK_WIN_EVENT_WINDOW_MAXIMIZE
+                                          : NACK_WIN_EVENT_WINDOW_RESTORE);
     }
     w->fullscreen = ww->pending_fullscreen;
 
@@ -338,7 +338,7 @@ static void xdg_toplevel_close(void *data, struct xdg_toplevel *toplevel)
     (void)toplevel;
     struct nack_window *w = (struct nack_window *)data;
     w->should_close = true;
-    nack__emit_simple(w, NACK_EVENT_WINDOW_CLOSE);
+    nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_CLOSE);
 }
 
 static void xdg_toplevel_configure_bounds(void *data, struct xdg_toplevel *toplevel,
@@ -550,7 +550,7 @@ static bool nack__wl_window_create(struct nack_window *w,
     if (nack__egl.initialized) {
         EGLConfig config;
         EGLint visual = 0;
-        if (nack__egl_choose_config(&w->framebuffer, NACK_GL_PROFILE_CORE, 3,
+        if (nack__egl_choose_config(&w->framebuffer, NACK__GL_PROFILE_CORE, 3,
                                     &config, &visual)) {
             ww->config = config;
             ww->has_config = true;
@@ -649,7 +649,7 @@ static void nack__wl_window_set_size(struct nack_window *w, int width, int heigh
     if (ww->viewport)
         wp_viewport_set_destination(ww->viewport, width, height);
 
-    struct nack_event *ev = nack__event_begin(NACK_EVENT_WINDOW_RESIZE, w);
+    struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_WINDOW_RESIZE, w);
     ev->data.size.width = w->width;
     ev->data.size.height = w->height;
     ev->data.size.fb_width = w->fb_width;
@@ -720,7 +720,7 @@ static void nack__wl_window_request_redraw(struct nack_window *w)
 {
     struct nack_wl_window *ww = nack__wl_win(w);
     wl_surface_damage_buffer(ww->surface, 0, 0, INT32_MAX, INT32_MAX);
-    nack__emit_simple(w, NACK_EVENT_WINDOW_EXPOSE);
+    nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_EXPOSE);
     wl_display_flush(nack__wl.display);
 }
 
@@ -751,7 +751,7 @@ static bool nack__wl_ensure_surface(struct nack_window *w, EGLConfig config)
 }
 
 static struct nack_gl_context *nack__wl_gl_create(struct nack_window *w,
-                                                  const struct nack_gl_desc *desc)
+                                                  const struct nack__gl_desc *desc)
 {
     if (!nack__egl.initialized) {
         nack__fail(NACK_ERROR_UNSUPPORTED, "EGL is not available");
@@ -774,7 +774,7 @@ static bool nack__wl_gl_make_current(struct nack_window *w, struct nack_gl_conte
         return nack__egl_make_current(EGL_NO_SURFACE, NULL);
     if (!w)
         return nack__fail(NACK_ERROR_INVALID_ARGUMENT,
-                          "nack_gl_make_current needs a window for this context");
+                          "nack__gl_make_current needs a window for this context");
     struct nack_wl_window *ww = nack__wl_win(w);
     if (ww->egl_surface == EGL_NO_SURFACE &&
         !nack__wl_ensure_surface(w, ((struct nack_egl_context *)ctx->native)->config))
@@ -876,7 +876,7 @@ static void nack__wl_pump_events(double timeout)
         char scratch[64];
         while (read(nack__wl.wakeup_pipe[0], scratch, sizeof scratch) > 0)
             ;
-        nack__emit_simple(NULL, NACK_EVENT_WAKEUP);
+        nack__emit_simple(NULL, NACK_WIN_EVENT_WAKEUP);
     }
 
     nack__wl_pump_key_repeat();
@@ -887,7 +887,7 @@ static void nack__wl_pump_events(double timeout)
 /* Init / shutdown                                                    */
 /* ------------------------------------------------------------------ */
 
-static bool nack__wl_init(const struct nack_init_desc *desc)
+static bool nack__wl_init(const struct nack_win_init_desc *desc)
 {
     (void)desc;
     memset(&nack__wl, 0, sizeof nack__wl);

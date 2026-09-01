@@ -1,19 +1,36 @@
 /*
- * libnack - a small cross-platform windowing + OpenGL context library.
+ * libnack - a cell console for roguelikes.
  *
- * Backends: Win32, Cocoa, Wayland, X11.
+ * The whole API is a grid of cells you draw glyphs and tiles into, in the
+ * spirit of libtcod and BearLibTerminal. libnack owns the window, the OpenGL
+ * context and the renderer; none of that is exposed, because none of it is
+ * what a roguelike wants to think about.
  *
- * The API is deliberately shaped for the needs of a grid/terminal renderer:
- * blocking event waits with timeouts, thread-safe wakeups, size increments,
- * per-monitor DPI scaling, clipboard access and UTF-8 text input.
+ *     struct nack_config cfg;
+ *     nack_config_defaults(&cfg);
+ *     cfg.title = "my roguelike";
+ *     cfg.columns = 80;
+ *     cfg.rows = 50;
+ *     nack_init(&cfg);
  *
- * Threading: unless documented otherwise, every function must be called from
- * the thread that called nack_init(). The exceptions are nack_wakeup() and
- * nack_time_ns()/nack_time_seconds(), which are safe from any thread.
+ *     while (!nack_should_close()) {
+ *         struct nack_event ev;
+ *         while (nack_poll_event(&ev))
+ *             handle(&ev);
+ *
+ *         nack_clear(NULL);
+ *         nack_print(NULL, 1, 1, NACK_WHITE, NACK_BLACK, "@ you");
+ *         nack_present();
+ *     }
+ *     nack_shutdown();
+ *
+ * Turn-based games can block instead of spinning: nack_wait_event sleeps until
+ * the player does something, so an idle game costs no CPU.
  */
 #ifndef NACK_H_INCLUDED
 #define NACK_H_INCLUDED
 
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -35,85 +52,46 @@ extern "C" {
 #endif
 
 #define NACK_VERSION_MAJOR 0
-#define NACK_VERSION_MINOR 1
+#define NACK_VERSION_MINOR 2
 #define NACK_VERSION_PATCH 0
 
 /* -------------------------------------------------------------------------- */
-/* Enumerations                                                               */
+/* Colour                                                                     */
 /* -------------------------------------------------------------------------- */
 
-enum nack_backend {
-    NACK_BACKEND_NONE = 0,
-    NACK_BACKEND_WIN32,
-    NACK_BACKEND_COCOA,
-    NACK_BACKEND_WAYLAND,
-    NACK_BACKEND_X11
+struct nack_color {
+    uint8_t r, g, b, a;
 };
 
-enum nack_result {
-    NACK_OK = 0,
-    NACK_ERROR_UNKNOWN = -1,
-    NACK_ERROR_NOT_INITIALIZED = -2,
-    NACK_ERROR_NO_BACKEND = -3,
-    NACK_ERROR_PLATFORM = -4,
-    NACK_ERROR_OUT_OF_MEMORY = -5,
-    NACK_ERROR_INVALID_ARGUMENT = -6,
-    NACK_ERROR_NO_PIXEL_FORMAT = -7,
-    NACK_ERROR_CONTEXT_CREATION = -8,
-    NACK_ERROR_UNSUPPORTED = -9
-};
+#define NACK_RGB(r, g, b)      ((struct nack_color){ (uint8_t)(r), (uint8_t)(g), \
+                                                     (uint8_t)(b), 255 })
+#define NACK_RGBA(r, g, b, a)  ((struct nack_color){ (uint8_t)(r), (uint8_t)(g), \
+                                                     (uint8_t)(b), (uint8_t)(a) })
 
-enum nack_event_type {
-    NACK_EVENT_NONE = 0,
+#define NACK_BLACK        NACK_RGB(0, 0, 0)
+#define NACK_WHITE        NACK_RGB(255, 255, 255)
+#define NACK_GREY         NACK_RGB(128, 128, 128)
+#define NACK_DARK_GREY    NACK_RGB(64, 64, 64)
+#define NACK_RED          NACK_RGB(200, 60, 60)
+#define NACK_GREEN        NACK_RGB(90, 190, 90)
+#define NACK_BLUE         NACK_RGB(80, 130, 220)
+#define NACK_YELLOW       NACK_RGB(220, 200, 90)
+#define NACK_CYAN         NACK_RGB(90, 200, 210)
+#define NACK_MAGENTA      NACK_RGB(190, 100, 190)
+#define NACK_ORANGE       NACK_RGB(220, 140, 60)
+#define NACK_BROWN        NACK_RGB(140, 100, 60)
+/* Fully transparent: a cell background that lets what is behind it show. */
+#define NACK_NONE         NACK_RGBA(0, 0, 0, 0)
 
-    NACK_EVENT_WINDOW_CLOSE,       /* user asked to close the window        */
-    NACK_EVENT_WINDOW_RESIZE,      /* ev.size                                */
-    NACK_EVENT_WINDOW_MOVE,        /* ev.move                                */
-    NACK_EVENT_WINDOW_FOCUS,
-    NACK_EVENT_WINDOW_BLUR,
-    NACK_EVENT_WINDOW_EXPOSE,      /* contents need repainting               */
-    NACK_EVENT_WINDOW_SCALE,       /* ev.scale, DPI/content scale changed    */
-    NACK_EVENT_WINDOW_MINIMIZE,
-    NACK_EVENT_WINDOW_RESTORE,
-    NACK_EVENT_WINDOW_MAXIMIZE,
-
-    NACK_EVENT_KEY_DOWN,           /* ev.key                                 */
-    NACK_EVENT_KEY_UP,             /* ev.key                                 */
-    NACK_EVENT_TEXT,               /* ev.text, UTF-8 committed text          */
-
-    NACK_EVENT_MOUSE_DOWN,         /* ev.button                              */
-    NACK_EVENT_MOUSE_UP,           /* ev.button                              */
-    NACK_EVENT_MOUSE_MOVE,         /* ev.motion                              */
-    NACK_EVENT_MOUSE_SCROLL,       /* ev.scroll                              */
-    NACK_EVENT_MOUSE_ENTER,
-    NACK_EVENT_MOUSE_LEAVE,
-
-    NACK_EVENT_WAKEUP,             /* produced by nack_wakeup()              */
-    NACK_EVENT_QUIT                /* app-level quit request (macOS/Windows) */
-};
-
-enum nack_mod {
-    NACK_MOD_SHIFT    = 1u << 0,
-    NACK_MOD_CTRL     = 1u << 1,
-    NACK_MOD_ALT      = 1u << 2,
-    NACK_MOD_SUPER    = 1u << 3,   /* Windows key / Command                  */
-    NACK_MOD_CAPSLOCK = 1u << 4,
-    NACK_MOD_NUMLOCK  = 1u << 5
-};
-
-enum nack_mouse_button {
-    NACK_MOUSE_LEFT = 0,
-    NACK_MOUSE_RIGHT = 1,
-    NACK_MOUSE_MIDDLE = 2,
-    NACK_MOUSE_X1 = 3,
-    NACK_MOUSE_X2 = 4,
-    NACK_MOUSE_BUTTON_COUNT = 8
-};
+/* -------------------------------------------------------------------------- */
+/* Keys                                                                       */
+/* -------------------------------------------------------------------------- */
 
 /*
- * Physical key identifiers. Values are USB HID keyboard usage codes, so they
- * describe the *position* of the key rather than the symbol printed on it;
- * the symbol arrives separately as NACK_EVENT_TEXT.
+ * Physical key identifiers, using USB HID usage codes. They describe the
+ * position of a key rather than the symbol printed on it, so a movement
+ * binding does not move when the player changes layout. The symbol, when you
+ * want it (entering a character name), arrives as NACK_EVENT_TEXT.
  */
 enum nack_key {
     NACK_KEY_UNKNOWN = 0,
@@ -164,6 +142,8 @@ enum nack_key {
     NACK_KEY_DOWN = 81,
     NACK_KEY_UP = 82,
 
+    /* The numeric keypad, which is how a lot of roguelikes do eight-way
+     * movement, so these are worth having distinct from the number row. */
     NACK_KEY_NUM_LOCK = 83,
     NACK_KEY_KP_DIVIDE = 84,
     NACK_KEY_KP_MULTIPLY = 85,
@@ -199,279 +179,305 @@ enum nack_key {
     NACK_KEY_COUNT = 256
 };
 
-enum nack_cursor_shape {
-    NACK_CURSOR_ARROW = 0,
-    NACK_CURSOR_IBEAM,
-    NACK_CURSOR_CROSSHAIR,
-    NACK_CURSOR_HAND,
-    NACK_CURSOR_RESIZE_H,
-    NACK_CURSOR_RESIZE_V,
-    NACK_CURSOR_RESIZE_NWSE,
-    NACK_CURSOR_RESIZE_NESW,
-    NACK_CURSOR_RESIZE_ALL,
-    NACK_CURSOR_NOT_ALLOWED,
-    NACK_CURSOR_WAIT,
-    NACK_CURSOR_SHAPE_COUNT
+enum nack_mod {
+    NACK_MOD_SHIFT    = 1u << 0,
+    NACK_MOD_CTRL     = 1u << 1,
+    NACK_MOD_ALT      = 1u << 2,
+    NACK_MOD_SUPER    = 1u << 3,   /* Windows key / Command */
+    NACK_MOD_CAPSLOCK = 1u << 4,
+    NACK_MOD_NUMLOCK  = 1u << 5
 };
 
-enum nack_cursor_mode {
-    NACK_CURSOR_MODE_NORMAL = 0,
-    NACK_CURSOR_MODE_HIDDEN,     /* hidden while over the window            */
-    NACK_CURSOR_MODE_CAPTURED    /* hidden + confined, relative motion only */
+enum nack_mouse_button {
+    NACK_MOUSE_LEFT = 0,
+    NACK_MOUSE_RIGHT = 1,
+    NACK_MOUSE_MIDDLE = 2,
+    NACK_MOUSE_X1 = 3,
+    NACK_MOUSE_X2 = 4,
+    NACK_MOUSE_BUTTON_COUNT = 8
 };
 
-enum nack_gl_profile {
-    NACK_GL_PROFILE_CORE = 0,
-    NACK_GL_PROFILE_COMPAT,
-    NACK_GL_PROFILE_ES
-};
-
-/* -------------------------------------------------------------------------- */
-/* Types                                                                      */
-/* -------------------------------------------------------------------------- */
-
-struct nack_window;
-struct nack_gl_context;
-
-struct nack_event {
-    enum nack_event_type type;
-    struct nack_window *window;
-    uint64_t time_ns;
-    /* Named rather than anonymous: anonymous members are C11, not C99. */
-    union {
-        struct { int width, height, fb_width, fb_height; } size;
-        struct { int x, y; } move;
-        struct { float scale; } scale;
-        struct {
-            enum nack_key key;
-            uint32_t scancode;   /* raw platform scancode                    */
-            uint32_t mods;
-            bool repeat;
-        } key;
-        struct { char utf8[32]; } text;
-        struct {
-            double x, y;         /* in logical window coordinates            */
-            double dx, dy;       /* delta since previous motion event        */
-            uint32_t mods;
-        } motion;
-        struct {
-            int button;
-            double x, y;
-            uint32_t mods;
-            int click_count;     /* 1 = single, 2 = double, ...              */
-        } button;
-        struct {
-            double dx, dy;       /* positive dy scrolls content up           */
-            uint32_t mods;
-            bool precise;        /* true for trackpads / high-res wheels     */
-        } scroll;
-    } data;
-};
-
-struct nack_init_desc {
-    /* Preferred backend, or NACK_BACKEND_NONE to auto-detect. On Unix the
-     * NACK_BACKEND environment variable ("wayland"/"x11") overrides this. */
-    enum nack_backend backend;
-    /* Application identifier: Wayland xdg app-id and X11 WM_CLASS. */
-    const char *app_id;
-    /* Optional diagnostic sink; receives NUL-terminated messages. */
-    void (*log_fn)(const char *message, void *user_data);
-    void *log_user_data;
-};
-
-/*
- * Framebuffer format. This is a property of the window, not of the context:
- * on EGL and Wayland the window's visual is derived from the pixel format, so
- * it has to be fixed when the window is created.
- */
-struct nack_framebuffer_desc {
-    int red_bits, green_bits, blue_bits, alpha_bits;
-    int depth_bits, stencil_bits;
-    int samples;                  /* MSAA sample count, 0 = off              */
-    bool srgb;
-    bool double_buffer;
-};
-
-struct nack_window_desc {
-    const char *title;
-    int width, height;            /* logical pixels; <= 0 picks a default   */
-    int min_width, min_height;    /* 0 = unconstrained                       */
-    int max_width, max_height;    /* 0 = unconstrained                       */
-    int width_increment;          /* 0 = none (struct cell-size snapping)           */
-    int height_increment;
-    bool resizable;
-    bool decorated;
-    bool visible;
-    bool fullscreen;
-    bool maximized;
-    bool transparent;
-    bool high_dpi;                /* opt in to a framebuffer at native DPI   */
-    struct nack_framebuffer_desc framebuffer;
-    void *user_data;
-};
-
-/* Context attributes. The framebuffer format comes from the window. */
-struct nack_gl_desc {
-    int major, minor;             /* 0 = "any", library picks a sane default */
-    enum nack_gl_profile profile;
-    bool debug;
-    bool forward_compatible;
-    bool robust;
-    struct nack_gl_context *share;
-};
-
-/* -------------------------------------------------------------------------- */
-/* Library lifetime                                                           */
-/* -------------------------------------------------------------------------- */
-
-NACK_API bool         nack_init(const struct nack_init_desc *desc);
-NACK_API void         nack_shutdown(void);
-NACK_API bool         nack_is_initialized(void);
-NACK_API enum nack_backend nack_get_backend(void);
-NACK_API const char  *nack_backend_name(enum nack_backend backend);
-
-/* Last error for the calling thread; valid until the next failing call. */
-NACK_API enum nack_result  nack_get_error(const char **message);
-
-NACK_API void nack_window_desc_defaults(struct nack_window_desc *desc);
-NACK_API void nack_gl_desc_defaults(struct nack_gl_desc *desc);
-NACK_API void nack_framebuffer_desc_defaults(struct nack_framebuffer_desc *desc);
-
-/* -------------------------------------------------------------------------- */
-/* Windows                                                                    */
-/* -------------------------------------------------------------------------- */
-
-/*
- * Creates a window. A visible window appears on every backend as soon as it is
- * shown, even before anything has been drawn into it: on Wayland, where a
- * surface with no committed buffer would never be mapped at all, the library
- * commits a blank frame and retires it on the first nack_gl_swap_buffers.
- */
-NACK_API struct nack_window *nack_window_create(const struct nack_window_desc *desc);
-NACK_API void         nack_window_destroy(struct nack_window *window);
-
-NACK_API void  nack_window_show(struct nack_window *window);
-NACK_API void  nack_window_hide(struct nack_window *window);
-NACK_API void  nack_window_focus(struct nack_window *window);
-NACK_API void  nack_window_minimize(struct nack_window *window);
-NACK_API void  nack_window_maximize(struct nack_window *window);
-NACK_API void  nack_window_restore(struct nack_window *window);
-NACK_API void  nack_window_request_attention(struct nack_window *window);
-
-NACK_API void  nack_window_set_title(struct nack_window *window, const char *title);
-NACK_API void  nack_window_set_size(struct nack_window *window, int width, int height);
-NACK_API void  nack_window_get_size(const struct nack_window *window, int *width,
-                                    int *height);
-NACK_API void  nack_window_get_framebuffer_size(const struct nack_window *window,
-                                                int *width, int *height);
-NACK_API void  nack_window_get_position(const struct nack_window *window, int *x, int *y);
-NACK_API void  nack_window_set_position(struct nack_window *window, int x, int y);
-NACK_API float nack_window_get_content_scale(const struct nack_window *window);
-
-NACK_API void  nack_window_set_size_limits(struct nack_window *window,
-                                           int min_width, int min_height,
-                                           int max_width, int max_height);
-NACK_API void  nack_window_set_size_increments(struct nack_window *window, int dw,
-                                               int dh);
-
-NACK_API void  nack_window_set_fullscreen(struct nack_window *window, bool fullscreen);
-NACK_API bool  nack_window_is_fullscreen(const struct nack_window *window);
-NACK_API bool  nack_window_is_focused(const struct nack_window *window);
-NACK_API bool  nack_window_is_minimized(const struct nack_window *window);
-NACK_API bool  nack_window_is_maximized(const struct nack_window *window);
-
-NACK_API bool  nack_window_should_close(const struct nack_window *window);
-NACK_API void  nack_window_set_should_close(struct nack_window *window, bool value);
-
-NACK_API void *nack_window_get_user_data(const struct nack_window *window);
-NACK_API void  nack_window_set_user_data(struct nack_window *window, void *user_data);
-
-NACK_API void  nack_window_set_cursor_shape(struct nack_window *window,
-                                            enum nack_cursor_shape shape);
-NACK_API void  nack_window_set_cursor_mode(struct nack_window *window,
-                                           enum nack_cursor_mode mode);
-NACK_API enum nack_cursor_mode nack_window_get_cursor_mode(const struct nack_window *window);
-
-/* Marks the whole window as needing a repaint; produces a WINDOW_EXPOSE. */
-NACK_API void  nack_window_request_redraw(struct nack_window *window);
+NACK_API const char *nack_key_name(enum nack_key key);
 
 /* -------------------------------------------------------------------------- */
 /* Events                                                                     */
 /* -------------------------------------------------------------------------- */
 
-/* Non-blocking: returns false when the queue is empty. */
-NACK_API bool nack_poll_event(struct nack_event *event);
-/* Blocks until at least one event is available. */
-NACK_API bool nack_wait_event(struct nack_event *event);
-/* Blocks for at most `timeout` seconds; returns false on timeout. */
-NACK_API bool nack_wait_event_timeout(struct nack_event *event, double timeout);
-/* Thread-safe: unblocks a waiting nack_wait_event* and queues NACK_EVENT_WAKEUP. */
-NACK_API void nack_wakeup(void);
-
-/* Instantaneous input state, updated as events are generated. */
-NACK_API bool     nack_key_is_down(enum nack_key key);
-NACK_API uint32_t nack_get_mods(void);
-NACK_API bool     nack_mouse_button_is_down(int button);
-NACK_API void     nack_get_mouse_position(struct nack_window *window, double *x,
-                                          double *y);
-
-NACK_API const char *nack_key_get_name(enum nack_key key);
-
-/* -------------------------------------------------------------------------- */
-/* OpenGL                                                                     */
-/* -------------------------------------------------------------------------- */
-
-NACK_API struct nack_gl_context *nack_gl_context_create(struct nack_window *window, const struct nack_gl_desc *desc);
-NACK_API void  nack_gl_context_destroy(struct nack_gl_context *context);
-NACK_API bool  nack_gl_make_current(struct nack_window *window,
-                                    struct nack_gl_context *context);
-NACK_API void  nack_gl_swap_buffers(struct nack_window *window);
-NACK_API void  nack_gl_set_swap_interval(int interval);
-/*
- * Resolves an OpenGL entry point. Suitable as the loader callback for glad,
- * epoxy, or a hand-rolled loader; results are cached internally, so resolving
- * a few hundred names at startup is cheap and repeat loads are cheaper.
- *
- * A non-NULL result does NOT prove the function is usable: some drivers
- * (anything on libglvnd) return a dispatch stub for every gl-prefixed name.
- * Gate optional functionality on the context version or on
- * nack_gl_extension_supported(), never on the pointer alone.
- */
-NACK_API void *nack_gl_get_proc_address(const char *name);
-NACK_API bool  nack_gl_extension_supported(const char *name);
-
-/* -------------------------------------------------------------------------- */
-/* Clipboard                                                                  */
-/* -------------------------------------------------------------------------- */
-
-NACK_API bool        nack_clipboard_set_text(const char *utf8);
-/* Returned string is owned by the library and valid until the next call. */
-NACK_API const char *nack_clipboard_get_text(void);
-
-/* Primary selection (X11/Wayland). Returns false/NULL elsewhere. */
-NACK_API bool        nack_primary_set_text(const char *utf8);
-NACK_API const char *nack_primary_get_text(void);
-
-/* -------------------------------------------------------------------------- */
-/* Time                                                                       */
-/* -------------------------------------------------------------------------- */
-
-NACK_API uint64_t nack_time_ns(void);
-NACK_API double   nack_time_seconds(void);
-
-/* -------------------------------------------------------------------------- */
-/* Native handles (for interop; fields are backend-specific)                  */
-/* -------------------------------------------------------------------------- */
-
-struct nack_native_window {
-    enum nack_backend backend;
-    void *display;      /* Display* / wl_display* / NULL                     */
-    void *surface;      /* wl_surface* / NSWindow* / HWND                    */
-    uintptr_t handle;   /* X11 Window id / HWND / 0                          */
+enum nack_event_type {
+    NACK_EVENT_NONE = 0,
+    NACK_EVENT_QUIT,          /* the player closed the window            */
+    NACK_EVENT_KEY_DOWN,      /* ev.data.key                             */
+    NACK_EVENT_KEY_UP,        /* ev.data.key                             */
+    NACK_EVENT_TEXT,          /* ev.data.text, composed UTF-8            */
+    NACK_EVENT_MOUSE_MOVE,    /* ev.data.mouse                           */
+    NACK_EVENT_MOUSE_DOWN,    /* ev.data.mouse                           */
+    NACK_EVENT_MOUSE_UP,      /* ev.data.mouse                           */
+    NACK_EVENT_MOUSE_SCROLL,  /* ev.data.scroll                          */
+    NACK_EVENT_RESIZE,        /* ev.data.resize, console geometry changed */
+    NACK_EVENT_FOCUS,
+    NACK_EVENT_BLUR,
+    NACK_EVENT_WAKEUP         /* produced by nack_wakeup                 */
 };
 
-NACK_API void nack_window_get_native(const struct nack_window *window,
-                                     struct nack_native_window *out);
+struct nack_event {
+    enum nack_event_type type;
+    union {
+        struct {
+            enum nack_key key;
+            uint32_t mods;
+            bool repeat;
+        } key;
+
+        /* Text that has already been through the platform's dead-key and IME
+         * handling. Ctrl and Command chords produce key events and no text. */
+        struct { char utf8[32]; } text;
+
+        struct {
+            int x, y;          /* cell under the pointer                   */
+            int px, py;        /* pixel within the console area            */
+            int dx, dy;        /* cell delta since the last motion event   */
+            int button;        /* for MOUSE_DOWN and MOUSE_UP              */
+            int clicks;        /* 1 single, 2 double, ...                  */
+            uint32_t mods;
+        } mouse;
+
+        struct {
+            double dx, dy;     /* positive dy scrolls content up           */
+            uint32_t mods;
+            bool precise;      /* true for trackpads and high-res wheels   */
+        } scroll;
+
+        struct { int columns, rows; } resize;
+    } data;
+};
+
+/* -------------------------------------------------------------------------- */
+/* Tilesets                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * How the glyphs are arranged in the image. CP437 is what nearly every
+ * roguelike tileset ships as; ROW_MAJOR suits a sheet of arbitrary tiles;
+ * TCOD is libtcod's column-major ordering, for its own sheets.
+ */
+enum nack_tileset_layout {
+    NACK_LAYOUT_CP437 = 0,
+    NACK_LAYOUT_ROW_MAJOR,
+    NACK_LAYOUT_TCOD
+};
+
+struct nack_tileset;
+
+/*
+ * Loads a PNG. tile_width and tile_height may be 0 for a CP437 sheet, in which
+ * case they are inferred by dividing the image into 16 by 16 glyphs.
+ *
+ * A greyscale or white-on-transparent sheet is treated as a font: glyphs are
+ * tinted by the cell's foreground colour. A sheet with other colours in it is
+ * treated as graphical tiles and drawn as-is, tinted only if you ask.
+ */
+NACK_API struct nack_tileset *nack_tileset_load(const char *path,
+                                                int tile_width, int tile_height,
+                                                enum nack_tileset_layout layout);
+
+/* Same, from memory, so tilesets can be embedded in the executable. */
+NACK_API struct nack_tileset *nack_tileset_load_memory(const void *png, size_t size,
+                                                       int tile_width, int tile_height,
+                                                       enum nack_tileset_layout layout);
+
+NACK_API void nack_tileset_free(struct nack_tileset *tileset);
+
+NACK_API void nack_tileset_size(const struct nack_tileset *tileset,
+                                int *tile_width, int *tile_height, int *count);
+
+/*
+ * Maps codepoints onto tile indices, for characters outside whatever ordering
+ * the sheet came in. A CP437 sheet is pre-mapped for the codepoints CP437
+ * covers, including the box drawing characters.
+ */
+NACK_API bool nack_tileset_map(struct nack_tileset *tileset, uint32_t codepoint,
+                               int index);
+NACK_API bool nack_tileset_map_range(struct nack_tileset *tileset, uint32_t first,
+                                     uint32_t last, int first_index);
+
+/* The tileset used to draw codepoints. Defaults to the built-in font. */
+NACK_API void nack_set_font(struct nack_tileset *tileset);
+NACK_API struct nack_tileset *nack_get_font(void);
+
+/* -------------------------------------------------------------------------- */
+/* Configuration and lifetime                                                 */
+/* -------------------------------------------------------------------------- */
+
+/* How the console is fitted to the window when the two do not match. */
+enum nack_scaling {
+    NACK_SCALE_INTEGER = 0,  /* whole-number zoom, letterboxed: always crisp */
+    NACK_SCALE_FIT,          /* largest fit preserving aspect, letterboxed   */
+    NACK_SCALE_STRETCH       /* fill the window, ignoring aspect             */
+};
+
+struct nack_config {
+    const char *title;
+    int columns, rows;
+
+    /* Path to a tileset PNG. NULL uses the built-in 8x8 font, so a game can
+     * start without shipping any assets. */
+    const char *tileset;
+    int tile_width, tile_height;
+    enum nack_tileset_layout tileset_layout;
+
+    enum nack_scaling scaling;
+    struct nack_color letterbox;   /* colour of the bars around the console */
+
+    bool vsync;
+    bool resizable;
+    bool fullscreen;
+
+    /*
+     * When set, resizing the window changes the console's dimensions and
+     * produces NACK_EVENT_RESIZE, rather than scaling a fixed grid. This is
+     * what you want if the game reflows its layout.
+     */
+    bool auto_resize;
+
+    /* Initial window size, as a multiple of the console's pixel size.
+     * 0 picks the largest whole multiple that fits the monitor. */
+    int window_scale;
+};
+
+NACK_API void nack_config_defaults(struct nack_config *config);
+NACK_API bool nack_init(const struct nack_config *config);
+NACK_API void nack_shutdown(void);
+
+/* The most recent failure, or NULL if the last call succeeded. */
+NACK_API const char *nack_get_error(void);
+
+/* -------------------------------------------------------------------------- */
+/* Consoles                                                                   */
+/* -------------------------------------------------------------------------- */
+
+struct nack_console;
+
+/*
+ * Every drawing call takes a console, and NULL means the root console - the
+ * one that gets presented. Offscreen consoles are for composing: draw a panel
+ * or a menu into one, then blit it.
+ */
+NACK_API struct nack_console *nack_console_new(int columns, int rows);
+NACK_API void nack_console_free(struct nack_console *console);
+NACK_API void nack_console_size(const struct nack_console *console,
+                                int *columns, int *rows);
+NACK_API bool nack_console_resize(struct nack_console *console,
+                                  int columns, int rows);
+
+struct nack_cell {
+    uint32_t glyph;                 /* codepoint, or tile index when tiled */
+    struct nack_tileset *tileset;   /* NULL means the font                 */
+    struct nack_color fg, bg;
+};
+
+NACK_API void nack_clear(struct nack_console *console);
+NACK_API void nack_clear_to(struct nack_console *console, struct nack_color fg,
+                            struct nack_color bg);
+
+NACK_API void nack_put(struct nack_console *console, int x, int y,
+                       uint32_t codepoint, struct nack_color fg,
+                       struct nack_color bg);
+
+/* Draws a tile from a graphical tileset. tint is applied multiplicatively;
+ * pass NACK_WHITE to draw the tile's own colours unchanged. */
+NACK_API void nack_put_tile(struct nack_console *console, int x, int y,
+                            struct nack_tileset *tileset, int index,
+                            struct nack_color tint, struct nack_color bg);
+
+NACK_API void nack_set_glyph(struct nack_console *console, int x, int y,
+                             uint32_t codepoint);
+NACK_API void nack_set_fg(struct nack_console *console, int x, int y,
+                          struct nack_color fg);
+NACK_API void nack_set_bg(struct nack_console *console, int x, int y,
+                          struct nack_color bg);
+NACK_API struct nack_cell nack_get(const struct nack_console *console,
+                                   int x, int y);
+
+/* Returns the number of cells written. UTF-8 in, so box drawing and accented
+ * characters work if the tileset has them. */
+NACK_API int nack_print(struct nack_console *console, int x, int y,
+                        struct nack_color fg, struct nack_color bg,
+                        const char *utf8);
+NACK_API int nack_printf(struct nack_console *console, int x, int y,
+                         struct nack_color fg, struct nack_color bg,
+                         const char *fmt, ...);
+NACK_API int nack_vprintf(struct nack_console *console, int x, int y,
+                          struct nack_color fg, struct nack_color bg,
+                          const char *fmt, va_list args);
+
+/* Word-wrapped into a box; returns the number of rows used. Pass height 0 to
+ * measure without drawing, which is how you size a message log. */
+NACK_API int nack_print_wrapped(struct nack_console *console, int x, int y,
+                                int width, int height, struct nack_color fg,
+                                struct nack_color bg, const char *utf8);
+
+NACK_API void nack_fill(struct nack_console *console, int x, int y,
+                        int width, int height, uint32_t codepoint,
+                        struct nack_color fg, struct nack_color bg);
+
+/* A single-line box, using the tileset's box drawing characters. The title,
+ * when given, is centred on the top edge. */
+NACK_API void nack_draw_box(struct nack_console *console, int x, int y,
+                            int width, int height, struct nack_color fg,
+                            struct nack_color bg, const char *title);
+
+/*
+ * Copies a region of one console onto another. fg_alpha and bg_alpha blend
+ * against what is already there, so a translucent overlay is a blit with a
+ * low bg_alpha.
+ */
+NACK_API void nack_blit(const struct nack_console *src, int src_x, int src_y,
+                        int width, int height, struct nack_console *dst,
+                        int dst_x, int dst_y, float fg_alpha, float bg_alpha);
+
+/* -------------------------------------------------------------------------- */
+/* Frames                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/* Draws the root console and shows it. */
+NACK_API void nack_present(void);
+
+NACK_API bool nack_should_close(void);
+NACK_API void nack_set_should_close(bool value);
+
+NACK_API double nack_time(void);        /* seconds since nack_init */
+NACK_API double nack_delta_time(void);  /* seconds between the last two frames */
+
+/* -------------------------------------------------------------------------- */
+/* Input                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/* Non-blocking; returns false when nothing is queued. */
+NACK_API bool nack_poll_event(struct nack_event *event);
+/* Blocks until something happens. A turn-based game can sit here and use no
+ * CPU at all between the player's moves. */
+NACK_API bool nack_wait_event(struct nack_event *event);
+NACK_API bool nack_wait_event_timeout(struct nack_event *event, double seconds);
+/* Thread-safe: unblocks a waiting thread, for background work finishing. */
+NACK_API void nack_wakeup(void);
+
+/* Instantaneous state, for real-time games that would rather poll. */
+NACK_API bool nack_key_down(enum nack_key key);
+NACK_API uint32_t nack_mods(void);
+NACK_API bool nack_mouse_down(int button);
+NACK_API void nack_mouse_cell(int *x, int *y);
+
+/* -------------------------------------------------------------------------- */
+/* Window                                                                     */
+/* -------------------------------------------------------------------------- */
+
+NACK_API void nack_set_title(const char *title);
+NACK_API void nack_set_fullscreen(bool fullscreen);
+NACK_API bool nack_is_fullscreen(void);
+NACK_API void nack_set_vsync(bool vsync);
+
+NACK_API bool nack_clipboard_set(const char *utf8);
+NACK_API const char *nack_clipboard_get(void);
 
 #if defined(__cplusplus)
 }

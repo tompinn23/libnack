@@ -126,15 +126,15 @@ static bool nack__token_in_list(const char *list, const char *name)
     return false;
 }
 
-bool nack_gl_extension_supported(const char *name)
+bool nack__gl_extension_supported(const char *name)
 {
     if (!name || !*name || !nack__g.initialized || !nack__g.current_context)
         return false;
 
     nack__pfn_get_stringi get_stringi =
-        (nack__pfn_get_stringi)nack_gl_get_proc_address("glGetStringi");
+        (nack__pfn_get_stringi)nack__gl_get_proc_address("glGetStringi");
     nack__pfn_get_integerv get_integerv =
-        (nack__pfn_get_integerv)nack_gl_get_proc_address("glGetIntegerv");
+        (nack__pfn_get_integerv)nack__gl_get_proc_address("glGetIntegerv");
 
     if (get_stringi && get_integerv) {
         int count = 0;
@@ -149,7 +149,7 @@ bool nack_gl_extension_supported(const char *name)
     }
 
     nack__pfn_get_string get_string =
-        (nack__pfn_get_string)nack_gl_get_proc_address("glGetString");
+        (nack__pfn_get_string)nack__gl_get_proc_address("glGetString");
     if (!get_string)
         return false;
     const char *list = (const char *)get_string(NACK_GL_EXTENSIONS);

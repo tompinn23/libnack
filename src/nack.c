@@ -45,7 +45,7 @@ bool nack__fail(enum nack_result code, const char *fmt, ...)
     return false;
 }
 
-enum nack_result nack_get_error(const char **message)
+enum nack_result nack__win_get_error(const char **message)
 {
     if (message)
         *message = nack__g.error_message;
@@ -125,7 +125,7 @@ bool nack__codepoint_is_text(uint32_t cp)
 /* Time                                                               */
 /* ------------------------------------------------------------------ */
 
-uint64_t nack_time_ns(void)
+uint64_t nack__win_time_ns(void)
 {
 #if defined(NACK_PLATFORM_WIN32)
     static int64_t frequency;
@@ -141,9 +141,9 @@ uint64_t nack_time_ns(void)
 #endif
 }
 
-double nack_time_seconds(void)
+double nack__win_time_seconds(void)
 {
-    return (double)nack_time_ns() / 1e9;
+    return (double)nack__win_time_ns() / 1e9;
 }
 
 /* ------------------------------------------------------------------ */
@@ -155,34 +155,34 @@ bool nack__queue_empty(void)
     return nack__g.queue_head == nack__g.queue_tail;
 }
 
-void nack__push_event(const struct nack_event *ev)
+void nack__push_event(const struct nack_win_event *ev)
 {
-    size_t next = (nack__g.queue_tail + 1u) % NACK_EVENT_QUEUE_CAP;
+    size_t next = (nack__g.queue_tail + 1u) % NACK_WIN_EVENT_QUEUE_CAP;
     if (next == nack__g.queue_head) {
         /* Queue full: drop the oldest event so input stays responsive
          * rather than the newest, which is usually the interesting one. */
-        nack__g.queue_head = (nack__g.queue_head + 1u) % NACK_EVENT_QUEUE_CAP;
+        nack__g.queue_head = (nack__g.queue_head + 1u) % NACK_WIN_EVENT_QUEUE_CAP;
     }
     nack__g.queue[nack__g.queue_tail] = *ev;
     nack__g.queue_tail = next;
 }
 
-struct nack_event *nack__event_begin(enum nack_event_type type, struct nack_window *w)
+struct nack_win_event *nack__event_begin(enum nack_win_event_type type, struct nack_window *w)
 {
-    static struct nack_event scratch;
+    static struct nack_win_event scratch;
     memset(&scratch, 0, sizeof scratch);
     scratch.type = type;
     scratch.window = w;
-    scratch.time_ns = nack_time_ns();
+    scratch.time_ns = nack__win_time_ns();
     return &scratch;
 }
 
-static bool nack__pop(struct nack_event *out)
+static bool nack__pop(struct nack_win_event *out)
 {
     if (nack__queue_empty())
         return false;
     *out = nack__g.queue[nack__g.queue_head];
-    nack__g.queue_head = (nack__g.queue_head + 1u) % NACK_EVENT_QUEUE_CAP;
+    nack__g.queue_head = (nack__g.queue_head + 1u) % NACK_WIN_EVENT_QUEUE_CAP;
     return true;
 }
 
@@ -190,9 +190,9 @@ static bool nack__pop(struct nack_event *out)
 /* Event emitters                                                     */
 /* ------------------------------------------------------------------ */
 
-void nack__emit_simple(struct nack_window *w, enum nack_event_type type)
+void nack__emit_simple(struct nack_window *w, enum nack_win_event_type type)
 {
-    struct nack_event *ev = nack__event_begin(type, w);
+    struct nack_win_event *ev = nack__event_begin(type, w);
     nack__push_event(ev);
 }
 
@@ -213,7 +213,7 @@ void nack__emit_resize(struct nack_window *w, int width, int height, int fb_widt
     w->fb_width = fb_width;
     w->fb_height = fb_height;
 
-    struct nack_event *ev = nack__event_begin(NACK_EVENT_WINDOW_RESIZE, w);
+    struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_WINDOW_RESIZE, w);
     ev->data.size.width = width;
     ev->data.size.height = height;
     ev->data.size.fb_width = fb_width;
@@ -226,7 +226,7 @@ void nack__emit_scale(struct nack_window *w, float scale)
     if (scale <= 0.0f || w->scale == scale)
         return;
     w->scale = scale;
-    struct nack_event *ev = nack__event_begin(NACK_EVENT_WINDOW_SCALE, w);
+    struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_WINDOW_SCALE, w);
     ev->data.scale.scale = scale;
     nack__push_event(ev);
 }
@@ -246,7 +246,7 @@ void nack__emit_focus(struct nack_window *w, bool focused)
         }
         nack__g.mods = 0;
     }
-    nack__emit_simple(w, focused ? NACK_EVENT_WINDOW_FOCUS : NACK_EVENT_WINDOW_BLUR);
+    nack__emit_simple(w, focused ? NACK_WIN_EVENT_WINDOW_FOCUS : NACK_WIN_EVENT_WINDOW_BLUR);
 }
 
 void nack__emit_key(struct nack_window *w, enum nack_key key, uint32_t scancode, uint32_t mods,
@@ -261,7 +261,7 @@ void nack__emit_key(struct nack_window *w, enum nack_key key, uint32_t scancode,
     }
     nack__g.mods = mods;
 
-    struct nack_event *ev = nack__event_begin(down ? NACK_EVENT_KEY_DOWN : NACK_EVENT_KEY_UP, w);
+    struct nack_win_event *ev = nack__event_begin(down ? NACK_WIN_EVENT_KEY_DOWN : NACK_WIN_EVENT_KEY_UP, w);
     ev->data.key.key = key;
     ev->data.key.scancode = scancode;
     ev->data.key.mods = mods;
@@ -273,7 +273,7 @@ void nack__emit_text(struct nack_window *w, const char *utf8)
 {
     if (!utf8 || !utf8[0])
         return;
-    struct nack_event *ev = nack__event_begin(NACK_EVENT_TEXT, w);
+    struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_TEXT, w);
     size_t n = strlen(utf8);
     if (n >= sizeof ev->data.text.utf8)
         n = sizeof ev->data.text.utf8 - 1;
@@ -284,7 +284,7 @@ void nack__emit_text(struct nack_window *w, const char *utf8)
 
 void nack__emit_mouse_move(struct nack_window *w, double x, double y, uint32_t mods)
 {
-    struct nack_event *ev = nack__event_begin(NACK_EVENT_MOUSE_MOVE, w);
+    struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_MOUSE_MOVE, w);
     ev->data.motion.dx = x - w->mouse_x;
     ev->data.motion.dy = y - w->mouse_y;
     ev->data.motion.x = x;
@@ -308,7 +308,7 @@ void nack__emit_mouse_button(struct nack_window *w, int button, bool down, doubl
 
     int clicks = 1;
     if (down) {
-        uint64_t now = nack_time_ns();
+        uint64_t now = nack__win_time_ns();
         double ddx = x - w->last_click_x;
         double ddy = y - w->last_click_y;
         /* Not named `near`: windows.h still defines that as a macro. */
@@ -329,7 +329,7 @@ void nack__emit_mouse_button(struct nack_window *w, int button, bool down, doubl
         clicks = w->click_count ? w->click_count : 1;
     }
 
-    struct nack_event *ev = nack__event_begin(down ? NACK_EVENT_MOUSE_DOWN : NACK_EVENT_MOUSE_UP, w);
+    struct nack_win_event *ev = nack__event_begin(down ? NACK_WIN_EVENT_MOUSE_DOWN : NACK_WIN_EVENT_MOUSE_UP, w);
     ev->data.button.button = button;
     ev->data.button.x = x;
     ev->data.button.y = y;
@@ -343,7 +343,7 @@ void nack__emit_scroll(struct nack_window *w, double dx, double dy, uint32_t mod
 {
     if (dx == 0.0 && dy == 0.0)
         return;
-    struct nack_event *ev = nack__event_begin(NACK_EVENT_MOUSE_SCROLL, w);
+    struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_MOUSE_SCROLL, w);
     ev->data.scroll.dx = dx;
     ev->data.scroll.dy = dy;
     ev->data.scroll.mods = mods;
@@ -381,9 +381,9 @@ static void nack__purge_window_events(struct nack_window *w)
         if (nack__g.queue[read].window != w) {
             if (write != read)
                 nack__g.queue[write] = nack__g.queue[read];
-            write = (write + 1u) % NACK_EVENT_QUEUE_CAP;
+            write = (write + 1u) % NACK_WIN_EVENT_QUEUE_CAP;
         }
-        read = (read + 1u) % NACK_EVENT_QUEUE_CAP;
+        read = (read + 1u) % NACK_WIN_EVENT_QUEUE_CAP;
     }
     nack__g.queue_tail = write;
 }
@@ -392,7 +392,7 @@ static void nack__purge_window_events(struct nack_window *w)
 /* Backend selection                                                  */
 /* ------------------------------------------------------------------ */
 
-const char *nack_backend_name(enum nack_backend backend)
+const char *nack__win_backend_name(enum nack_backend backend)
 {
     switch (backend) {
     case NACK_BACKEND_WIN32:   return "win32";
@@ -444,7 +444,7 @@ static const struct nack_backend_vt *nack__select_backend(enum nack_backend pref
 }
 
 /* Try each available Unix backend in order until one initializes. */
-static bool nack__try_init_backends(const struct nack_init_desc *desc)
+static bool nack__try_init_backends(const struct nack_win_init_desc *desc)
 {
 #if defined(NACK_PLATFORM_UNIX)
     const struct nack_backend_vt *order[2] = { NULL, NULL };
@@ -481,12 +481,12 @@ static bool nack__try_init_backends(const struct nack_init_desc *desc)
 #endif
 }
 
-bool nack_init(const struct nack_init_desc *desc)
+bool nack__win_init(const struct nack_win_init_desc *desc)
 {
     if (nack__g.initialized)
         return true;
 
-    struct nack_init_desc local;
+    struct nack_win_init_desc local;
     memset(&local, 0, sizeof local);
     if (desc)
         local = *desc;
@@ -508,7 +508,7 @@ bool nack_init(const struct nack_init_desc *desc)
     return true;
 }
 
-void nack_shutdown(void)
+void nack__win_shutdown(void)
 {
     if (!nack__g.initialized)
         return;
@@ -526,12 +526,12 @@ void nack_shutdown(void)
     memset(&nack__g, 0, sizeof nack__g);
 }
 
-bool nack_is_initialized(void)
+bool nack__win_is_initialized(void)
 {
     return nack__g.initialized;
 }
 
-enum nack_backend nack_get_backend(void)
+enum nack_backend nack__win_get_backend(void)
 {
     return nack__g.vt ? nack__g.vt->id : NACK_BACKEND_NONE;
 }
@@ -555,14 +555,14 @@ void nack_window_desc_defaults(struct nack_window_desc *desc)
     nack_framebuffer_desc_defaults(&desc->framebuffer);
 }
 
-void nack_gl_desc_defaults(struct nack_gl_desc *desc)
+void nack__gl_desc_defaults(struct nack__gl_desc *desc)
 {
     if (!desc)
         return;
     memset(desc, 0, sizeof *desc);
     desc->major = 3;
     desc->minor = 3;
-    desc->profile = NACK_GL_PROFILE_CORE;
+    desc->profile = NACK__GL_PROFILE_CORE;
 }
 
 void nack_framebuffer_desc_defaults(struct nack_framebuffer_desc *desc)
@@ -586,7 +586,7 @@ void nack_framebuffer_desc_defaults(struct nack_framebuffer_desc *desc)
 #define NACK_REQUIRE_INIT_RET(ret)                                            \
     do {                                                                      \
         if (!nack__g.initialized) {                                           \
-            nack__fail(NACK_ERROR_NOT_INITIALIZED, "nack_init() not called"); \
+            nack__fail(NACK_ERROR_NOT_INITIALIZED, "nack__win_init() not called"); \
             return ret;                                                       \
         }                                                                     \
     } while (0)
@@ -851,7 +851,7 @@ void nack_window_request_redraw(struct nack_window *window)
     if (window->vt->window_request_redraw)
         window->vt->window_request_redraw(window);
     else
-        nack__emit_simple(window, NACK_EVENT_WINDOW_EXPOSE);
+        nack__emit_simple(window, NACK_WIN_EVENT_WINDOW_EXPOSE);
 }
 
 void nack_window_get_native(const struct nack_window *window,
@@ -871,7 +871,7 @@ void nack_window_get_native(const struct nack_window *window,
 /* Event loop                                                         */
 /* ------------------------------------------------------------------ */
 
-bool nack_poll_event(struct nack_event *event)
+bool nack__win_poll_event(struct nack_win_event *event)
 {
     NACK_REQUIRE_INIT_RET(false);
     if (!event)
@@ -882,12 +882,12 @@ bool nack_poll_event(struct nack_event *event)
     return nack__pop(event);
 }
 
-bool nack_wait_event(struct nack_event *event)
+bool nack__win_wait_event(struct nack_win_event *event)
 {
-    return nack_wait_event_timeout(event, -1.0);
+    return nack__win_wait_event_timeout(event, -1.0);
 }
 
-bool nack_wait_event_timeout(struct nack_event *event, double timeout)
+bool nack__win_wait_event_timeout(struct nack_win_event *event, double timeout)
 {
     NACK_REQUIRE_INIT_RET(false);
     if (!event)
@@ -905,45 +905,45 @@ bool nack_wait_event_timeout(struct nack_event *event, double timeout)
         return nack__pop(event);
     }
 
-    double deadline = nack_time_seconds() + timeout;
+    double deadline = nack__win_time_seconds() + timeout;
     for (;;) {
-        double remaining = deadline - nack_time_seconds();
+        double remaining = deadline - nack__win_time_seconds();
         if (remaining < 0.0)
             remaining = 0.0;
         nack__g.vt->pump_events(remaining);
         if (nack__pop(event))
             return true;
-        if (nack_time_seconds() >= deadline)
+        if (nack__win_time_seconds() >= deadline)
             return false;
     }
 }
 
-void nack_wakeup(void)
+void nack__win_wakeup(void)
 {
     if (nack__g.initialized && nack__g.vt->wakeup)
         nack__g.vt->wakeup();
 }
 
-bool nack_key_is_down(enum nack_key key)
+bool nack__win_key_is_down(enum nack_key key)
 {
     if (key <= 0 || key >= NACK_KEY_COUNT)
         return false;
     return nack__g.keys[key];
 }
 
-uint32_t nack_get_mods(void)
+uint32_t nack__win_get_mods(void)
 {
     return nack__g.mods;
 }
 
-bool nack_mouse_button_is_down(int button)
+bool nack__win_mouse_button_is_down(int button)
 {
     if (button < 0 || button >= NACK_MOUSE_BUTTON_COUNT)
         return false;
     return nack__g.mouse_buttons[button];
 }
 
-void nack_get_mouse_position(struct nack_window *window, double *x, double *y)
+void nack__win_get_mouse_position(struct nack_window *window, double *x, double *y)
 {
     if (x) *x = window ? window->mouse_x : 0.0;
     if (y) *y = window ? window->mouse_y : 0.0;
@@ -953,16 +953,16 @@ void nack_get_mouse_position(struct nack_window *window, double *x, double *y)
 /* OpenGL                                                             */
 /* ------------------------------------------------------------------ */
 
-struct nack_gl_context *nack_gl_context_create(struct nack_window *window,
-                                               const struct nack_gl_desc *desc)
+struct nack_gl_context *nack__gl_context_create(struct nack_window *window,
+                                               const struct nack__gl_desc *desc)
 {
     NACK_REQUIRE_INIT_RET(NULL);
     if (!window) {
-        nack__fail(NACK_ERROR_INVALID_ARGUMENT, "nack_gl_context_create: null window");
+        nack__fail(NACK_ERROR_INVALID_ARGUMENT, "nack__gl_context_create: null window");
         return NULL;
     }
-    struct nack_gl_desc d;
-    nack_gl_desc_defaults(&d);
+    struct nack__gl_desc d;
+    nack__gl_desc_defaults(&d);
     if (desc)
         d = *desc;
     if (!nack__g.vt->gl_create) {
@@ -972,7 +972,7 @@ struct nack_gl_context *nack_gl_context_create(struct nack_window *window,
     return nack__g.vt->gl_create(window, &d);
 }
 
-void nack_gl_context_destroy(struct nack_gl_context *context)
+void nack__gl_context_destroy(struct nack_gl_context *context)
 {
     if (!context)
         return;
@@ -983,7 +983,7 @@ void nack_gl_context_destroy(struct nack_gl_context *context)
     context->vt->gl_destroy(context);
 }
 
-bool nack_gl_make_current(struct nack_window *window, struct nack_gl_context *context)
+bool nack__gl_make_current(struct nack_window *window, struct nack_gl_context *context)
 {
     NACK_REQUIRE_INIT_RET(false);
     if (!nack__g.vt->gl_make_current)
@@ -995,13 +995,13 @@ bool nack_gl_make_current(struct nack_window *window, struct nack_gl_context *co
     return true;
 }
 
-void nack_gl_swap_buffers(struct nack_window *window)
+void nack__gl_swap_buffers(struct nack_window *window)
 {
     if (window && nack__g.vt && nack__g.vt->gl_swap_buffers)
         nack__g.vt->gl_swap_buffers(window);
 }
 
-void nack_gl_set_swap_interval(int interval)
+void nack__gl_set_swap_interval(int interval)
 {
     if (!nack__g.initialized)
         return;
@@ -1010,7 +1010,7 @@ void nack_gl_set_swap_interval(int interval)
         nack__g.vt->gl_set_swap_interval(interval);
 }
 
-void *nack_gl_get_proc_address(const char *name)
+void *nack__gl_get_proc_address(const char *name)
 {
     if (!nack__g.initialized || !name || !nack__g.vt->gl_get_proc_address)
         return NULL;
@@ -1021,7 +1021,7 @@ void *nack_gl_get_proc_address(const char *name)
 /* Clipboard                                                          */
 /* ------------------------------------------------------------------ */
 
-bool nack_clipboard_set_text(const char *utf8)
+bool nack__win_clipboard_set(const char *utf8)
 {
     NACK_REQUIRE_INIT_RET(false);
     if (!utf8 || !nack__g.vt->clipboard_set)
@@ -1029,21 +1029,21 @@ bool nack_clipboard_set_text(const char *utf8)
     return nack__g.vt->clipboard_set(utf8);
 }
 
-const char *nack_clipboard_get_text(void)
+const char *nack__win_clipboard_get(void)
 {
     if (!nack__g.initialized || !nack__g.vt->clipboard_get)
         return NULL;
     return nack__g.vt->clipboard_get();
 }
 
-bool nack_primary_set_text(const char *utf8)
+bool nack__win_primary_set(const char *utf8)
 {
     if (!nack__g.initialized || !utf8 || !nack__g.vt->primary_set)
         return false;
     return nack__g.vt->primary_set(utf8);
 }
 
-const char *nack_primary_get_text(void)
+const char *nack__win_primary_get(void)
 {
     if (!nack__g.initialized || !nack__g.vt->primary_get)
         return NULL;

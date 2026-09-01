@@ -184,12 +184,12 @@ static xcb_generic_event_t *nack__xcb_wait_for(uint8_t wanted, double deadline)
             free(event);
         }
 
-        if (nack_time_seconds() >= deadline)
+        if (nack__win_time_seconds() >= deadline)
             return NULL;
 
         xcb_flush(nack__xcb.connection);
         struct pollfd pfd = { xcb_get_file_descriptor(nack__xcb.connection), POLLIN, 0 };
-        double remaining = (deadline - nack_time_seconds()) * 1000.0;
+        double remaining = (deadline - nack__win_time_seconds()) * 1000.0;
         if (remaining < 0.0)
             remaining = 0.0;
         if (remaining > 50.0)
@@ -211,7 +211,7 @@ static char *nack__xcb_read_incr(void)
     xcb_flush(nack__xcb.connection);
 
     for (;;) {
-        double deadline = nack_time_seconds() + NACK_SELECTION_TIMEOUT;
+        double deadline = nack__win_time_seconds() + NACK_SELECTION_TIMEOUT;
         xcb_generic_event_t *event =
             nack__xcb_wait_for(XCB_PROPERTY_NOTIFY, deadline);
         if (!event) {
@@ -298,7 +298,7 @@ static char *nack__xcb_read_selection(xcb_atom_t selection)
                               XCB_CURRENT_TIME);
         xcb_flush(nack__xcb.connection);
 
-        double deadline = nack_time_seconds() + NACK_SELECTION_TIMEOUT;
+        double deadline = nack__win_time_seconds() + NACK_SELECTION_TIMEOUT;
         xcb_generic_event_t *event = nack__xcb_wait_for(XCB_SELECTION_NOTIFY, deadline);
         if (!event)
             continue;

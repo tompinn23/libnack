@@ -28,11 +28,11 @@ struct nack_nsgl_context {
 
 static void *nack__nsgl_framework;
 
-struct nack_gl_context *nack__nsgl_create_context(struct nack_window *w, const struct nack_gl_desc *desc,
+struct nack_gl_context *nack__nsgl_create_context(struct nack_window *w, const struct nack__gl_desc *desc,
                                            const struct nack_backend_vt *vt)
 {
     @autoreleasepool {
-        if (desc->profile == NACK_GL_PROFILE_ES) {
+        if (desc->profile == NACK__GL_PROFILE_ES) {
             nack__fail(NACK_ERROR_UNSUPPORTED,
                        "macOS has no OpenGL ES; use ANGLE or a Metal backend");
             return NULL;
@@ -44,7 +44,7 @@ struct nack_gl_context *nack__nsgl_create_context(struct nack_window *w, const s
          * the 4.1 profile and a compatibility request maps to legacy.
          */
         NSOpenGLPixelFormatAttribute profile;
-        if (desc->profile == NACK_GL_PROFILE_COMPAT) {
+        if (desc->profile == NACK__GL_PROFILE_COMPAT) {
             if (desc->major > 2) {
                 nack__fail(NACK_ERROR_UNSUPPORTED,
                            "macOS offers no compatibility profile above 2.1; "

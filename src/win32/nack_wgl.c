@@ -314,7 +314,7 @@ bool nack__wgl_choose_pixel_format(struct nack_window *w, HDC hdc, int *out_form
 /* Contexts                                                           */
 /* ------------------------------------------------------------------ */
 
-struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const struct nack_gl_desc *desc,
+struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const struct nack__gl_desc *desc,
                                           const struct nack_backend_vt *vt)
 {
     if (!nack__wgl.initialized) {
@@ -328,7 +328,7 @@ struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const st
         return NULL;
     }
 
-    if (desc->profile == NACK_GL_PROFILE_ES) {
+    if (desc->profile == NACK__GL_PROFILE_ES) {
         nack__fail(NACK_ERROR_UNSUPPORTED,
                    "OpenGL ES needs an EGL implementation such as ANGLE; "
                    "WGL provides desktop OpenGL only");
@@ -359,7 +359,7 @@ struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const st
             flags |= WGL_CONTEXT_ROBUST_ACCESS_BIT_ARB;
 
         if (nack__wgl.has_create_context_profile)
-            mask = (desc->profile == NACK_GL_PROFILE_CORE)
+            mask = (desc->profile == NACK__GL_PROFILE_CORE)
                        ? WGL_CONTEXT_CORE_PROFILE_BIT_ARB
                        : WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
 
@@ -429,7 +429,7 @@ bool nack__wgl_make_current(struct nack_window *w, struct nack_gl_context *ctx)
         return nack__wgl.MakeCurrent(NULL, NULL) != FALSE;
     if (!w)
         return nack__fail(NACK_ERROR_INVALID_ARGUMENT,
-                          "nack_gl_make_current needs a window for this context");
+                          "nack__gl_make_current needs a window for this context");
 
     struct nack_win32_window *ww = nack__win32_win(w);
     struct nack_wgl_context *native = (struct nack_wgl_context *)ctx->native;
