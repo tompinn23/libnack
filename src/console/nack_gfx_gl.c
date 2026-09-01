@@ -1,0 +1,282 @@
+/*
+ * The OpenGL 3.3 implementation of the console's graphics backend.
+ *
+ * One quad per cell, uploaded per draw. A console is a few thousand cells, so
+ * rebuilding the buffer outright is cheaper than tracking which cells changed.
+ */
+#include "nack_gfx.h"
+#include "nack_gl.h"
+#include "nack_console_internal.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+struct nack_texture {
+    nack_gluint id;
+};
+
+struct nack_gl_backend {
+    struct nack_window *window;
+    struct nack_gl_context *context;
+    nack_gluint program;
+    nack_gluint vao, vbo;
+    nack_glint uniform_viewport, uniform_atlas, uniform_mode;
+    int viewport_w, viewport_h;
+    int fb_height;
+};
+
+static struct nack_gl_backend nack__gl;
+
+static const char *nack__vertex_source =
+    "#version 330 core\n"
+    "layout(location = 0) in vec2 a_position;\n"
+    "layout(location = 1) in vec2 a_uv;\n"
+    "layout(location = 2) in vec4 a_fg;\n"
+    "layout(location = 3) in vec4 a_bg;\n"
+    "uniform vec2 u_viewport;\n"
+    "out vec2 v_uv;\n"
+    "out vec4 v_fg;\n"
+    "out vec4 v_bg;\n"
+    "void main() {\n"
+    "    vec2 ndc = (a_position / u_viewport) * 2.0 - 1.0;\n"
+    "    gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);\n"
+    "    v_uv = a_uv;\n"
+    "    v_fg = a_fg;\n"
+    "    v_bg = a_bg;\n"
+    "}\n";
+
+static const char *nack__fragment_source =
+    "#version 330 core\n"
+    "in vec2 v_uv;\n"
+    "in vec4 v_fg;\n"
+    "in vec4 v_bg;\n"
+    "uniform sampler2D u_atlas;\n"
+    "uniform int u_mode;\n"
+    "out vec4 frag_colour;\n"
+    "void main() {\n"
+    "    if (u_mode == 0) {\n"
+    "        frag_colour = v_bg;\n"
+    "        return;\n"
+    "    }\n"
+    /* A font atlas is white with coverage in alpha, so the multiply tints it.
+     * A colour tileset carries its own rgb and the tint is usually white. */
+    "    vec4 texel = texture(u_atlas, v_uv);\n"
+    "    frag_colour = vec4(v_fg.rgb * texel.rgb, v_fg.a * texel.a);\n"
+    "    if (frag_colour.a <= 0.0) discard;\n"
+    "}\n";
+
+const char *nack__gfx_name(void)
+{
+    return "opengl";
+}
+
+static nack_gluint nack__compile(nack_glenum stage, const char *source)
+{
+    nack_gluint shader = glCreateShader(stage);
+    nack_glint status = 0;
+
+    glShaderSource(shader, 1, &source, NULL);
+    glCompileShader(shader);
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+    if (!status) {
+        char log[1024];
+        glGetShaderInfoLog(shader, sizeof log, NULL, log);
+        nack__error("console shader failed to compile: %s", log);
+        glDeleteShader(shader);
+        return 0;
+    }
+    return shader;
+}
+
+bool nack__gfx_init(struct nack_window *window)
+{
+    struct nack__gl_desc desc;
+    const char *missing = NULL;
+    nack_gluint vertex, fragment;
+    nack_glint status = 0;
+
+    memset(&nack__gl, 0, sizeof nack__gl);
+    nack__gl.window = window;
+
+    nack__gl_desc_defaults(&desc);
+    desc.major = 3;
+    desc.minor = 3;
+    desc.profile = NACK__GL_PROFILE_CORE;
+
+    nack__gl.context = nack__gl_context_create(window, &desc);
+    if (!nack__gl.context) {
+        const char *message = NULL;
+        nack__win_get_error(&message);
+        return nack__error("cannot create an OpenGL 3.3 context: %s",
+                           message ? message : "unknown");
+    }
+    nack__gl_make_current(window, nack__gl.context);
+
+    if (!nack__gl_load(&missing))
+        return nack__error("this OpenGL driver is missing %s",
+                           missing ? missing : "required entry points");
+
+    vertex = nack__compile(GL_VERTEX_SHADER, nack__vertex_source);
+    if (!vertex)
+        return false;
+    fragment = nack__compile(GL_FRAGMENT_SHADER, nack__fragment_source);
+    if (!fragment) {
+        glDeleteShader(vertex);
+        return false;
+    }
+
+    nack__gl.program = glCreateProgram();
+    glAttachShader(nack__gl.program, vertex);
+    glAttachShader(nack__gl.program, fragment);
+    glLinkProgram(nack__gl.program);
+    glGetProgramiv(nack__gl.program, GL_LINK_STATUS, &status);
+    glDeleteShader(vertex);
+    glDeleteShader(fragment);
+    if (!status) {
+        char log[1024];
+        glGetProgramInfoLog(nack__gl.program, sizeof log, NULL, log);
+        glDeleteProgram(nack__gl.program);
+        nack__gl.program = 0;
+        return nack__error("console shader failed to link: %s", log);
+    }
+
+    nack__gl.uniform_viewport = glGetUniformLocation(nack__gl.program, "u_viewport");
+    nack__gl.uniform_atlas = glGetUniformLocation(nack__gl.program, "u_atlas");
+    nack__gl.uniform_mode = glGetUniformLocation(nack__gl.program, "u_mode");
+
+    glGenVertexArrays(1, &nack__gl.vao);
+    glBindVertexArray(nack__gl.vao);
+    glGenBuffers(1, &nack__gl.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, nack__gl.vbo);
+
+    {
+        const nack_glsizei stride =
+            NACK_FLOATS_PER_VERTEX * (nack_glsizei)sizeof(float);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride,
+                              (const void *)(0 * sizeof(float)));
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride,
+                              (const void *)(2 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, stride,
+                              (const void *)(4 * sizeof(float)));
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, stride,
+                              (const void *)(8 * sizeof(float)));
+        glEnableVertexAttribArray(3);
+    }
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    return true;
+}
+
+void nack__gfx_shutdown(void)
+{
+    if (nack__gl.vbo) glDeleteBuffers(1, &nack__gl.vbo);
+    if (nack__gl.vao) glDeleteVertexArrays(1, &nack__gl.vao);
+    if (nack__gl.program) glDeleteProgram(nack__gl.program);
+    if (nack__gl.context) nack__gl_context_destroy(nack__gl.context);
+    memset(&nack__gl, 0, sizeof nack__gl);
+}
+
+struct nack_texture *nack__gfx_texture_create(const uint8_t *rgba, int width,
+                                              int height)
+{
+    struct nack_texture *texture =
+        (struct nack_texture *)calloc(1, sizeof *texture);
+
+    if (!texture) {
+        nack__error("out of memory");
+        return NULL;
+    }
+
+    glGenTextures(1, &texture->id);
+    glBindTexture(GL_TEXTURE_2D, texture->id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, rgba);
+    /* Nearest keeps pixel art crisp; a console never wants smoothing. */
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    return texture;
+}
+
+void nack__gfx_texture_destroy(struct nack_texture *texture)
+{
+    if (!texture)
+        return;
+    if (texture->id)
+        glDeleteTextures(1, &texture->id);
+    free(texture);
+}
+
+void nack__gfx_begin_frame(struct nack_color clear, int fb_width, int fb_height,
+                           int viewport_x, int viewport_y, int viewport_w,
+                           int viewport_h)
+{
+    nack__gl.viewport_w = viewport_w;
+    nack__gl.viewport_h = viewport_h;
+    nack__gl.fb_height = fb_height;
+
+    glViewport(0, 0, fb_width, fb_height);
+    glClearColor(clear.r / 255.0f, clear.g / 255.0f, clear.b / 255.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    /* GL's origin is bottom left, so the console's y is measured from there. */
+    glViewport(viewport_x, fb_height - viewport_y - viewport_h,
+               viewport_w, viewport_h);
+
+    glUseProgram(nack__gl.program);
+    glUniform2f(nack__gl.uniform_viewport, (float)viewport_w, (float)viewport_h);
+    glUniform1i(nack__gl.uniform_atlas, 0);
+    glBindVertexArray(nack__gl.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, nack__gl.vbo);
+    glActiveTexture(GL_TEXTURE0);
+}
+
+void nack__gfx_draw(const float *vertices, size_t vertex_count, int mode,
+                    struct nack_texture *texture)
+{
+    if (vertex_count == 0)
+        return;
+
+    glUniform1i(nack__gl.uniform_mode, mode);
+    if (texture)
+        glBindTexture(GL_TEXTURE_2D, texture->id);
+
+    glBufferData(GL_ARRAY_BUFFER,
+                 (nack_glsizeiptr)(vertex_count * NACK_FLOATS_PER_VERTEX *
+                                   sizeof(float)),
+                 vertices, GL_STREAM_DRAW);
+    glDrawArrays(GL_TRIANGLES, 0, (nack_glsizei)vertex_count);
+}
+
+void nack__gfx_end_frame(void)
+{
+    nack__gl_swap_buffers(nack__gl.window);
+}
+
+void nack__gfx_resize(int fb_width, int fb_height)
+{
+    (void)fb_width;
+    nack__gl.fb_height = fb_height;
+}
+
+void nack__gfx_set_vsync(bool vsync)
+{
+    nack__gl_set_swap_interval(vsync ? 1 : 0);
+}
+
+bool nack__gfx_read_pixel(int x, int y, uint8_t rgba[4])
+{
+    if (!nack__gl.program)
+        return false;
+    /* Flip into GL's bottom-left origin. */
+    glReadPixels(x, nack__gl.fb_height - 1 - y, 1, 1, GL_RGBA,
+                 GL_UNSIGNED_BYTE, rgba);
+    return true;
+}

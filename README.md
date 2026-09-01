@@ -36,11 +36,15 @@ int main(void)
 }
 ```
 
-| Platform | Windowing | Contexts |
+| Platform | Windowing | Renderer |
 | --- | --- | --- |
-| Linux, BSD | Wayland (xdg-shell) or XCB, chosen at run time | EGL |
-| Windows | Win32 | WGL |
-| macOS | Cocoa | NSOpenGL |
+| Linux, BSD | Wayland (xdg-shell) or XCB, chosen at run time | OpenGL 3.3 via EGL |
+| Windows | Win32 | OpenGL 3.3 via WGL |
+| macOS | Cocoa | Metal |
+
+The library is C99 throughout, with no C++ anywhere — not even `extern "C"`
+guards in the headers, since it is not meant to be included from C++ without
+the caller saying so themselves.
 
 ## Why it looks like this
 
@@ -150,6 +154,14 @@ is Mesa-only. Where that extension exists the connection stays pure XCB.
 `-DNACK_XCB_XLIB_FALLBACK=OFF` drops the dependency, at the cost of EGL on
 NVIDIA. GLX is not used.
 
+**macOS renders with Metal.** Apple deprecated OpenGL in 10.14 and capped it
+at 4.1, so the console draws through Metal there: a `CAMetalLayer` on the
+window's view, one pipeline built from Metal Shading Language at startup, and
+the same quads the OpenGL backend gets. `-DNACK_MACOS_USE_OPENGL=ON` selects
+the OpenGL renderer instead, and CI builds both. The renderer sits behind an
+internal interface (`src/console/nack_gfx.h`), so the console layer is unaware
+of which one it is talking to.
+
 **Wayland decorations.** xdg-decoration is optional and some compositors never
 implement it (Mutter and WSLg among them). Where it is missing, libnack draws
 its own frame: title bar with the window title, minimise, maximise and close
@@ -177,7 +189,8 @@ bit depth and row filter and compares them pixel for pixel against known data.
 SDK.
 
 Run here against Xvfb, sway and Weston, and cross-compiled for Windows with
-MinGW and exercised under Wine. The Cocoa backend is built by CI but has not
+MinGW and exercised under Wine. The Cocoa window layer and the Metal renderer
+are built by CI, in both the Metal and OpenGL configurations, but neither has
 been run on hardware.
 
 ## Licence

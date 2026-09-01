@@ -35,10 +35,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
 #if defined(NACK_SHARED) && defined(_WIN32)
 #  if defined(NACK_BUILD)
 #    define NACK_API __declspec(dllexport)
@@ -478,9 +474,5 @@ NACK_API void nack_set_vsync(bool vsync);
 
 NACK_API bool nack_clipboard_set(const char *utf8);
 NACK_API const char *nack_clipboard_get(void);
-
-#if defined(__cplusplus)
-}
-#endif
 
 #endif /* NACK_H_INCLUDED */

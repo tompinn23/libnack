@@ -418,10 +418,6 @@ typedef struct tagPIXELFORMATDESCRIPTOR {
 /* Functions                                                          */
 /* ------------------------------------------------------------------ */
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
 /* kernel32 */
 NACK_WINIMPORT HMODULE WINAPI GetModuleHandleW(LPCWSTR);
 NACK_WINIMPORT HMODULE WINAPI LoadLibraryA(LPCSTR);
@@ -509,9 +505,5 @@ NACK_WINIMPORT BOOL WINAPI SwapBuffers(HDC);
 /* opengl32 */
 NACK_WINIMPORT HGLRC WINAPI wglGetCurrentContext(void);
 NACK_WINIMPORT HDC   WINAPI wglGetCurrentDC(void);
-
-#if defined(__cplusplus)
-}
-#endif
 
 #endif /* NACK_WIN32_API_H_INCLUDED */

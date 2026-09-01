@@ -3,6 +3,7 @@
  * cell-based ones.
  */
 #include "nack_console_internal.h"
+#include "nack_gfx.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -58,8 +59,6 @@ bool nack_init(const struct nack_config *config)
     struct nack_config cfg;
     struct nack_win_init_desc init;
     struct nack_window_desc window_desc;
-    struct nack__gl_desc gl_desc;
-    const char *missing = NULL;
     int tile_w, tile_h, pixel_w, pixel_h, scale;
 
     if (nack__c.initialized)
@@ -122,32 +121,13 @@ bool nack_init(const struct nack_config *config)
                            message ? message : "unknown");
     }
 
-    nack__gl_desc_defaults(&gl_desc);
-    gl_desc.major = 3;
-    gl_desc.minor = 3;
-    gl_desc.profile = NACK__GL_PROFILE_CORE;
-    nack__c.gl = nack__gl_context_create(nack__c.window, &gl_desc);
-    if (!nack__c.gl) {
-        const char *message = NULL;
-        nack__win_get_error(&message);
+    if (!nack__gfx_init(nack__c.window)) {
         nack_window_destroy(nack__c.window);
+        nack__c.window = NULL;
         nack__win_shutdown();
-        return nack__error("cannot create an OpenGL 3.3 context: %s",
-                           message ? message : "unknown");
+        return false;   /* the backend already described the failure */
     }
-    nack__gl_make_current(nack__c.window, nack__c.gl);
-    nack__gl_set_swap_interval(cfg.vsync ? 1 : 0);
-
-    if (!nack__gl_load(&missing)) {
-        nack_shutdown();
-        return nack__error("this OpenGL driver is missing %s",
-                           missing ? missing : "required entry points");
-    }
-
-    if (!nack__render_init()) {
-        nack_shutdown();
-        return false;
-    }
+    nack__gfx_set_vsync(cfg.vsync);
 
     nack__c.initialized = true;   /* tileset loading checks this */
 
@@ -207,7 +187,7 @@ void nack_shutdown(void)
 {
     size_t i;
 
-    nack__render_shutdown();
+    nack__gfx_shutdown();
 
     /* Copy first: freeing a tileset unregisters it and moves the array. */
     for (i = nack__c.tileset_count; i > 0; --i) {
@@ -228,12 +208,12 @@ void nack_shutdown(void)
         nack_console_free(root);
     }
 
-    if (nack__c.gl)
-        nack__gl_context_destroy(nack__c.gl);
-    if (nack__c.window)
+    free(nack__c.vertices);
+
+    if (nack__c.window) {
         nack_window_destroy(nack__c.window);
-    if (nack__c.window || nack__c.gl)
         nack__win_shutdown();
+    }
 
     memset(&nack__c, 0, sizeof nack__c);
 }
@@ -249,14 +229,11 @@ void nack_present(void)
     if (!nack__c.initialized)
         return;
 
-    glDisable(GL_SCISSOR_TEST);
-    glViewport(0, 0, nack__c.fb_width, nack__c.fb_height);
-    glClearColor(nack__c.letterbox.r / 255.0f, nack__c.letterbox.g / 255.0f,
-                 nack__c.letterbox.b / 255.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
+    nack__gfx_begin_frame(nack__c.letterbox, nack__c.fb_width, nack__c.fb_height,
+                          nack__c.viewport_x, nack__c.viewport_y,
+                          nack__c.viewport_w, nack__c.viewport_h);
     nack__render_console(nack__c.root);
-    nack__gl_swap_buffers(nack__c.window);
+    nack__gfx_end_frame();
 
     now = nack__win_time_seconds();
     nack__c.delta = now - nack__c.last_frame_time;
@@ -277,13 +254,10 @@ bool nack__debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4])
          (int)(((double)cell_x + 0.5) * nack__c.viewport_w / console->columns);
     py = nack__c.viewport_y +
          (int)(((double)cell_y + 0.5) * nack__c.viewport_h / console->rows);
-    py = nack__c.fb_height - 1 - py;
-
     if (px < 0 || py < 0 || px >= nack__c.fb_width || py >= nack__c.fb_height)
         return false;
 
-    glReadPixels(px, py, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-    return true;
+    return nack__gfx_read_pixel(px, py, rgba);
 }
 
 bool nack_should_close(void)
@@ -427,6 +401,7 @@ static bool nack__translate(const struct nack_win_event *in,
     case NACK_WIN_EVENT_WINDOW_RESIZE: {
         nack__c.fb_width = in->data.size.fb_width;
         nack__c.fb_height = in->data.size.fb_height;
+        nack__gfx_resize(nack__c.fb_width, nack__c.fb_height);
         if (in->data.size.width > 0)
             nack__c.dpi_scale = (float)in->data.size.fb_width /
                                 (float)in->data.size.width;
@@ -558,7 +533,7 @@ bool nack_is_fullscreen(void)
 void nack_set_vsync(bool vsync)
 {
     nack__c.vsync = vsync;
-    nack__gl_set_swap_interval(vsync ? 1 : 0);
+    nack__gfx_set_vsync(vsync);
 }
 
 bool nack_clipboard_set(const char *utf8)

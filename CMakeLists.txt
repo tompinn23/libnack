@@ -22,6 +22,9 @@ cmake_dependent_option(NACK_ENABLE_XCB
     "Build the XCB backend" ON "UNIX;NOT APPLE" OFF)
 cmake_dependent_option(NACK_ENABLE_WAYLAND
     "Build the Wayland backend" ON "UNIX;NOT APPLE" OFF)
+option(NACK_MACOS_USE_OPENGL
+    "Use the OpenGL renderer on macOS instead of Metal" OFF)
+
 option(NACK_WIN32_USE_SDK_HEADERS
     "Use <windows.h> instead of libnack's hand-rolled Win32 declarations" OFF)
 
@@ -39,10 +42,17 @@ set(NACK_SOURCES
     src/common/nack_proc_cache.c
     src/console/nack_api.c
     src/console/nack_console.c
-    src/console/nack_gl.c
     src/console/nack_png.c
     src/console/nack_render.c
     src/console/nack_tileset.c)
+
+# Exactly one graphics backend is compiled in. macOS defaults to Metal, since
+# Apple deprecated OpenGL and capped it at 4.1.
+if(APPLE AND NOT NACK_MACOS_USE_OPENGL)
+    list(APPEND NACK_SOURCES src/console/nack_gfx_metal.m)
+else()
+    list(APPEND NACK_SOURCES src/console/nack_gfx_gl.c src/console/nack_gl.c)
+endif()
 
 set(NACK_LIBRARIES "")
 set(NACK_DEFINITIONS "")
@@ -144,6 +154,10 @@ elseif(APPLE)
     list(APPEND NACK_LIBRARIES
         ${COCOA_FRAMEWORK} ${QUARTZCORE_FRAMEWORK}
         ${OPENGL_FRAMEWORK} ${IOKIT_FRAMEWORK})
+    if(NOT NACK_MACOS_USE_OPENGL)
+        find_library(METAL_FRAMEWORK Metal REQUIRED)
+        list(APPEND NACK_LIBRARIES ${METAL_FRAMEWORK})
+    endif()
 endif()
 
 # --------------------------------------------------------------------------

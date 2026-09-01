@@ -252,16 +252,11 @@ struct nack_tileset *nack__tileset_from_rgba(uint8_t *rgba, int width, int heigh
             tileset->direct[i] = (int16_t)i;
     }
 
-    glGenTextures(1, &tileset->texture);
-    glBindTexture(GL_TEXTURE_2D, tileset->texture);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA,
-                 GL_UNSIGNED_BYTE, rgba);
-    /* Nearest keeps pixel art crisp; a console never wants smoothing. */
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    tileset->texture = nack__gfx_texture_create(rgba, width, height);
+    if (!tileset->texture) {
+        free(tileset);
+        return NULL;
+    }
 
     nack__tileset_register(tileset);
     return tileset;
@@ -392,8 +387,7 @@ void nack_tileset_free(struct nack_tileset *tileset)
     if (!tileset || tileset == nack__c.builtin_font)
         return;
     nack__tileset_unregister(tileset);
-    if (tileset->texture)
-        glDeleteTextures(1, &tileset->texture);
+    nack__gfx_texture_destroy(tileset->texture);
     free(tileset->sparse);
     free(tileset);
 }

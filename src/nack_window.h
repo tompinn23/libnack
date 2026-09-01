@@ -24,10 +24,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
 /* -------------------------------------------------------------------------- */
 /* Enumerations                                                               */
 /* -------------------------------------------------------------------------- */
@@ -362,14 +358,11 @@ struct nack_native_window {
     enum nack_backend backend;
     void *display;      /* Display* / wl_display* / NULL                     */
     void *surface;      /* wl_surface* / NSWindow* / HWND                    */
+    void *view;         /* NSView*, which is what a CAMetalLayer attaches to */
     uintptr_t handle;   /* X11 Window id / HWND / 0                          */
 };
 
 void nack_window_get_native(const struct nack_window *window,
                                      struct nack_native_window *out);
-
-#if defined(__cplusplus)
-}
-#endif
 
 #endif /* NACK_WINDOW_H_INCLUDED */

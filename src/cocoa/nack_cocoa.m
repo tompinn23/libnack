@@ -841,6 +841,7 @@ static void nack__cocoa_window_get_native(const struct nack_window *w,
     struct nack_cocoa_window *cw = (struct nack_cocoa_window *)w->native;
     out->display = NULL;
     out->surface = cw ? (void *)cw->window : NULL;
+    out->view = cw ? (void *)cw->view : NULL;
     out->handle = 0;
 }
 

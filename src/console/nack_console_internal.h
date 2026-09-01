@@ -2,7 +2,7 @@
 #define NACK_CONSOLE_INTERNAL_H_INCLUDED
 
 #include "../nack_internal.h"
-#include "nack_gl.h"
+#include "nack_gfx.h"
 
 #define NACK_MAX_TILESETS 16
 
@@ -12,7 +12,7 @@
  * them, which is decided at load time from the image's contents.
  */
 struct nack_tileset {
-    nack_gluint texture;
+    struct nack_texture *texture;
     int tile_width, tile_height;
     int columns, rows;          /* tiles across and down the atlas */
     int count;
@@ -60,10 +60,7 @@ struct nack_console_state {
     int fb_width, fb_height;
     float dpi_scale;
 
-    /* Renderer */
-    nack_gluint program;
-    nack_gluint vao, vbo;
-    nack_glint uniform_viewport, uniform_atlas, uniform_mode;
+    /* Quad scratch space, reused between frames. */
     float *vertices;
     size_t vertex_capacity;
 
@@ -94,8 +91,6 @@ void nack__tileset_register(struct nack_tileset *tileset);
 void nack__tileset_unregister(struct nack_tileset *tileset);
 
 /* nack_render.c */
-bool nack__render_init(void);
-void nack__render_shutdown(void);
 void nack__render_console(const struct nack_console *console);
 void nack__render_update_viewport(void);
 
