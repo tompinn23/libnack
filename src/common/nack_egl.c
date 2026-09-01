@@ -1,0 +1,354 @@
+/* Shared EGL context management for the XCB and Wayland backends. */
+#include "nack_egl.h"
+
+#include <dlfcn.h>
+#include <stdio.h>
+
+nack_egl_state nack__egl;
+
+const char *nack__egl_error_string(EGLint error)
+{
+    switch (error) {
+    case EGL_SUCCESS:             return "EGL_SUCCESS";
+    case EGL_NOT_INITIALIZED:     return "EGL_NOT_INITIALIZED";
+    case EGL_BAD_ACCESS:          return "EGL_BAD_ACCESS";
+    case EGL_BAD_ALLOC:           return "EGL_BAD_ALLOC";
+    case EGL_BAD_ATTRIBUTE:       return "EGL_BAD_ATTRIBUTE";
+    case EGL_BAD_CONTEXT:         return "EGL_BAD_CONTEXT";
+    case EGL_BAD_CONFIG:          return "EGL_BAD_CONFIG";
+    case EGL_BAD_CURRENT_SURFACE: return "EGL_BAD_CURRENT_SURFACE";
+    case EGL_BAD_DISPLAY:         return "EGL_BAD_DISPLAY";
+    case EGL_BAD_SURFACE:         return "EGL_BAD_SURFACE";
+    case EGL_BAD_MATCH:           return "EGL_BAD_MATCH";
+    case EGL_BAD_PARAMETER:       return "EGL_BAD_PARAMETER";
+    case EGL_BAD_NATIVE_PIXMAP:   return "EGL_BAD_NATIVE_PIXMAP";
+    case EGL_BAD_NATIVE_WINDOW:   return "EGL_BAD_NATIVE_WINDOW";
+    case EGL_CONTEXT_LOST:        return "EGL_CONTEXT_LOST";
+    default:                      return "unknown EGL error";
+    }
+}
+
+static bool nack__egl_has_extension(const char *list, const char *name)
+{
+    if (!list || !name)
+        return false;
+    size_t len = strlen(name);
+    const char *p = list;
+    while ((p = strstr(p, name)) != NULL) {
+        char after = p[len];
+        if ((p == list || p[-1] == ' ') && (after == ' ' || after == '\0'))
+            return true;
+        p += len;
+    }
+    return false;
+}
+
+bool nack__egl_init(EGLenum platform, void *native_display, const EGLAttrib *attribs)
+{
+    if (nack__egl.initialized)
+        return true;
+
+    memset(&nack__egl, 0, sizeof nack__egl);
+
+    const char *client_exts = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
+    nack__egl.has_platform_base =
+        nack__egl_has_extension(client_exts, "EGL_EXT_platform_base");
+
+    if (nack__egl.has_platform_base) {
+        nack__egl.get_platform_display = (PFNEGLGETPLATFORMDISPLAYEXTPROC)
+            eglGetProcAddress("eglGetPlatformDisplayEXT");
+        nack__egl.create_platform_window_surface =
+            (PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC)
+                eglGetProcAddress("eglCreatePlatformWindowSurfaceEXT");
+    }
+
+    if (nack__egl.get_platform_display) {
+        /* eglGetPlatformDisplayEXT takes EGLint attributes, not EGLAttrib. */
+        EGLint int_attribs[9];
+        EGLint *ptr = NULL;
+        if (attribs) {
+            size_t i = 0;
+            for (; attribs[i] != EGL_NONE && i < 8; ++i)
+                int_attribs[i] = (EGLint)attribs[i];
+            int_attribs[i] = EGL_NONE;
+            ptr = int_attribs;
+        }
+        nack__egl.display = nack__egl.get_platform_display(platform, native_display, ptr);
+    }
+
+    if (nack__egl.display == EGL_NO_DISPLAY) {
+        /* Legacy path: only valid when the native display is an Xlib Display*
+         * or a wl_display*, which is exactly how callers use the fallback. */
+        nack__egl.display = eglGetDisplay((EGLNativeDisplayType)native_display);
+    }
+
+    if (nack__egl.display == EGL_NO_DISPLAY)
+        return nack__fail(NACK_ERROR_NO_BACKEND, "eglGetDisplay failed: %s",
+                          nack__egl_error_string(eglGetError()));
+
+    if (!eglInitialize(nack__egl.display, &nack__egl.major, &nack__egl.minor)) {
+        nack__egl.display = EGL_NO_DISPLAY;
+        return nack__fail(NACK_ERROR_NO_BACKEND, "eglInitialize failed: %s",
+                          nack__egl_error_string(eglGetError()));
+    }
+
+    const char *exts = eglQueryString(nack__egl.display, EGL_EXTENSIONS);
+    nack__egl.has_khr_create_context =
+        nack__egl_has_extension(exts, "EGL_KHR_create_context");
+    nack__egl.has_ext_create_context_robustness =
+        nack__egl_has_extension(exts, "EGL_EXT_create_context_robustness");
+    nack__egl.has_khr_gl_colorspace =
+        nack__egl_has_extension(exts, "EGL_KHR_gl_colorspace");
+    nack__egl.has_ext_swap_control_tear =
+        nack__egl_has_extension(exts, "EGL_EXT_swap_control_tear");
+
+    /* EGL 1.5 guarantees eglGetProcAddress resolves core GL entry points;
+     * older implementations do not, so keep a dlopen handle for fallback. */
+    nack__egl.gl_library = dlopen("libGL.so.1", RTLD_LAZY | RTLD_LOCAL);
+    if (!nack__egl.gl_library)
+        nack__egl.gl_library = dlopen("libOpenGL.so.0", RTLD_LAZY | RTLD_LOCAL);
+    nack__egl.gles_library = dlopen("libGLESv2.so.2", RTLD_LAZY | RTLD_LOCAL);
+
+    nack__egl.initialized = true;
+    nack__log("nack: EGL %d.%d initialized", nack__egl.major, nack__egl.minor);
+    return true;
+}
+
+void nack__egl_terminate(void)
+{
+    if (!nack__egl.initialized)
+        return;
+    eglMakeCurrent(nack__egl.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    eglTerminate(nack__egl.display);
+    if (nack__egl.gl_library)
+        dlclose(nack__egl.gl_library);
+    if (nack__egl.gles_library)
+        dlclose(nack__egl.gles_library);
+    memset(&nack__egl, 0, sizeof nack__egl);
+}
+
+bool nack__egl_choose_config(const nack_framebuffer_desc *fb, nack_gl_profile profile,
+                             int gl_major, EGLConfig *out_config,
+                             EGLint *out_visual_id)
+{
+    EGLint renderable = EGL_OPENGL_BIT;
+    if (profile == NACK_GL_PROFILE_ES)
+        renderable = (gl_major >= 3) ? EGL_OPENGL_ES3_BIT : EGL_OPENGL_ES2_BIT;
+
+    EGLint attribs[] = {
+        EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
+        EGL_RENDERABLE_TYPE, renderable,
+        EGL_RED_SIZE,        fb->red_bits,
+        EGL_GREEN_SIZE,      fb->green_bits,
+        EGL_BLUE_SIZE,       fb->blue_bits,
+        EGL_ALPHA_SIZE,      fb->alpha_bits,
+        EGL_DEPTH_SIZE,      fb->depth_bits,
+        EGL_STENCIL_SIZE,    fb->stencil_bits,
+        EGL_SAMPLES,         fb->samples,
+        EGL_NONE
+    };
+
+    EGLint count = 0;
+    if (!eglChooseConfig(nack__egl.display, attribs, NULL, 0, &count) || count == 0)
+        return nack__fail(NACK_ERROR_NO_PIXEL_FORMAT,
+                          "no EGL config matches the requested framebuffer");
+
+    EGLConfig *configs = (EGLConfig *)nack__calloc((size_t)count, sizeof *configs);
+    if (!configs)
+        return false;
+    eglChooseConfig(nack__egl.display, attribs, configs, count, &count);
+
+    /* eglChooseConfig sorts by "at least as good as requested", which can hand
+     * back a config with more bits than asked for. Prefer an exact match on the
+     * colour channels so a request for 8/8/8/0 does not silently gain alpha. */
+    EGLConfig chosen = configs[0];
+    for (EGLint i = 0; i < count; ++i) {
+        EGLint r = 0, g = 0, b = 0, a = 0, samples = 0;
+        eglGetConfigAttrib(nack__egl.display, configs[i], EGL_RED_SIZE, &r);
+        eglGetConfigAttrib(nack__egl.display, configs[i], EGL_GREEN_SIZE, &g);
+        eglGetConfigAttrib(nack__egl.display, configs[i], EGL_BLUE_SIZE, &b);
+        eglGetConfigAttrib(nack__egl.display, configs[i], EGL_ALPHA_SIZE, &a);
+        eglGetConfigAttrib(nack__egl.display, configs[i], EGL_SAMPLES, &samples);
+        if (r == fb->red_bits && g == fb->green_bits && b == fb->blue_bits &&
+            a == fb->alpha_bits && samples == fb->samples) {
+            chosen = configs[i];
+            break;
+        }
+    }
+
+    *out_config = chosen;
+    if (out_visual_id) {
+        *out_visual_id = 0;
+        eglGetConfigAttrib(nack__egl.display, chosen, EGL_NATIVE_VISUAL_ID, out_visual_id);
+    }
+    free(configs);
+    return true;
+}
+
+nack_gl_context *nack__egl_create_context(nack_window *w, const nack_gl_desc *desc,
+                                          EGLConfig config, const nack_backend_vt *vt)
+{
+    EGLenum api = (desc->profile == NACK_GL_PROFILE_ES) ? EGL_OPENGL_ES_API
+                                                        : EGL_OPENGL_API;
+    if (!eglBindAPI(api)) {
+        nack__fail(NACK_ERROR_CONTEXT_CREATION, "eglBindAPI failed: %s",
+                   nack__egl_error_string(eglGetError()));
+        return NULL;
+    }
+
+    EGLint attribs[16];
+    int n = 0;
+
+    if (nack__egl.has_khr_create_context || nack__egl.major > 1 ||
+        (nack__egl.major == 1 && nack__egl.minor >= 5)) {
+        if (desc->major > 0) {
+            attribs[n++] = EGL_CONTEXT_MAJOR_VERSION;
+            attribs[n++] = desc->major;
+            attribs[n++] = EGL_CONTEXT_MINOR_VERSION;
+            attribs[n++] = desc->minor;
+        }
+        if (desc->profile != NACK_GL_PROFILE_ES) {
+            attribs[n++] = EGL_CONTEXT_OPENGL_PROFILE_MASK;
+            attribs[n++] = (desc->profile == NACK_GL_PROFILE_CORE)
+                               ? EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT
+                               : EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT;
+        }
+        if (desc->debug) {
+            attribs[n++] = EGL_CONTEXT_OPENGL_DEBUG;
+            attribs[n++] = EGL_TRUE;
+        }
+        if (desc->forward_compatible) {
+            attribs[n++] = EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE;
+            attribs[n++] = EGL_TRUE;
+        }
+        if (desc->robust && nack__egl.has_ext_create_context_robustness) {
+            attribs[n++] = EGL_CONTEXT_OPENGL_ROBUST_ACCESS;
+            attribs[n++] = EGL_TRUE;
+        }
+    } else if (desc->profile == NACK_GL_PROFILE_ES && desc->major > 0) {
+        attribs[n++] = EGL_CONTEXT_CLIENT_VERSION;
+        attribs[n++] = desc->major;
+    }
+    attribs[n] = EGL_NONE;
+
+    EGLContext share = EGL_NO_CONTEXT;
+    if (desc->share && desc->share->native)
+        share = ((nack_egl_context *)desc->share->native)->context;
+
+    EGLContext egl_ctx = eglCreateContext(nack__egl.display, config, share, attribs);
+    if (egl_ctx == EGL_NO_CONTEXT) {
+        nack__fail(NACK_ERROR_CONTEXT_CREATION,
+                   "eglCreateContext failed for GL %d.%d %s: %s",
+                   desc->major, desc->minor,
+                   desc->profile == NACK_GL_PROFILE_CORE ? "core"
+                       : desc->profile == NACK_GL_PROFILE_ES ? "es" : "compat",
+                   nack__egl_error_string(eglGetError()));
+        return NULL;
+    }
+
+    nack_gl_context *ctx = (nack_gl_context *)nack__calloc(1, sizeof *ctx);
+    nack_egl_context *native = (nack_egl_context *)nack__calloc(1, sizeof *native);
+    if (!ctx || !native) {
+        eglDestroyContext(nack__egl.display, egl_ctx);
+        free(ctx);
+        free(native);
+        return NULL;
+    }
+
+    native->context = egl_ctx;
+    native->config = config;
+    eglGetConfigAttrib(nack__egl.display, config, EGL_NATIVE_VISUAL_ID,
+                       &native->visual_id);
+    native->is_es = (desc->profile == NACK_GL_PROFILE_ES);
+    ctx->native = native;
+    ctx->vt = vt;
+    ctx->owner = w;
+    return ctx;
+}
+
+void nack__egl_destroy_context(nack_gl_context *ctx)
+{
+    if (!ctx)
+        return;
+    nack_egl_context *native = (nack_egl_context *)ctx->native;
+    if (native) {
+        if (native->context != EGL_NO_CONTEXT)
+            eglDestroyContext(nack__egl.display, native->context);
+        free(native);
+    }
+    free(ctx);
+}
+
+EGLSurface nack__egl_create_window_surface(EGLConfig config, void *native_window,
+                                           bool use_pointer, bool srgb)
+{
+    EGLint attribs[5];
+    int n = 0;
+    if (srgb && nack__egl.has_khr_gl_colorspace) {
+        attribs[n++] = EGL_GL_COLORSPACE_KHR;
+        attribs[n++] = EGL_GL_COLORSPACE_SRGB_KHR;
+    }
+    attribs[n] = EGL_NONE;
+
+    EGLSurface surface = EGL_NO_SURFACE;
+    if (use_pointer && nack__egl.create_platform_window_surface) {
+        surface = nack__egl.create_platform_window_surface(nack__egl.display, config,
+                                                           native_window, attribs);
+    } else {
+        surface = eglCreateWindowSurface(nack__egl.display, config,
+                                         (EGLNativeWindowType)(uintptr_t)native_window,
+                                         attribs);
+    }
+
+    if (surface == EGL_NO_SURFACE)
+        nack__fail(NACK_ERROR_CONTEXT_CREATION, "eglCreateWindowSurface failed: %s",
+                   nack__egl_error_string(eglGetError()));
+    return surface;
+}
+
+bool nack__egl_make_current(EGLSurface surface, nack_gl_context *ctx)
+{
+    if (!ctx) {
+        eglMakeCurrent(nack__egl.display, EGL_NO_SURFACE, EGL_NO_SURFACE,
+                       EGL_NO_CONTEXT);
+        return true;
+    }
+    nack_egl_context *native = (nack_egl_context *)ctx->native;
+    eglBindAPI(native->is_es ? EGL_OPENGL_ES_API : EGL_OPENGL_API);
+    if (!eglMakeCurrent(nack__egl.display, surface, surface, native->context))
+        return nack__fail(NACK_ERROR_PLATFORM, "eglMakeCurrent failed: %s",
+                          nack__egl_error_string(eglGetError()));
+    return true;
+}
+
+void nack__egl_swap_buffers(EGLSurface surface)
+{
+    if (surface != EGL_NO_SURFACE)
+        eglSwapBuffers(nack__egl.display, surface);
+}
+
+void nack__egl_set_swap_interval(int interval)
+{
+    if (!nack__egl.initialized)
+        return;
+    if (interval < 0 && !nack__egl.has_ext_swap_control_tear)
+        interval = -interval;   /* no adaptive vsync; fall back to plain vsync */
+    eglSwapInterval(nack__egl.display, interval);
+}
+
+void *nack__egl_get_proc_address(const char *name)
+{
+    void *proc = (void *)eglGetProcAddress(name);
+    if (proc)
+        return proc;
+    /* Core entry points before EGL 1.5 may only be available from the
+     * client library itself. */
+    if (nack__egl.gl_library) {
+        proc = dlsym(nack__egl.gl_library, name);
+        if (proc)
+            return proc;
+    }
+    if (nack__egl.gles_library)
+        proc = dlsym(nack__egl.gles_library, name);
+    return proc;
+}
