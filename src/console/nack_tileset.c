@@ -330,7 +330,7 @@ struct nack_tileset *nack_tileset_load_memory(const void *data, size_t size,
 
     tileset = nack__tileset_from_rgba(rgba, width, height, tile_width,
                                       tile_height, layout);
-    free(rgba);
+    nack__image_free(rgba);
     return tileset;
 }
 

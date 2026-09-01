@@ -57,23 +57,18 @@ if(APPLE AND NOT NACK_MACOS_OPENGL_ONLY)
 endif()
 
 #
-# Vendored decoders. Image decoding is parsing untrusted input, so it uses
-# libraries that have been attacked for years rather than something written
-# here: LodePNG for PNG, TurboJPEG for JPEG. Both build from source in-tree,
-# so the library still needs nothing installed on the machine.
+# The vendored image decoder. Decoding is parsing untrusted input, so it is
+# stb_image rather than something written here, and it builds from source
+# in-tree so the library still needs nothing installed on the machine.
 #
-add_subdirectory(third_party/lodepng)
-add_subdirectory(third_party/libjpeg-turbo)
+add_subdirectory(third_party/stb)
 
 set(NACK_LIBRARIES "")
-# Their objects go straight into libnack rather than being separate archives a
+# Its objects go straight into libnack rather than being a separate archive a
 # consumer would have to link too: from the outside, decoding images is part of
 # what the library does.
-set(NACK_VENDORED_OBJECTS
-    $<TARGET_OBJECTS:nack_lodepng> $<TARGET_OBJECTS:nack_jpeg>)
-set(NACK_VENDORED_INCLUDES
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lodepng
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libjpeg-turbo/src)
+set(NACK_VENDORED_OBJECTS $<TARGET_OBJECTS:nack_stb_image>)
+set(NACK_VENDORED_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb)
 set(NACK_DEFINITIONS "")
 
 if(UNIX AND NOT APPLE)
@@ -294,7 +289,7 @@ if(PROJECT_IS_TOP_LEVEL)
     # nothing, so the pixels come from Python's zlib instead. Without an
     # interpreter the test finds no fixtures and reports itself skipped.
     #
-    set(NACK_PNG_FIXTURES ${CMAKE_CURRENT_BINARY_DIR}/png-fixtures)
+    set(NACK_PNG_FIXTURES ${CMAKE_CURRENT_BINARY_DIR}/image-fixtures)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_FOUND)
         add_custom_command(
@@ -304,8 +299,16 @@ if(PROJECT_IS_TOP_LEVEL)
                     ${NACK_PNG_FIXTURES}
             DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/mkpng.py
             COMMENT "Generating PNG decoder fixtures")
+        add_custom_command(
+            OUTPUT ${NACK_PNG_FIXTURES}/expected_jpeg.bin
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tools/mkjpeg.py
+                    ${NACK_PNG_FIXTURES}
+            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/mkjpeg.py
+            COMMENT "Generating JPEG decoder fixtures")
         add_custom_target(nack_png_fixtures
-            DEPENDS ${NACK_PNG_FIXTURES}/expected.bin)
+            DEPENDS ${NACK_PNG_FIXTURES}/expected.bin
+                    ${NACK_PNG_FIXTURES}/expected_jpeg.bin)
         add_dependencies(nack_image_test nack_png_fixtures)
     else()
         message(STATUS

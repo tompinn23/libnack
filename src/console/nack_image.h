@@ -11,10 +11,10 @@
  * needs no hint. Returns a buffer the caller frees, or NULL on failure with
  * *error describing why.
  *
- * PNG goes through LodePNG and JPEG through TurboJPEG, both vendored under
- * third_party/. Between them that covers every colour type, bit depth and
- * interlacing a tileset might ship as; a JPEG has no alpha, so it decodes
- * fully opaque.
+ * Both go through stb_image, vendored under third_party/. Between them that
+ * covers every colour type, bit depth and interlacing a tileset might ship
+ * as, baseline and progressive JPEG included; a JPEG has no alpha, so it
+ * decodes fully opaque.
  *
  * The error string lives in a buffer belonging to this module and is
  * overwritten by the next failure, which matches the rest of the library:
@@ -22,5 +22,8 @@
  */
 uint8_t *nack__image_decode(const void *data, size_t size, int *width,
                             int *height, const char **error);
+
+/* Returns a decoded image. Not interchangeable with free(). */
+void nack__image_free(uint8_t *pixels);
 
 #endif /* NACK_IMAGE_H_INCLUDED */

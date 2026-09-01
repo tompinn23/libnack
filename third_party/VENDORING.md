@@ -2,86 +2,73 @@
 
 Image decoding is parsing untrusted input from disk. That is the last place to
 prefer something written here over code that has been attacked for years, so
-libnack does not decode PNG or JPEG itself. Both decoders are vendored in
-source form rather than looked for on the system, so building libnack still
-needs nothing installed.
+libnack does not decode PNG or JPEG itself. The decoder is vendored in source
+form rather than looked for on the system, so building libnack still needs
+nothing installed.
 
-Nothing in here is libnack's code. It is compiled with warnings off, since
-its warnings are not ours to fix and would bury the ones that are, and with
-hidden visibility, so a program linking libnack does not end up with a second
-copy of these symbols in its global namespace.
+Nothing in here is libnack's code, apart from the two files named below. It is
+compiled with warnings off, since its warnings are not ours to fix and would
+bury the ones that are, and with hidden visibility, so a program linking
+libnack does not end up with a second copy of these symbols in its global
+namespace.
 
-## LodePNG
-
-| | |
-| --- | --- |
-| Version | 20260119 |
-| Source | `https://github.com/lvandeve/lodepng` |
-| Files | `lodepng.h`, `lodepng.c`, `LICENSE` |
-| Licence | zlib |
-
-Upstream ships the implementation as `lodepng.cpp`. It is also valid C — the
-C++ API is behind `LODEPNG_COMPILE_CPP` — so it is renamed to `lodepng.c`
-here and compiled as C99, because this project has no C++ in it. That rename
-is the only modification.
-
-The build defines `LODEPNG_NO_COMPILE_ENCODER`, `LODEPNG_NO_COMPILE_DISK` and
-`LODEPNG_NO_COMPILE_CPP`: only decoding is wanted, and the rest is code
-nothing could reach. Error text stays, because it is what a bad tileset
-reports back to the caller.
-
-LodePNG carries its own inflate, so there is no zlib here.
-
-### Updating
-
-Replace `lodepng.h`, drop the new `lodepng.cpp` in as `lodepng.c`, and run the
-test suite. Nothing else should need changing.
-
-## libjpeg-turbo
+## stb_image
 
 | | |
 | --- | --- |
-| Version | 3.1.2 |
-| Source | `https://github.com/libjpeg-turbo/libjpeg-turbo` |
-| Files | `src/`, `LICENSE.md`, `README.ijg` |
-| Licence | IJG, plus BSD-3-Clause and zlib for parts (see `LICENSE.md`) |
-| API used | TurboJPEG (`turbojpeg.h`) |
+| Version | 2.30 |
+| Source | `https://github.com/nothings/stb` |
+| Files | `stb_image.h`, `LICENSE` |
+| Licence | public domain, or MIT — the file offers both |
 
-The sources are unmodified. What is not here: the SIMD extensions, the
-command-line tools (`cjpeg`, `djpeg`, `jpegtran`, `tjbench`), the tests, the
-Java bindings, the fuzzers, the documentation and the test images.
+`stb_image.h` is unmodified. `stb_image.c` and `CMakeLists.txt` in that
+directory are libnack's: stb_image is a header carrying its own
+implementation, emitted only where `STB_IMAGE_IMPLEMENTATION` is defined, and
+`stb_image.c` is the one place that does it. It also pins the configuration,
+which is deliberately narrow:
 
-`CMakeLists.txt` in that directory is libnack's, not upstream's. Upstream's
-build refuses to be used from another project:
+- `STBI_ONLY_PNG` and `STBI_ONLY_JPEG`. stb_image can also read BMP, TGA, PSD,
+  GIF, HDR, PIC and PNM. None of those is a format a tileset should be, and
+  every one left enabled is another parser reachable from a file the program
+  did not write. Cutting them out means a BMP is refused, rather than quietly
+  working on one machine and not another.
+- `STBI_NO_STDIO`. Everything is decoded from memory.
+- `STBI_NO_LINEAR` and `STBI_NO_HDR`. The console wants 8-bit RGBA and nothing
+  else; these also drag in `pow()` from libm for code nothing calls.
+- `STBI_MAX_DIMENSIONS 32768`, so an absurd size in a header is refused rather
+  than attempted.
 
-> The libjpeg-turbo build system cannot be integrated into another build
-> system using add_subdirectory(). Use ExternalProject_Add() instead.
+### What it covers
 
-`ExternalProject_Add` fetches and builds at build time, which is the opposite
-of vendoring, so the source list and the configure-time checks are transcribed
-from upstream's `CMakeLists.txt` instead. Three things about that are worth
-knowing before an update:
+PNG at every colour type and bit depth, interlaced or not, and JPEG both
+baseline and progressive. The libnack-written decoder this replaced handled
+neither interlacing nor JPEG at all.
 
-- **SIMD is off.** On x86 it would need NASM, for a speedup nothing here
-  wants: a tileset is decoded once at startup. Everything SIMD in 3.x sits
-  behind `#ifdef WITH_SIMD`, so leaving it undefined is the whole of it.
-- **Some `.c` files are `#include`d, not compiled.** The `src/wrapper/*.c`
-  stubs each include one implementation file at a given sample precision,
-  which is how 3.x builds 8-, 12- and 16-bit support from one source tree.
-  Deleting a `.c` file because it is not in the source list will break the
-  build.
-- **`BMP_SUPPORTED` and `PPM_SUPPORTED` are required.** `tj3LoadImage` and
-  `tj3SaveImage` are part of the TurboJPEG API and call into the BMP and PPM
-  readers and writers, so `turbojpeg.c` does not link without them. Nothing in
-  libnack reads a BMP or a PPM.
+### One behaviour worth knowing
+
+**stb_image is lenient about truncated JPEGs.** Once it has read the header it
+returns an image of the declared size containing whatever scan data it managed
+to read, rather than reporting an error — the same thing most image viewers
+do. A truncated tileset therefore loads with its tail blank instead of failing
+outright. Truncation before the header is still refused, and nothing here
+reads out of bounds; `tests/image_test.c` checks both. If a future version of
+libnack needs strictness instead, that is a check to add above stb_image, not
+a patch to make to it.
 
 ### Updating
 
-Take a release tarball, copy `src/*.c`, `src/*.h`, `src/*.h.in` and
-`src/wrapper/*.c`, then delete the files with a `main()` in them and the
-readers and writers for formats the TurboJPEG API does not need
-(`rdgif.c`, `rdtarga.c`, `wrgif.c`, `wrtarga.c`, and so on — `rdbmp.c`,
-`wrbmp.c`, `rdppm.c` and `wrppm.c` must stay). Then diff upstream's
-`JPEG_SOURCES` and `TURBOJPEG_SOURCES` against the lists in the local
-`CMakeLists.txt`, and update `VERSION`, `COPYRIGHT_YEAR` and
-`LIBJPEG_TURBO_VERSION_NUMBER` there.
+Replace `stb_image.h` and run the test suite. `stb_image.c` should not need
+changing unless upstream renames a configuration macro.
+
+## Test fixtures are not vendored
+
+`tools/mkpng.py` and `tools/mkjpeg.py` generate the images
+`tests/image_test.c` decodes, into the build tree. Nothing is checked in,
+which is the point: pixels a decoder is compared against have to come from
+somewhere other than that decoder. `mkjpeg.py` is a small baseline JPEG
+encoder written for this — there is no encoder in the tree, and a decoder
+checked against its own encoder proves very little either way.
+
+That the two agree to within a few levels on every channel is a real result:
+they are independent implementations of the same standard, and both being
+wrong in the same direction is far less likely than either being wrong alone.
