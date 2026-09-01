@@ -260,6 +260,11 @@ void nack_present(void)
     nack__c.last_frame_time = now;
 }
 
+void nack__debug_capture_frames(bool capture)
+{
+    nack__gfx_set_capture(capture);
+}
+
 bool nack__debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4])
 {
     const struct nack_console *console = nack__c.root;

@@ -7,6 +7,7 @@
 #include "console/nack_console_internal.h"
 #include "console/nack_gfx.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -15,6 +16,23 @@ static int failures;
 static void check(int ok, const char *what)
 {
     printf("%-52s %s\n", what, ok ? "ok" : "FAIL");
+    if (!ok)
+        failures++;
+}
+
+/*
+ * Same, but says what the pixel actually was. These are the checks most
+ * likely to fail on a machine nobody here can run, and "FAIL" on its own
+ * would leave nothing to go on.
+ */
+static void checkpx(int ok, const char *what, const uint8_t rgba[4],
+                    const char *expected)
+{
+    printf("%-52s %s", what, ok ? "ok" : "FAIL");
+    if (!ok)
+        printf("  (got %u,%u,%u,%u; wanted %s)", rgba[0], rgba[1], rgba[2],
+               rgba[3], expected);
+    printf("\n");
     if (!ok)
         failures++;
 }
@@ -57,6 +75,8 @@ int main(void)
         return 1;
     }
     printf("rendering with the %s backend\n", nack__gfx_name());
+    /* Frames are gone once presented unless the renderer is told to keep one. */
+    nack__debug_capture_frames(true);
     check(1, "nack_init with the built-in font");
     /*
      * Under NACK_RENDERER=test-fail the preferred renderer refuses to start,
@@ -140,8 +160,9 @@ int main(void)
     {
         uint8_t pixel[4] = { 0, 0, 0, 0 };
         check(nack__debug_read_pixel(5, 5, pixel), "framebuffer readable");
-        check(pixel[0] > 10 && pixel[0] < 32 && pixel[2] > 64 && pixel[2] < 96,
-              "cell background rendered to the framebuffer");
+        checkpx(pixel[0] > 10 && pixel[0] < 32 && pixel[2] > 64 && pixel[2] < 96,
+                "cell background rendered to the framebuffer", pixel,
+                "r 10..32, b 64..96");
     }
 
     /* A glyph must actually put foreground pixels on screen. */
@@ -151,8 +172,9 @@ int main(void)
     {
         uint8_t pixel[4] = { 0, 0, 0, 0 };
         nack__debug_read_pixel(10, 10, pixel);
-        check(pixel[1] > 200 && pixel[0] < 60,
-              "full block glyph rendered in its foreground colour");
+        checkpx(pixel[1] > 200 && pixel[0] < 60,
+                "full block glyph rendered in its foreground colour", pixel,
+                "g > 200, r < 60");
     }
 
     /* And a blank cell must leave the background showing. */
@@ -161,7 +183,8 @@ int main(void)
     {
         uint8_t pixel[4] = { 0, 0, 0, 0 };
         nack__debug_read_pixel(20, 10, pixel);
-        check(pixel[0] > 200 && pixel[1] < 60, "blank cell shows its background");
+        checkpx(pixel[0] > 200 && pixel[1] < 60,
+                "blank cell shows its background", pixel, "r > 200, g < 60");
     }
 
     check(1, "frames presented");

@@ -55,6 +55,7 @@ typedef ptrdiff_t     nack_glintptr;
 #define GL_CLAMP_TO_EDGE    0x812F
 #define GL_RGBA             0x1908
 #define GL_RGBA8            0x8058
+#define GL_PACK_ALIGNMENT   0x0D05
 #define GL_UNPACK_ALIGNMENT 0x0CF5
 #define GL_BLEND            0x0BE2
 #define GL_SRC_ALPHA        0x0302

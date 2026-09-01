@@ -451,6 +451,16 @@ static void nack__mtl_set_vsync(bool vsync)
         nack__mtl.layer.displaySyncEnabled = vsync ? YES : NO;
 }
 
+static void nack__mtl_set_capture(bool capture)
+{
+    /*
+     * Nothing to do: end_frame already retains the drawable's texture so a
+     * readback can wait on the frame it belongs to, which is the same thing
+     * capture buys the OpenGL path.
+     */
+    (void)capture;
+}
+
 static bool nack__mtl_read_pixel(int x, int y, uint8_t rgba[4])
 {
     @autoreleasepool {
@@ -506,6 +516,7 @@ static const struct nack_gfx_backend nack__mtl_backend = {
     nack__mtl_end_frame,
     nack__mtl_resize,
     nack__mtl_set_vsync,
+    nack__mtl_set_capture,
     nack__mtl_read_pixel
 };
 

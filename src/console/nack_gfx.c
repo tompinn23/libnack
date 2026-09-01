@@ -38,7 +38,7 @@ static const struct nack_gfx_backend nack__gfx_fail_backend = {
     "test-fail",
     nack__gfx_fail_init,
     nack__gfx_fail_shutdown,
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
 };
 
 bool nack__gfx_init(struct nack_window *window)
@@ -175,6 +175,12 @@ void nack__gfx_set_vsync(bool vsync)
 {
     if (nack__gfx)
         nack__gfx->set_vsync(vsync);
+}
+
+void nack__gfx_set_capture(bool capture)
+{
+    if (nack__gfx && nack__gfx->set_capture)
+        nack__gfx->set_capture(capture);
 }
 
 bool nack__gfx_read_pixel(int x, int y, uint8_t rgba[4])

@@ -28,7 +28,12 @@ struct nack_gl_backend {
     nack_gluint vao, vbo;
     nack_glint uniform_viewport, uniform_atlas, uniform_mode;
     int viewport_w, viewport_h;
-    int fb_height;
+    int fb_width, fb_height;
+
+    /* The last frame, kept only when capture is on. See nack__glr_end_frame. */
+    bool capture;
+    uint8_t *frame;
+    int frame_width, frame_height;
 };
 
 static struct nack_gl_backend nack__gl;
@@ -174,6 +179,7 @@ static bool nack__glr_init(struct nack_window *window)
 
 static void nack__glr_shutdown(void)
 {
+    free(nack__gl.frame);
     if (nack__gl.vbo) glDeleteBuffers(1, &nack__gl.vbo);
     if (nack__gl.vao) glDeleteVertexArrays(1, &nack__gl.vao);
     if (nack__gl.program) glDeleteProgram(nack__gl.program);
@@ -223,6 +229,7 @@ static void nack__glr_begin_frame(struct nack_color clear, int fb_width,
 {
     nack__gl.viewport_w = viewport_w;
     nack__gl.viewport_h = viewport_h;
+    nack__gl.fb_width = fb_width;
     nack__gl.fb_height = fb_height;
 
     glViewport(0, 0, fb_width, fb_height);
@@ -260,8 +267,46 @@ static void nack__glr_draw(const float *vertices, size_t vertex_count,
     glDrawArrays(GL_TRIANGLES, 0, (nack_glsizei)vertex_count);
 }
 
+/*
+ * Grabs the whole framebuffer before presenting it. This has to happen here:
+ * once the buffers have been swapped the back buffer's contents are undefined
+ * by the specification, and drivers differ on what they leave behind - Mesa's
+ * software renderer on Windows leaves nothing, where the Linux drivers happen
+ * to leave the frame intact. Reading after the swap therefore worked by luck
+ * rather than by rule.
+ */
+static void nack__glr_capture_frame(void)
+{
+    size_t bytes;
+
+    if (nack__gl.fb_width <= 0 || nack__gl.fb_height <= 0)
+        return;
+
+    if (nack__gl.frame_width != nack__gl.fb_width ||
+        nack__gl.frame_height != nack__gl.fb_height) {
+        free(nack__gl.frame);
+        nack__gl.frame = NULL;
+        nack__gl.frame_width = 0;
+        nack__gl.frame_height = 0;
+    }
+    if (!nack__gl.frame) {
+        bytes = (size_t)nack__gl.fb_width * (size_t)nack__gl.fb_height * 4;
+        nack__gl.frame = (uint8_t *)malloc(bytes);
+        if (!nack__gl.frame)
+            return;
+        nack__gl.frame_width = nack__gl.fb_width;
+        nack__gl.frame_height = nack__gl.fb_height;
+    }
+
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, nack__gl.frame_width, nack__gl.frame_height, GL_RGBA,
+                 GL_UNSIGNED_BYTE, nack__gl.frame);
+}
+
 static void nack__glr_end_frame(void)
 {
+    if (nack__gl.capture)
+        nack__glr_capture_frame();
     nack__gl_swap_buffers(nack__gl.window);
 }
 
@@ -276,13 +321,35 @@ static void nack__glr_set_vsync(bool vsync)
     nack__gl_set_swap_interval(vsync ? 1 : 0);
 }
 
+static void nack__glr_set_capture(bool capture)
+{
+    nack__gl.capture = capture;
+    if (!capture) {
+        free(nack__gl.frame);
+        nack__gl.frame = NULL;
+        nack__gl.frame_width = 0;
+        nack__gl.frame_height = 0;
+    }
+}
+
 static bool nack__glr_read_pixel(int x, int y, uint8_t rgba[4])
 {
-    if (!nack__gl.program)
+    const uint8_t *pixel;
+    int row;
+
+    if (!nack__gl.frame)
         return false;
-    /* Flip into GL's bottom-left origin. */
-    glReadPixels(x, nack__gl.fb_height - 1 - y, 1, 1, GL_RGBA,
-                 GL_UNSIGNED_BYTE, rgba);
+    if (x < 0 || y < 0 || x >= nack__gl.frame_width ||
+        y >= nack__gl.frame_height)
+        return false;
+
+    /* The capture is in GL's bottom-left order; callers count from the top. */
+    row = nack__gl.frame_height - 1 - y;
+    pixel = nack__gl.frame + ((size_t)row * nack__gl.frame_width + x) * 4;
+    rgba[0] = pixel[0];
+    rgba[1] = pixel[1];
+    rgba[2] = pixel[2];
+    rgba[3] = pixel[3];
     return true;
 }
 
@@ -297,6 +364,7 @@ static const struct nack_gfx_backend nack__glr_backend = {
     nack__glr_end_frame,
     nack__glr_resize,
     nack__glr_set_vsync,
+    nack__glr_set_capture,
     nack__glr_read_pixel
 };
 

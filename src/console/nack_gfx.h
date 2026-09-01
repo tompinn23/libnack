@@ -42,6 +42,7 @@ struct nack_gfx_backend {
     void (*end_frame)(void);
     void (*resize)(int fb_width, int fb_height);
     void (*set_vsync)(bool vsync);
+    void (*set_capture)(bool capture);
     bool (*read_pixel)(int x, int y, uint8_t rgba[4]);
 };
 
@@ -89,9 +90,18 @@ void nack__gfx_resize(int fb_width, int fb_height);
 void nack__gfx_set_vsync(bool vsync);
 
 /*
- * Reads one framebuffer pixel back, for the tests. Returns false where the
- * backend cannot do it; callers treat that as "not checkable" rather than as
- * a failure.
+ * Keeps a copy of each frame so it can be read back afterwards. Off by
+ * default: it costs a full framebuffer read every frame, and only the tests
+ * want it. It has to exist because a frame is gone once it has been
+ * presented - the OpenGL back buffer is undefined after a swap, whatever a
+ * given driver happens to leave in it.
+ */
+void nack__gfx_set_capture(bool capture);
+
+/*
+ * Reads one pixel of the last frame back, for the tests. Returns false where
+ * the backend cannot do it, or where capture was never turned on; callers
+ * treat that as "not checkable" rather than as a failure.
  */
 bool nack__gfx_read_pixel(int x, int y, uint8_t rgba[4]);
 

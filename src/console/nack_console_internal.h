@@ -102,6 +102,12 @@ void nack__render_update_viewport(void);
  * that a frame actually rendered rather than merely that present() returned;
  * it is deliberately not part of the public API.
  */
+/*
+ * Turns on keeping a copy of each presented frame, which nack__debug_read_pixel
+ * then reads from. Off by default because it costs a framebuffer read per
+ * frame; the tests turn it on right after nack_init.
+ */
+void nack__debug_capture_frames(bool capture);
 bool nack__debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4]);
 
 /* nack_console.c */
