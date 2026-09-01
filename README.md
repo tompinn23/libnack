@@ -148,6 +148,13 @@ namespace pollution. Those declarations are checked rather than trusted:
 constant against the real SDK and fails the build if any of the 226 facts
 disagree. `-DNACK_WIN32_USE_SDK_HEADERS=ON` falls back to `windows.h`.
 
+Windows needs a real OpenGL 3.3 driver. A machine with no graphics driver
+installed has only the GDI generic renderer, which is OpenGL 1.1 and has no
+`WGL_ARB_create_context`; libnack says so rather than limping along on a
+context it cannot use. Dropping Mesa's `opengl32.dll` and `libgallium_wgl.dll`
+next to the executable gives a software 3.3 implementation, which is how CI
+tests the Win32 renderer.
+
 **X11 goes through XCB, not Xlib.** Xlib is linked for one reason: EGL on the
 proprietary NVIDIA driver needs an Xlib `Display*`, and `EGL_EXT_platform_xcb`
 is Mesa-only. Where that extension exists the connection stays pure XCB.

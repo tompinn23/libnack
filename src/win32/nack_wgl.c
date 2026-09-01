@@ -376,18 +376,32 @@ struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const st
         glrc = nack__wgl.CreateContextAttribsARB(ww->hdc, share, attribs);
     }
 
-    if (!glrc) {
-        /* No ARB_create_context, or the driver refused the requested version:
-         * a legacy context is still better than nothing. */
+    if (!glrc && desc->major == 0) {
+        /*
+         * No version was asked for, so the legacy context is what was wanted.
+         * When one was asked for, falling back here would hand back a 1.1
+         * context that fails much later with a missing entry point, blaming
+         * the loader for what is really a machine with no modern OpenGL on
+         * it - which is exactly what the Microsoft GDI generic renderer, the
+         * only one a GPU-less Windows box has, does.
+         */
         glrc = nack__wgl.CreateContext(ww->hdc);
         if (glrc && share && !nack__wgl.ShareLists(share, glrc))
             nack__log("nack: wglShareLists failed; contexts will not share objects");
     }
 
     if (!glrc) {
-        nack__fail(NACK_ERROR_CONTEXT_CREATION,
-                   "failed to create a GL %d.%d context (error %lu)",
-                   desc->major, desc->minor, GetLastError());
+        if (desc->major > 0 && !nack__wgl.CreateContextAttribsARB)
+            nack__fail(NACK_ERROR_CONTEXT_CREATION,
+                       "this OpenGL driver has no WGL_ARB_create_context, so "
+                       "no GL %d.%d context can be made; it is most likely "
+                       "the software renderer Windows falls back to with no "
+                       "graphics driver installed",
+                       desc->major, desc->minor);
+        else
+            nack__fail(NACK_ERROR_CONTEXT_CREATION,
+                       "failed to create a GL %d.%d context (error %lu)",
+                       desc->major, desc->minor, GetLastError());
         return NULL;
     }
 

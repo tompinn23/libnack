@@ -88,12 +88,39 @@ jobs:
       # the SDK, so the comparison runs on every build.
       - name: Check Win32 ABI against the SDK
         run: ctest --test-dir build -C Release -R win32_abi --output-on-failure
-      # The runner has no GPU, so opengl32.dll is the 1.1 software path and a
-      # 3.3 core context cannot be created; the smoke test reports that as a
-      # skip. Installing Mesa's llvmpipe here would give the Win32 renderer
-      # real coverage.
+      # The runner has no GPU, so Windows falls back to the GDI generic
+      # renderer, which is OpenGL 1.1 and has no WGL_ARB_create_context: no
+      # 3.3 context can exist on it and the console renderer cannot run at
+      # all. Mesa's llvmpipe is a real 3.3 implementation in software, so
+      # dropping it next to the test binaries is what gives the Win32
+      # renderer any runtime coverage. opengl32.dll is only the ICD shim;
+      # libgallium_wgl.dll is the driver behind it.
+      - name: Install Mesa (software OpenGL 3.3)
+        shell: pwsh
+        run: |
+          $version = "26.2.0"
+          $url = "https://github.com/pal1000/mesa-dist-win/releases/download/$version/mesa3d-$version-release-msvc.7z"
+          Invoke-WebRequest -Uri $url -OutFile mesa.7z
+          7z e mesa.7z -omesa `
+            x64/opengl32.dll x64/libgallium_wgl.dll x64/dxil.dll -y
+          Copy-Item mesa/*.dll build/Release/
       - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          ctest --test-dir build -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # Mesa is installed above so that the renderer actually runs here.
+          # ctest counts a skip as success, so the smoke test is run once
+          # more directly: exit 77 means it found no renderer, which now
+          # means the Mesa step silently did not take effect.
+          $env:NACK_DEBUG = "1"
+          & ./build/Release/nack_smoke.exe
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "smoke test exited $LASTEXITCODE (77 = no renderer found)"
+            exit 1
+          }
 
   windows-sdk-headers:
     name: windows (windows.h fallback)
