@@ -228,7 +228,8 @@ static void data_source_dnd_finished(void *data, struct wl_data_source *source)
     (void)data; (void)source;
 }
 
-static void data_source_action(void *data, struct wl_data_source *source, uint32_t action)
+static void data_source_action(void *data, struct wl_data_source *source,
+                               uint32_t action)
 {
     (void)data; (void)source; (void)action;
 }

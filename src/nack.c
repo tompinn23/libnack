@@ -75,7 +75,7 @@ void *nack__calloc(size_t count, size_t size)
     return p;
 }
 
-uint32_t nack__utf8_encode(uint32_t cp, char out[static 5])
+uint32_t nack__utf8_encode(uint32_t cp, char out[5])
 {
     if (cp < 0x80) {
         out[0] = (char)cp;
@@ -196,7 +196,8 @@ void nack__emit_simple(struct nack_window *w, enum nack_event_type type)
     nack__push_event(ev);
 }
 
-void nack__emit_resize(struct nack_window *w, int width, int height, int fb_width, int fb_height)
+void nack__emit_resize(struct nack_window *w, int width, int height, int fb_width,
+                       int fb_height)
 {
     if (width < 1) width = 1;
     if (height < 1) height = 1;
@@ -337,7 +338,8 @@ void nack__emit_mouse_button(struct nack_window *w, int button, bool down, doubl
     nack__push_event(ev);
 }
 
-void nack__emit_scroll(struct nack_window *w, double dx, double dy, uint32_t mods, bool precise)
+void nack__emit_scroll(struct nack_window *w, double dx, double dy, uint32_t mods,
+                       bool precise)
 {
     if (dx == 0.0 && dy == 0.0)
         return;
@@ -744,7 +746,8 @@ void nack_window_get_size(const struct nack_window *window, int *width, int *hei
     if (height) *height = window ? window->height : 0;
 }
 
-void nack_window_get_framebuffer_size(const struct nack_window *window, int *width, int *height)
+void nack_window_get_framebuffer_size(const struct nack_window *window, int *width,
+                                      int *height)
 {
     if (width)  *width  = window ? window->fb_width : 0;
     if (height) *height = window ? window->fb_height : 0;
@@ -817,7 +820,8 @@ void nack_window_set_user_data(struct nack_window *window, void *user_data)
         window->user_data = user_data;
 }
 
-void nack_window_set_cursor_shape(struct nack_window *window, enum nack_cursor_shape shape)
+void nack_window_set_cursor_shape(struct nack_window *window,
+                                  enum nack_cursor_shape shape)
 {
     if (!window || shape < 0 || shape >= NACK_CURSOR_SHAPE_COUNT)
         return;
@@ -850,7 +854,8 @@ void nack_window_request_redraw(struct nack_window *window)
         nack__emit_simple(window, NACK_EVENT_WINDOW_EXPOSE);
 }
 
-void nack_window_get_native(const struct nack_window *window, struct nack_native_window *out)
+void nack_window_get_native(const struct nack_window *window,
+                            struct nack_native_window *out)
 {
     if (!out)
         return;
@@ -948,7 +953,8 @@ void nack_get_mouse_position(struct nack_window *window, double *x, double *y)
 /* OpenGL                                                             */
 /* ------------------------------------------------------------------ */
 
-struct nack_gl_context *nack_gl_context_create(struct nack_window *window, const struct nack_gl_desc *desc)
+struct nack_gl_context *nack_gl_context_create(struct nack_window *window,
+                                               const struct nack_gl_desc *desc)
 {
     NACK_REQUIRE_INIT_RET(NULL);
     if (!window) {

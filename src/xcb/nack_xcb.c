@@ -425,7 +425,8 @@ static void nack__xcb_update_cursor(struct nack_window *w)
     xcb_flush(nack__xcb.connection);
 }
 
-static void nack__xcb_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape)
+static void nack__xcb_set_cursor_shape(struct nack_window *w,
+                                       enum nack_cursor_shape shape)
 {
     (void)shape;
     nack__xcb_update_cursor(w);
@@ -943,7 +944,8 @@ static bool nack__xcb_find_visual(xcb_visualid_t visual_id, uint8_t *out_depth)
     return false;
 }
 
-static bool nack__xcb_window_create(struct nack_window *w, const struct nack_window_desc *desc)
+static bool nack__xcb_window_create(struct nack_window *w,
+                                    const struct nack_window_desc *desc)
 {
     struct nack_xcb_window *xw = (struct nack_xcb_window *)nack__calloc(1, sizeof *xw);
     if (!xw)
@@ -1197,7 +1199,8 @@ static void nack__xcb_window_request_redraw(struct nack_window *w)
     xcb_flush(nack__xcb.connection);
 }
 
-static void nack__xcb_window_get_native(const struct nack_window *w, struct nack_native_window *out)
+static void nack__xcb_window_get_native(const struct nack_window *w,
+                                        struct nack_native_window *out)
 {
     struct nack_xcb_window *xw = (struct nack_xcb_window *)w->native;
     out->display = nack__xcb.connection;
@@ -1229,7 +1232,8 @@ static bool nack__xcb_ensure_surface(struct nack_window *w, EGLConfig config)
     return xw->surface != EGL_NO_SURFACE;
 }
 
-static struct nack_gl_context *nack__xcb_gl_create(struct nack_window *w, const struct nack_gl_desc *desc)
+static struct nack_gl_context *nack__xcb_gl_create(struct nack_window *w,
+                                                   const struct nack_gl_desc *desc)
 {
     if (!nack__egl.initialized) {
         nack__fail(NACK_ERROR_UNSUPPORTED, "EGL is not available");

@@ -360,8 +360,10 @@ NACK_API void  nack_window_request_attention(struct nack_window *window);
 
 NACK_API void  nack_window_set_title(struct nack_window *window, const char *title);
 NACK_API void  nack_window_set_size(struct nack_window *window, int width, int height);
-NACK_API void  nack_window_get_size(const struct nack_window *window, int *width, int *height);
-NACK_API void  nack_window_get_framebuffer_size(const struct nack_window *window, int *width, int *height);
+NACK_API void  nack_window_get_size(const struct nack_window *window, int *width,
+                                    int *height);
+NACK_API void  nack_window_get_framebuffer_size(const struct nack_window *window,
+                                                int *width, int *height);
 NACK_API void  nack_window_get_position(const struct nack_window *window, int *x, int *y);
 NACK_API void  nack_window_set_position(struct nack_window *window, int x, int y);
 NACK_API float nack_window_get_content_scale(const struct nack_window *window);
@@ -369,7 +371,8 @@ NACK_API float nack_window_get_content_scale(const struct nack_window *window);
 NACK_API void  nack_window_set_size_limits(struct nack_window *window,
                                            int min_width, int min_height,
                                            int max_width, int max_height);
-NACK_API void  nack_window_set_size_increments(struct nack_window *window, int dw, int dh);
+NACK_API void  nack_window_set_size_increments(struct nack_window *window, int dw,
+                                               int dh);
 
 NACK_API void  nack_window_set_fullscreen(struct nack_window *window, bool fullscreen);
 NACK_API bool  nack_window_is_fullscreen(const struct nack_window *window);
@@ -383,8 +386,10 @@ NACK_API void  nack_window_set_should_close(struct nack_window *window, bool val
 NACK_API void *nack_window_get_user_data(const struct nack_window *window);
 NACK_API void  nack_window_set_user_data(struct nack_window *window, void *user_data);
 
-NACK_API void  nack_window_set_cursor_shape(struct nack_window *window, enum nack_cursor_shape shape);
-NACK_API void  nack_window_set_cursor_mode(struct nack_window *window, enum nack_cursor_mode mode);
+NACK_API void  nack_window_set_cursor_shape(struct nack_window *window,
+                                            enum nack_cursor_shape shape);
+NACK_API void  nack_window_set_cursor_mode(struct nack_window *window,
+                                           enum nack_cursor_mode mode);
 NACK_API enum nack_cursor_mode nack_window_get_cursor_mode(const struct nack_window *window);
 
 /* Marks the whole window as needing a repaint; produces a WINDOW_EXPOSE. */
@@ -407,7 +412,8 @@ NACK_API void nack_wakeup(void);
 NACK_API bool     nack_key_is_down(enum nack_key key);
 NACK_API uint32_t nack_get_mods(void);
 NACK_API bool     nack_mouse_button_is_down(int button);
-NACK_API void     nack_get_mouse_position(struct nack_window *window, double *x, double *y);
+NACK_API void     nack_get_mouse_position(struct nack_window *window, double *x,
+                                          double *y);
 
 NACK_API const char *nack_key_get_name(enum nack_key key);
 
@@ -417,7 +423,8 @@ NACK_API const char *nack_key_get_name(enum nack_key key);
 
 NACK_API struct nack_gl_context *nack_gl_context_create(struct nack_window *window, const struct nack_gl_desc *desc);
 NACK_API void  nack_gl_context_destroy(struct nack_gl_context *context);
-NACK_API bool  nack_gl_make_current(struct nack_window *window, struct nack_gl_context *context);
+NACK_API bool  nack_gl_make_current(struct nack_window *window,
+                                    struct nack_gl_context *context);
 NACK_API void  nack_gl_swap_buffers(struct nack_window *window);
 NACK_API void  nack_gl_set_swap_interval(int interval);
 /*
@@ -463,7 +470,8 @@ struct nack_native_window {
     uintptr_t handle;   /* X11 Window id / HWND / 0                          */
 };
 
-NACK_API void nack_window_get_native(const struct nack_window *window, struct nack_native_window *out);
+NACK_API void nack_window_get_native(const struct nack_window *window,
+                                     struct nack_native_window *out);
 
 #if defined(__cplusplus)
 }

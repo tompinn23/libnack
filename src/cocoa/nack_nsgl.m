@@ -8,6 +8,13 @@
  */
 #include "nack_cocoa.h"
 
+/*
+ * Apple deprecated OpenGL wholesale in 10.14 but still ships it, so every
+ * entry point below is marked deprecated. Silencing it here keeps real
+ * warnings visible instead of burying them.
+ */
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
 #import <OpenGL/OpenGL.h>
 #import <OpenGL/gl.h>
 

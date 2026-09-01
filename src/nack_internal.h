@@ -175,14 +175,16 @@ struct nack_event *nack__event_begin(enum nack_event_type type, struct nack_wind
 bool nack__queue_empty(void);
 
 /* Convenience emitters used by backends */
-void nack__emit_resize(struct nack_window *w, int width, int height, int fb_width, int fb_height);
+void nack__emit_resize(struct nack_window *w, int width, int height, int fb_width,
+                       int fb_height);
 void nack__emit_key(struct nack_window *w, enum nack_key key, uint32_t scancode, uint32_t mods,
                     bool down, bool repeat);
 void nack__emit_text(struct nack_window *w, const char *utf8);
 void nack__emit_mouse_button(struct nack_window *w, int button, bool down, double x, double y,
                              uint32_t mods);
 void nack__emit_mouse_move(struct nack_window *w, double x, double y, uint32_t mods);
-void nack__emit_scroll(struct nack_window *w, double dx, double dy, uint32_t mods, bool precise);
+void nack__emit_scroll(struct nack_window *w, double dx, double dy, uint32_t mods,
+                       bool precise);
 void nack__emit_simple(struct nack_window *w, enum nack_event_type type);
 void nack__emit_focus(struct nack_window *w, bool focused);
 void nack__emit_scale(struct nack_window *w, float scale);
@@ -198,7 +200,9 @@ void  nack__proc_cache_clear(void);
 /* Helpers */
 char *nack__strdup(const char *s);
 void *nack__calloc(size_t count, size_t size);
-uint32_t nack__utf8_encode(uint32_t codepoint, char out[static 5]);
+/* out must have room for 4 bytes plus a terminator. Spelled [5] rather
+ * than the C99 [static 5], which MSVC does not implement. */
+uint32_t nack__utf8_encode(uint32_t codepoint, char out[5]);
 bool nack__codepoint_is_text(uint32_t codepoint);
 
 /* Backend registration - each platform provides the ones it supports. */

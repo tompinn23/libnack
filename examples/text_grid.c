@@ -220,7 +220,8 @@ struct vertex {
     float r, g, b;
 };
 
-static size_t build_vertices(const struct grid *g, struct vertex *out, double time_seconds)
+static size_t build_vertices(const struct grid *g, struct vertex *out,
+                             double time_seconds)
 {
     size_t count = 0;
     const float glyph_uv = 1.0f / 16.0f;

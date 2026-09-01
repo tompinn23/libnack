@@ -34,18 +34,23 @@ struct nack_cocoa_state {
 
 extern struct nack_cocoa_state nack__cocoa;
 
+/*
+ * Instance variables carry a nack prefix rather than the obvious _window and
+ * friends: AppKit has historically used such names for its own private ivars,
+ * and a collision in a subclass is a compile error.
+ */
 @interface NackWindowDelegate : NSObject <NSWindowDelegate>
 {
-    struct nack_window *_window;
+    struct nack_window *_nackWindow;
 }
 - (instancetype)initWithWindow:(struct nack_window *)window;
 @end
 
 @interface NackContentView : NSView <NSTextInputClient>
 {
-    struct nack_window *_window;
-    NSTrackingArea *_trackingArea;
-    NSMutableAttributedString *_markedText;
+    struct nack_window *_nackWindow;
+    NSTrackingArea *_nackTrackingArea;
+    NSMutableAttributedString *_nackMarkedText;
 }
 - (instancetype)initWithWindow:(struct nack_window *)window;
 @end

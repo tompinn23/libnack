@@ -1,7 +1,8 @@
 /* libnack - Cocoa backend. */
 #include "nack_cocoa.h"
 
-#import <Carbon/Carbon.h>   /* kVK_* virtual key constants */
+#import <Carbon/Carbon.h>             /* kVK_* virtual key constants */
+#import <CoreGraphics/CoreGraphics.h> /* CGAssociateMouseAndMouseCursorPosition */
 
 #include <stdio.h>
 
@@ -186,15 +187,15 @@ void nack__cocoa_update_size(struct nack_window *w)
 {
     self = [super init];
     if (self)
-        _window = window;
+        _nackWindow = window;
     return self;
 }
 
 - (BOOL)windowShouldClose:(id)sender
 {
     (void)sender;
-    _window->should_close = true;
-    nack__emit_simple(_window, NACK_EVENT_WINDOW_CLOSE);
+    _nackWindow->should_close = true;
+    nack__emit_simple(_nackWindow, NACK_EVENT_WINDOW_CLOSE);
     /* Never close the window here: the application decides when to destroy
      * it, exactly as on the other backends. */
     return NO;
@@ -203,24 +204,24 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (void)windowDidResize:(NSNotification *)notification
 {
     (void)notification;
-    nack__cocoa_update_size(_window);
+    nack__cocoa_update_size(_nackWindow);
 }
 
 - (void)windowDidMove:(NSNotification *)notification
 {
     (void)notification;
-    struct nack_cocoa_window *cw = nack__cocoa_win(_window);
+    struct nack_cocoa_window *cw = nack__cocoa_win(_nackWindow);
     const NSRect frame = [cw->window frame];
     const NSRect content = [cw->window contentRectForFrameRect:frame];
     /* Cocoa's origin is bottom-left; report top-left like everywhere else. */
-    const CGFloat screen_height = [[[cw->window screen] frame] size].height;
+    const CGFloat screen_height = [[cw->window screen] frame].size.height;
     int x = (int)content.origin.x;
     int y = (int)(screen_height - content.origin.y - content.size.height);
 
-    if (x != _window->pos_x || y != _window->pos_y) {
-        _window->pos_x = x;
-        _window->pos_y = y;
-        struct nack_event *ev = nack__event_begin(NACK_EVENT_WINDOW_MOVE, _window);
+    if (x != _nackWindow->pos_x || y != _nackWindow->pos_y) {
+        _nackWindow->pos_x = x;
+        _nackWindow->pos_y = y;
+        struct nack_event *ev = nack__event_begin(NACK_EVENT_WINDOW_MOVE, _nackWindow);
         ev->data.move.x = x;
         ev->data.move.y = y;
         nack__push_event(ev);
@@ -230,46 +231,46 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (void)windowDidBecomeKey:(NSNotification *)notification
 {
     (void)notification;
-    nack__emit_focus(_window, true);
+    nack__emit_focus(_nackWindow, true);
 }
 
 - (void)windowDidResignKey:(NSNotification *)notification
 {
     (void)notification;
-    nack__emit_focus(_window, false);
+    nack__emit_focus(_nackWindow, false);
 }
 
 - (void)windowDidMiniaturize:(NSNotification *)notification
 {
     (void)notification;
-    _window->minimized = true;
-    nack__emit_simple(_window, NACK_EVENT_WINDOW_MINIMIZE);
+    _nackWindow->minimized = true;
+    nack__emit_simple(_nackWindow, NACK_EVENT_WINDOW_MINIMIZE);
 }
 
 - (void)windowDidDeminiaturize:(NSNotification *)notification
 {
     (void)notification;
-    _window->minimized = false;
-    nack__emit_simple(_window, NACK_EVENT_WINDOW_RESTORE);
+    _nackWindow->minimized = false;
+    nack__emit_simple(_nackWindow, NACK_EVENT_WINDOW_RESTORE);
 }
 
 - (void)windowDidChangeBackingProperties:(NSNotification *)notification
 {
     (void)notification;
     /* Fires when the window moves between displays of different densities. */
-    nack__cocoa_update_size(_window);
+    nack__cocoa_update_size(_nackWindow);
 }
 
 - (void)windowDidEnterFullScreen:(NSNotification *)notification
 {
     (void)notification;
-    _window->fullscreen = true;
+    _nackWindow->fullscreen = true;
 }
 
 - (void)windowDidExitFullScreen:(NSNotification *)notification
 {
     (void)notification;
-    _window->fullscreen = false;
+    _nackWindow->fullscreen = false;
 }
 
 @end
@@ -284,8 +285,8 @@ void nack__cocoa_update_size(struct nack_window *w)
 {
     self = [super initWithFrame:NSMakeRect(0, 0, window->width, window->height)];
     if (self) {
-        _window = window;
-        _markedText = [[NSMutableAttributedString alloc] init];
+        _nackWindow = window;
+        _nackMarkedText = [[NSMutableAttributedString alloc] init];
         [self updateTrackingAreas];
     }
     return self;
@@ -293,8 +294,8 @@ void nack__cocoa_update_size(struct nack_window *w)
 
 - (void)dealloc
 {
-    [_trackingArea release];
-    [_markedText release];
+    [_nackTrackingArea release];
+    [_nackMarkedText release];
     [super dealloc];
 }
 
@@ -306,26 +307,26 @@ void nack__cocoa_update_size(struct nack_window *w)
 
 - (void)updateTrackingAreas
 {
-    if (_trackingArea) {
-        [self removeTrackingArea:_trackingArea];
-        [_trackingArea release];
+    if (_nackTrackingArea) {
+        [self removeTrackingArea:_nackTrackingArea];
+        [_nackTrackingArea release];
     }
     const NSTrackingAreaOptions options =
         NSTrackingMouseEnteredAndExited | NSTrackingActiveInKeyWindow |
         NSTrackingCursorUpdate | NSTrackingInVisibleRect |
         NSTrackingEnabledDuringMouseDrag;
-    _trackingArea = [[NSTrackingArea alloc] initWithRect:[self bounds]
+    _nackTrackingArea = [[NSTrackingArea alloc] initWithRect:[self bounds]
                                                 options:options
                                                   owner:self
                                                userInfo:nil];
-    [self addTrackingArea:_trackingArea];
+    [self addTrackingArea:_nackTrackingArea];
     [super updateTrackingAreas];
 }
 
 - (void)drawRect:(NSRect)rect
 {
     (void)rect;
-    nack__emit_simple(_window, NACK_EVENT_WINDOW_EXPOSE);
+    nack__emit_simple(_nackWindow, NACK_EVENT_WINDOW_EXPOSE);
 }
 
 /* ---- Mouse ---- */
@@ -342,7 +343,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (void)nackHandleMouseButton:(NSEvent *)event button:(int)button down:(BOOL)down
 {
     const NSPoint location = [self nackMouseLocation:event];
-    nack__emit_mouse_button(_window, button, down, location.x, location.y,
+    nack__emit_mouse_button(_nackWindow, button, down, location.x, location.y,
                             nack__cocoa_mods([event modifierFlags]));
 }
 
@@ -371,9 +372,9 @@ void nack__cocoa_update_size(struct nack_window *w)
 
 - (void)nackHandleMouseMove:(NSEvent *)event
 {
-    struct nack_cocoa_window *cw = nack__cocoa_win(_window);
+    struct nack_cocoa_window *cw = nack__cocoa_win(_nackWindow);
 
-    if (_window->cursor_mode == NACK_CURSOR_MODE_CAPTURED) {
+    if (_nackWindow->cursor_mode == NACK_CURSOR_MODE_CAPTURED) {
         /* In captured mode the deltas are authoritative; the pointer itself
          * is associated away from the mouse, so its position is meaningless. */
         const double dx = [event deltaX];
@@ -381,7 +382,7 @@ void nack__cocoa_update_size(struct nack_window *w)
         cw->virtual_x += dx;
         cw->virtual_y += dy;
 
-        struct nack_event *ev = nack__event_begin(NACK_EVENT_MOUSE_MOVE, _window);
+        struct nack_event *ev = nack__event_begin(NACK_EVENT_MOUSE_MOVE, _nackWindow);
         ev->data.motion.x = cw->virtual_x;
         ev->data.motion.y = cw->virtual_y;
         ev->data.motion.dx = dx;
@@ -392,7 +393,7 @@ void nack__cocoa_update_size(struct nack_window *w)
     }
 
     const NSPoint location = [self nackMouseLocation:event];
-    nack__emit_mouse_move(_window, location.x, location.y,
+    nack__emit_mouse_move(_nackWindow, location.x, location.y,
                           nack__cocoa_mods([event modifierFlags]));
 }
 
@@ -404,19 +405,19 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (void)mouseEntered:(NSEvent *)event
 {
     (void)event;
-    nack__emit_simple(_window, NACK_EVENT_MOUSE_ENTER);
+    nack__emit_simple(_nackWindow, NACK_EVENT_MOUSE_ENTER);
 }
 
 - (void)mouseExited:(NSEvent *)event
 {
     (void)event;
-    nack__emit_simple(_window, NACK_EVENT_MOUSE_LEAVE);
+    nack__emit_simple(_nackWindow, NACK_EVENT_MOUSE_LEAVE);
 }
 
 - (void)cursorUpdate:(NSEvent *)event
 {
     (void)event;
-    struct nack_cocoa_window *cw = nack__cocoa_win(_window);
+    struct nack_cocoa_window *cw = nack__cocoa_win(_nackWindow);
     if (cw->cursor)
         [cw->cursor set];
 }
@@ -434,7 +435,7 @@ void nack__cocoa_update_size(struct nack_window *w)
         dy *= 0.1;
     }
 
-    nack__emit_scroll(_window, dx, dy, nack__cocoa_mods([event modifierFlags]),
+    nack__emit_scroll(_nackWindow, dx, dy, nack__cocoa_mods([event modifierFlags]),
                       precise);
 }
 
@@ -445,7 +446,7 @@ void nack__cocoa_update_size(struct nack_window *w)
     const enum nack_key key = nack__cocoa_key([event keyCode]);
     const uint32_t mods = nack__cocoa_mods([event modifierFlags]);
 
-    nack__emit_key(_window, key, [event keyCode], mods, true, [event isARepeat]);
+    nack__emit_key(_nackWindow, key, [event keyCode], mods, true, [event isARepeat]);
 
     /*
      * Command chords are menu shortcuts, not text. Routing them through the
@@ -457,7 +458,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 
 - (void)keyUp:(NSEvent *)event
 {
-    nack__emit_key(_window, nack__cocoa_key([event keyCode]), [event keyCode],
+    nack__emit_key(_nackWindow, nack__cocoa_key([event keyCode]), [event keyCode],
                    nack__cocoa_mods([event modifierFlags]), false, false);
 }
 
@@ -483,7 +484,7 @@ void nack__cocoa_update_size(struct nack_window *w)
     }
 
     nack__cocoa.modifier_flags = mods;
-    nack__emit_key(_window, key, [event keyCode], mods, down, false);
+    nack__emit_key(_nackWindow, key, [event keyCode], mods, down, false);
 }
 
 /* ---- NSTextInputClient ----
@@ -493,10 +494,10 @@ void nack__cocoa_update_size(struct nack_window *w)
  * arrives.
  */
 
-- (BOOL)hasMarkedText                { return [_markedText length] > 0; }
+- (BOOL)hasMarkedText                { return [_nackMarkedText length] > 0; }
 - (NSRange)markedRange
 {
-    return [_markedText length] > 0 ? NSMakeRange(0, [_markedText length] - 1)
+    return [_nackMarkedText length] > 0 ? NSMakeRange(0, [_nackMarkedText length] - 1)
                                     : NSMakeRange(NSNotFound, 0);
 }
 - (NSRange)selectedRange             { return NSMakeRange(NSNotFound, 0); }
@@ -506,14 +507,14 @@ void nack__cocoa_update_size(struct nack_window *w)
      replacementRange:(NSRange)replacementRange
 {
     (void)selectedRange; (void)replacementRange;
-    [_markedText release];
+    [_nackMarkedText release];
     if ([string isKindOfClass:[NSAttributedString class]])
-        _markedText = [[NSMutableAttributedString alloc] initWithAttributedString:string];
+        _nackMarkedText = [[NSMutableAttributedString alloc] initWithAttributedString:string];
     else
-        _markedText = [[NSMutableAttributedString alloc] initWithString:string];
+        _nackMarkedText = [[NSMutableAttributedString alloc] initWithString:string];
 }
 
-- (void)unmarkText                   { [[_markedText mutableString] setString:@""]; }
+- (void)unmarkText                   { [[_nackMarkedText mutableString] setString:@""]; }
 - (NSArray *)validAttributesForMarkedText { return @[]; }
 
 - (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range
@@ -565,7 +566,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 
         char utf8[5];
         nack__utf8_encode(codepoint, utf8);
-        nack__emit_text(_window, utf8);
+        nack__emit_text(_nackWindow, utf8);
     }
 }
 
@@ -633,7 +634,8 @@ void nack__cocoa_update_size(struct nack_window *w)
 /* Window management                                                  */
 /* ------------------------------------------------------------------ */
 
-static bool nack__cocoa_window_create(struct nack_window *w, const struct nack_window_desc *desc)
+static bool nack__cocoa_window_create(struct nack_window *w,
+                                      const struct nack_window_desc *desc)
 {
     (void)desc;
     struct nack_cocoa_window *cw = (struct nack_cocoa_window *)nack__calloc(1, sizeof *cw);
@@ -677,7 +679,10 @@ static bool nack__cocoa_window_create(struct nack_window *w, const struct nack_w
     /* Opting the view into high resolution is what makes the backing store
      * match the display; without it the framebuffer stays at point size and
      * text renders soft on a Retina panel. */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     [cw->view setWantsBestResolutionOpenGLSurface:w->high_dpi ? YES : NO];
+#pragma clang diagnostic pop
 
     if (w->transparent) {
         [cw->window setOpaque:NO];
@@ -767,7 +772,7 @@ static void nack__cocoa_window_set_position(struct nack_window *w, int x, int y)
 {
     struct nack_cocoa_window *cw = nack__cocoa_win(w);
     const NSRect content = [cw->window contentRectForFrameRect:[cw->window frame]];
-    const CGFloat screen_height = [[[cw->window screen] frame] size].height;
+    const CGFloat screen_height = [[cw->window screen] frame].size.height;
     /* Convert our top-left origin back to Cocoa's bottom-left one. */
     const NSRect target = NSMakeRect(x, screen_height - y - content.size.height,
                                      content.size.width, content.size.height);
@@ -863,7 +868,8 @@ static NSCursor *nack__cocoa_cursor_for(enum nack_cursor_shape shape)
     }
 }
 
-static void nack__cocoa_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape)
+static void nack__cocoa_set_cursor_shape(struct nack_window *w,
+                                         enum nack_cursor_shape shape)
 {
     struct nack_cocoa_window *cw = nack__cocoa_win(w);
     cw->cursor = nack__cocoa_cursor_for(shape);
@@ -871,7 +877,8 @@ static void nack__cocoa_set_cursor_shape(struct nack_window *w, enum nack_cursor
         [cw->cursor set];
 }
 
-static void nack__cocoa_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode)
+static void nack__cocoa_set_cursor_mode(struct nack_window *w,
+                                        enum nack_cursor_mode mode)
 {
     struct nack_cocoa_window *cw = nack__cocoa_win(w);
 

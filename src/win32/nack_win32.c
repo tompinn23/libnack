@@ -316,13 +316,15 @@ static void nack__win32_clip_cursor(struct nack_window *w, bool clip)
     }
 }
 
-static void nack__win32_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode)
+static void nack__win32_set_cursor_mode(struct nack_window *w,
+                                        enum nack_cursor_mode mode)
 {
     nack__win32_clip_cursor(w, mode == NACK_CURSOR_MODE_CAPTURED);
     nack__win32_apply_cursor(w);
 }
 
-static void nack__win32_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape)
+static void nack__win32_set_cursor_shape(struct nack_window *w,
+                                         enum nack_cursor_shape shape)
 {
     (void)shape;
     nack__win32_apply_cursor(w);
@@ -763,7 +765,8 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 /* Window management                                                  */
 /* ------------------------------------------------------------------ */
 
-static bool nack__win32_window_create(struct nack_window *w, const struct nack_window_desc *desc)
+static bool nack__win32_window_create(struct nack_window *w,
+                                      const struct nack_window_desc *desc)
 {
     (void)desc;
     struct nack_win32_window *ww = (struct nack_win32_window *)nack__calloc(1, sizeof *ww);

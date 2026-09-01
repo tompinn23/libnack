@@ -44,7 +44,8 @@ static uint32_t nack__wl_mods(void)
 /* Text production                                                    */
 /* ------------------------------------------------------------------ */
 
-static void nack__wl_emit_text_for(struct nack_window *w, xkb_keycode_t keycode, uint32_t mods)
+static void nack__wl_emit_text_for(struct nack_window *w, xkb_keycode_t keycode,
+                                   uint32_t mods)
 {
     if (!nack__wl.xkb_state)
         return;

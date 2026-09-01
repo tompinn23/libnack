@@ -474,7 +474,8 @@ static const struct zxdg_toplevel_decoration_v1_listener nack__wl_decoration_lis
     .configure = decoration_configure,
 };
 
-static bool nack__wl_window_create(struct nack_window *w, const struct nack_window_desc *desc)
+static bool nack__wl_window_create(struct nack_window *w,
+                                   const struct nack_window_desc *desc)
 {
     if (!nack__wl.compositor || !nack__wl.wm_base)
         return nack__fail(NACK_ERROR_PLATFORM,
@@ -723,7 +724,8 @@ static void nack__wl_window_request_redraw(struct nack_window *w)
     wl_display_flush(nack__wl.display);
 }
 
-static void nack__wl_window_get_native(const struct nack_window *w, struct nack_native_window *out)
+static void nack__wl_window_get_native(const struct nack_window *w,
+                                       struct nack_native_window *out)
 {
     struct nack_wl_window *ww = (struct nack_wl_window *)w->native;
     out->display = nack__wl.display;
@@ -748,7 +750,8 @@ static bool nack__wl_ensure_surface(struct nack_window *w, EGLConfig config)
     return ww->egl_surface != EGL_NO_SURFACE;
 }
 
-static struct nack_gl_context *nack__wl_gl_create(struct nack_window *w, const struct nack_gl_desc *desc)
+static struct nack_gl_context *nack__wl_gl_create(struct nack_window *w,
+                                                  const struct nack_gl_desc *desc)
 {
     if (!nack__egl.initialized) {
         nack__fail(NACK_ERROR_UNSUPPORTED, "EGL is not available");
