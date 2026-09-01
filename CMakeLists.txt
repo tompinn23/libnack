@@ -162,7 +162,7 @@ target_link_libraries(nack PRIVATE ${NACK_LIBRARIES})
 target_compile_definitions(nack PRIVATE ${NACK_DEFINITIONS})
 
 set_target_properties(nack PROPERTIES
-    C_STANDARD 23
+    C_STANDARD 99
     C_STANDARD_REQUIRED ON
     C_EXTENSIONS ON          # POSIX interfaces (poll, pipe) need the GNU dialect
     VERSION ${PROJECT_VERSION}

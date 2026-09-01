@@ -30,20 +30,20 @@ static const char *fragment_source =
 
 int main(void)
 {
-    if (!nack_init(&(nack_init_desc){ .app_id = "nack.triangle" })) {
+    if (!nack_init(&(struct nack_init_desc){ .app_id = "nack.triangle" })) {
         const char *message = NULL;
         nack_get_error(&message);
         fprintf(stderr, "nack_init failed: %s\n", message);
         return 1;
     }
 
-    nack_window_desc window_desc;
+    struct nack_window_desc window_desc;
     nack_window_desc_defaults(&window_desc);
     window_desc.title = "libnack - triangle";
     window_desc.width = 800;
     window_desc.height = 600;
 
-    nack_window *window = nack_window_create(&window_desc);
+    struct nack_window *window = nack_window_create(&window_desc);
     if (!window) {
         const char *message = NULL;
         nack_get_error(&message);
@@ -52,9 +52,9 @@ int main(void)
         return 1;
     }
 
-    nack_gl_desc gl_desc;
+    struct nack_gl_desc gl_desc;
     nack_gl_desc_defaults(&gl_desc);
-    nack_gl_context *context = nack_gl_context_create(window, &gl_desc);
+    struct nack_gl_context *context = nack_gl_context_create(window, &gl_desc);
     if (!context) {
         const char *message = NULL;
         nack_get_error(&message);
@@ -108,10 +108,10 @@ int main(void)
     glEnableVertexAttribArray(1);
 
     while (!nack_window_should_close(window)) {
-        nack_event event;
+        struct nack_event event;
         while (nack_poll_event(&event)) {
             if (event.type == NACK_EVENT_KEY_DOWN &&
-                event.key.key == NACK_KEY_ESCAPE)
+                event.data.key.key == NACK_KEY_ESCAPE)
                 nack_window_set_should_close(window, true);
         }
 

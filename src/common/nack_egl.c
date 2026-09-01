@@ -4,7 +4,7 @@
 #include <dlfcn.h>
 #include <stdio.h>
 
-nack_egl_state nack__egl;
+struct nack_egl_state nack__egl;
 
 const char *nack__egl_error_string(EGLint error)
 {
@@ -127,7 +127,7 @@ void nack__egl_terminate(void)
     memset(&nack__egl, 0, sizeof nack__egl);
 }
 
-bool nack__egl_choose_config(const nack_framebuffer_desc *fb, nack_gl_profile profile,
+bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack_gl_profile profile,
                              int gl_major, EGLConfig *out_config,
                              EGLint *out_visual_id)
 {
@@ -185,8 +185,8 @@ bool nack__egl_choose_config(const nack_framebuffer_desc *fb, nack_gl_profile pr
     return true;
 }
 
-nack_gl_context *nack__egl_create_context(nack_window *w, const nack_gl_desc *desc,
-                                          EGLConfig config, const nack_backend_vt *vt)
+struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const struct nack_gl_desc *desc,
+                                          EGLConfig config, const struct nack_backend_vt *vt)
 {
     EGLenum api = (desc->profile == NACK_GL_PROFILE_ES) ? EGL_OPENGL_ES_API
                                                         : EGL_OPENGL_API;
@@ -233,7 +233,7 @@ nack_gl_context *nack__egl_create_context(nack_window *w, const nack_gl_desc *de
 
     EGLContext share = EGL_NO_CONTEXT;
     if (desc->share && desc->share->native)
-        share = ((nack_egl_context *)desc->share->native)->context;
+        share = ((struct nack_egl_context *)desc->share->native)->context;
 
     EGLContext egl_ctx = eglCreateContext(nack__egl.display, config, share, attribs);
     if (egl_ctx == EGL_NO_CONTEXT) {
@@ -246,8 +246,8 @@ nack_gl_context *nack__egl_create_context(nack_window *w, const nack_gl_desc *de
         return NULL;
     }
 
-    nack_gl_context *ctx = (nack_gl_context *)nack__calloc(1, sizeof *ctx);
-    nack_egl_context *native = (nack_egl_context *)nack__calloc(1, sizeof *native);
+    struct nack_gl_context *ctx = (struct nack_gl_context *)nack__calloc(1, sizeof *ctx);
+    struct nack_egl_context *native = (struct nack_egl_context *)nack__calloc(1, sizeof *native);
     if (!ctx || !native) {
         eglDestroyContext(nack__egl.display, egl_ctx);
         free(ctx);
@@ -266,11 +266,11 @@ nack_gl_context *nack__egl_create_context(nack_window *w, const nack_gl_desc *de
     return ctx;
 }
 
-void nack__egl_destroy_context(nack_gl_context *ctx)
+void nack__egl_destroy_context(struct nack_gl_context *ctx)
 {
     if (!ctx)
         return;
-    nack_egl_context *native = (nack_egl_context *)ctx->native;
+    struct nack_egl_context *native = (struct nack_egl_context *)ctx->native;
     if (native) {
         if (native->context != EGL_NO_CONTEXT)
             eglDestroyContext(nack__egl.display, native->context);
@@ -306,14 +306,14 @@ EGLSurface nack__egl_create_window_surface(EGLConfig config, void *native_window
     return surface;
 }
 
-bool nack__egl_make_current(EGLSurface surface, nack_gl_context *ctx)
+bool nack__egl_make_current(EGLSurface surface, struct nack_gl_context *ctx)
 {
     if (!ctx) {
         eglMakeCurrent(nack__egl.display, EGL_NO_SURFACE, EGL_NO_SURFACE,
                        EGL_NO_CONTEXT);
         return true;
     }
-    nack_egl_context *native = (nack_egl_context *)ctx->native;
+    struct nack_egl_context *native = (struct nack_egl_context *)ctx->native;
     eglBindAPI(native->is_es ? EGL_OPENGL_ES_API : EGL_OPENGL_API);
     if (!eglMakeCurrent(nack__egl.display, surface, surface, native->context))
         return nack__fail(NACK_ERROR_PLATFORM, "eglMakeCurrent failed: %s",

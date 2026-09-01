@@ -1,5 +1,5 @@
 /*
- * A character-cell grid: the shape a terminal emulator or a libtcod-style
+ * A character-struct cell struct grid: the shape a terminal emulator or a libtcod-style
  * console sits on top of.
  *
  * What it demonstrates, in the order it matters for a terminal:
@@ -11,9 +11,9 @@
  *     physical key events used for control chords.
  *   - Clipboard paste and copy, including the primary selection on Unix.
  *   - The framebuffer is sized in physical pixels, so glyphs stay crisp on a
- *     HiDPI display while the cell grid is reasoned about in logical ones.
+ *     HiDPI display while the struct cell struct grid is reasoned about in logical ones.
  *
- * Rendering is one textured quad per cell out of an 8x8 bitmap font. That is
+ * Rendering is one textured quad per struct cell out of an 8x8 bitmap font. That is
  * the least interesting part and a real terminal would want a proper shaper,
  * but it makes the plumbing visible.
  */
@@ -40,16 +40,16 @@
 #define MAX_COLS 400
 #define MAX_ROWS 200
 
-typedef struct cell {
+struct cell {
     unsigned char glyph;
     unsigned char colour;
-} cell;
+};
 
-typedef struct grid {
+struct grid {
     int cols, rows;
-    cell *cells;
+    struct cell *cells;
     int cursor_x, cursor_y;
-} grid;
+};
 
 static const float palette[8][3] = {
     { 0.85f, 0.87f, 0.91f },   /* default text */
@@ -66,12 +66,12 @@ static const float palette[8][3] = {
 /* Grid                                                               */
 /* ------------------------------------------------------------------ */
 
-static bool grid_resize(grid *g, int cols, int rows)
+static bool grid_resize(struct grid *g, int cols, int rows)
 {
     if (cols < 1) cols = 1;
     if (rows < 1) rows = 1;
 
-    cell *cells = (cell *)calloc((size_t)cols * (size_t)rows, sizeof *cells);
+    struct cell *cells = (struct cell *)calloc((size_t)cols * (size_t)rows, sizeof *cells);
     if (!cells)
         return false;
 
@@ -93,7 +93,7 @@ static bool grid_resize(grid *g, int cols, int rows)
     return true;
 }
 
-static void grid_scroll(grid *g)
+static void grid_scroll(struct grid *g)
 {
     memmove(g->cells, g->cells + g->cols,
             (size_t)(g->rows - 1) * (size_t)g->cols * sizeof *g->cells);
@@ -101,7 +101,7 @@ static void grid_scroll(grid *g)
            (size_t)g->cols * sizeof *g->cells);
 }
 
-static void grid_newline(grid *g)
+static void grid_newline(struct grid *g)
 {
     g->cursor_x = 0;
     if (++g->cursor_y >= g->rows) {
@@ -110,7 +110,7 @@ static void grid_newline(grid *g)
     }
 }
 
-static void grid_put(grid *g, unsigned char glyph, unsigned char colour)
+static void grid_put(struct grid *g, unsigned char glyph, unsigned char colour)
 {
     if (g->cursor_x >= g->cols)
         grid_newline(g);
@@ -119,7 +119,7 @@ static void grid_put(grid *g, unsigned char glyph, unsigned char colour)
     g->cursor_x++;
 }
 
-static void grid_backspace(grid *g)
+static void grid_backspace(struct grid *g)
 {
     if (g->cursor_x > 0) {
         g->cursor_x--;
@@ -130,7 +130,7 @@ static void grid_backspace(grid *g)
     g->cells[(size_t)g->cursor_y * g->cols + g->cursor_x].glyph = 0;
 }
 
-static void grid_write(grid *g, const char *text, unsigned char colour)
+static void grid_write(struct grid *g, const char *text, unsigned char colour)
 {
     for (const unsigned char *p = (const unsigned char *)text; *p; ++p) {
         if (*p == '\n')
@@ -184,7 +184,7 @@ static GLuint build_font_texture(void)
 
 static const char *vertex_source =
     "#version 330 core\n"
-    "layout(location = 0) in vec2 a_position;\n"   /* in cell pixels        */
+    "layout(location = 0) in vec2 a_position;\n"   /* in struct cell pixels        */
     "layout(location = 1) in vec2 a_uv;\n"
     "layout(location = 2) in vec3 a_colour;\n"
     "uniform vec2 u_viewport;\n"
@@ -213,20 +213,20 @@ static const char *fragment_source =
 /* Vertex building                                                    */
 /* ------------------------------------------------------------------ */
 
-typedef struct vertex {
+struct vertex {
     float x, y;
     float u, v;
     float r, g, b;
-} vertex;
+};
 
-static size_t build_vertices(const grid *g, vertex *out, double time_seconds)
+static size_t build_vertices(const struct grid *g, struct vertex *out, double time_seconds)
 {
     size_t count = 0;
     const float glyph_uv = 1.0f / 16.0f;
 
     for (int row = 0; row < g->rows; ++row) {
         for (int col = 0; col < g->cols; ++col) {
-            const cell *c = &g->cells[(size_t)row * g->cols + col];
+            const struct cell *c = &g->cells[(size_t)row * g->cols + col];
 
             unsigned char glyph = c->glyph;
             unsigned char colour = c->colour;
@@ -255,7 +255,7 @@ static size_t build_vertices(const grid *g, vertex *out, double time_seconds)
             const float g_ = palette[colour % 8][1];
             const float b = palette[colour % 8][2];
 
-            const vertex quad[6] = {
+            const struct vertex quad[6] = {
                 { x0, y0, u0, v0, r, g_, b },
                 { x1, y0, u1, v0, r, g_, b },
                 { x1, y1, u1, v1, r, g_, b },
@@ -274,22 +274,22 @@ static size_t build_vertices(const grid *g, vertex *out, double time_seconds)
 
 int main(void)
 {
-    if (!nack_init(&(nack_init_desc){ .app_id = "nack.textgrid" })) {
+    if (!nack_init(&(struct nack_init_desc){ .app_id = "nack.textgrid" })) {
         const char *message = NULL;
         nack_get_error(&message);
         fprintf(stderr, "nack_init failed: %s\n", message);
         return 1;
     }
 
-    grid g = { 0 };
+    struct grid g = { 0 };
     if (!grid_resize(&g, 80, 25)) {
         nack_shutdown();
         return 1;
     }
 
-    nack_window_desc window_desc;
+    struct nack_window_desc window_desc;
     nack_window_desc_defaults(&window_desc);
-    window_desc.title = "libnack - text grid";
+    window_desc.title = "libnack - text struct grid";
     window_desc.width = g.cols * CELL_PIXELS_W;
     window_desc.height = g.rows * CELL_PIXELS_H;
     /* The two hints that make a window behave like a terminal. */
@@ -298,7 +298,7 @@ int main(void)
     window_desc.min_width = MIN_COLS * CELL_PIXELS_W;
     window_desc.min_height = MIN_ROWS * CELL_PIXELS_H;
 
-    nack_window *window = nack_window_create(&window_desc);
+    struct nack_window *window = nack_window_create(&window_desc);
     if (!window) {
         const char *message = NULL;
         nack_get_error(&message);
@@ -310,9 +310,9 @@ int main(void)
 
     nack_window_set_cursor_shape(window, NACK_CURSOR_IBEAM);
 
-    nack_gl_desc gl_desc;
+    struct nack_gl_desc gl_desc;
     nack_gl_desc_defaults(&gl_desc);
-    nack_gl_context *context = nack_gl_context_create(window, &gl_desc);
+    struct nack_gl_context *context = nack_gl_context_create(window, &gl_desc);
     if (!context || !nack_gl_make_current(window, context) ||
         !nack_example_load_gl()) {
         const char *message = NULL;
@@ -340,20 +340,20 @@ int main(void)
     glBindVertexArray(vao);
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(vertex),
-                          (const void *)offsetof(vertex, x));
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertex),
+                          (const void *)offsetof(struct vertex, x));
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(vertex),
-                          (const void *)offsetof(vertex, u));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(struct vertex),
+                          (const void *)offsetof(struct vertex, u));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(vertex),
-                          (const void *)offsetof(vertex, r));
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(struct vertex),
+                          (const void *)offsetof(struct vertex, r));
     glEnableVertexAttribArray(2);
 
     const GLint viewport_uniform = glGetUniformLocation(program, "u_viewport");
     const GLint font_uniform = glGetUniformLocation(program, "u_font");
 
-    vertex *vertices = (vertex *)malloc((size_t)MAX_COLS * MAX_ROWS * 6 *
+    struct vertex *vertices = (struct vertex *)malloc((size_t)MAX_COLS * MAX_ROWS * 6 *
                                         sizeof *vertices);
     if (!vertices) {
         nack_gl_context_destroy(context);
@@ -363,7 +363,7 @@ int main(void)
         return 1;
     }
 
-    grid_write(&g, "libnack text grid\n", 5);
+    grid_write(&g, "libnack text struct grid\n", 5);
     grid_write(&g, "type; ctrl+v pastes, ctrl+c copies, esc quits\n\n", 7);
 
     bool dirty = true;
@@ -374,13 +374,13 @@ int main(void)
          * cursor blinks. A terminal with no cursor animation would pass -1
          * and use exactly zero CPU while idle.
          */
-        nack_event event;
+        struct nack_event event;
         if (nack_wait_event_timeout(&event, 0.5)) {
             do {
                 switch (event.type) {
                 case NACK_EVENT_WINDOW_RESIZE: {
-                    int cols = event.size.width / CELL_PIXELS_W;
-                    int rows = event.size.height / CELL_PIXELS_H;
+                    int cols = event.data.size.width / CELL_PIXELS_W;
+                    int rows = event.data.size.height / CELL_PIXELS_H;
                     if (cols > MAX_COLS) cols = MAX_COLS;
                     if (rows > MAX_ROWS) rows = MAX_ROWS;
                     if (cols != g.cols || rows != g.rows) {
@@ -395,12 +395,12 @@ int main(void)
                 }
 
                 case NACK_EVENT_TEXT:
-                    grid_write(&g, event.text.utf8, 0);
+                    grid_write(&g, event.data.text.utf8, 0);
                     dirty = true;
                     break;
 
                 case NACK_EVENT_KEY_DOWN:
-                    switch (event.key.key) {
+                    switch (event.data.key.key) {
                     case NACK_KEY_ESCAPE:
                         nack_window_set_should_close(window, true);
                         break;
@@ -412,7 +412,7 @@ int main(void)
                         grid_backspace(&g);
                         break;
                     case NACK_KEY_V:
-                        if (event.key.mods & NACK_MOD_CTRL) {
+                        if (event.data.key.mods & NACK_MOD_CTRL) {
                             const char *text = nack_clipboard_get_text();
                             if (text)
                                 grid_write(&g, text, 1);
@@ -421,7 +421,7 @@ int main(void)
                         }
                         break;
                     case NACK_KEY_C:
-                        if (event.key.mods & NACK_MOD_CTRL) {
+                        if (event.data.key.mods & NACK_MOD_CTRL) {
                             nack_clipboard_set_text("copied from libnack");
                             grid_write(&g, "\n[copied to clipboard]\n", 1);
                         }
@@ -433,11 +433,11 @@ int main(void)
                     break;
 
                 case NACK_EVENT_MOUSE_DOWN: {
-                    int col = (int)event.button.x / CELL_PIXELS_W;
-                    int row = (int)event.button.y / CELL_PIXELS_H;
+                    int col = (int)event.data.button.x / CELL_PIXELS_W;
+                    int row = (int)event.data.button.y / CELL_PIXELS_H;
                     char note[64];
-                    snprintf(note, sizeof note, "\n[click cell %d,%d x%d]\n",
-                             col, row, event.button.click_count);
+                    snprintf(note, sizeof note, "\n[click struct cell %d,%d x%d]\n",
+                             col, row, event.data.button.click_count);
                     grid_write(&g, note, 4);
                     dirty = true;
                     break;

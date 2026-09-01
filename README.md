@@ -1,6 +1,6 @@
 # libnack
 
-A small cross-platform windowing and OpenGL context library in C23, built to
+A small cross-platform windowing and OpenGL context library in C99, built to
 sit under a terminal emulator or a libtcod/BearLibTerminal-style console.
 
 | Platform | Backend | Contexts |

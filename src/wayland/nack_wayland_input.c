@@ -44,7 +44,7 @@ static uint32_t nack__wl_mods(void)
 /* Text production                                                    */
 /* ------------------------------------------------------------------ */
 
-static void nack__wl_emit_text_for(nack_window *w, xkb_keycode_t keycode, uint32_t mods)
+static void nack__wl_emit_text_for(struct nack_window *w, xkb_keycode_t keycode, uint32_t mods)
 {
     if (!nack__wl.xkb_state)
         return;
@@ -95,7 +95,7 @@ static void nack__wl_emit_text_for(nack_window *w, xkb_keycode_t keycode, uint32
 /* Key repeat                                                         */
 /* ------------------------------------------------------------------ */
 
-static void nack__wl_start_repeat(nack_window *w, uint32_t raw_key)
+static void nack__wl_start_repeat(struct nack_window *w, uint32_t raw_key)
 {
     if (nack__wl.repeat_rate <= 0 || !nack__wl.xkb_keymap)
         return;
@@ -140,7 +140,7 @@ void nack__wl_pump_key_repeat(void)
     while (now >= nack__wl.repeat_next_ns && guard++ < 32) {
         uint32_t raw_key = nack__wl.repeat_key - 1;
         xkb_keycode_t keycode = NACK_WL_KEYCODE(raw_key);
-        nack_key key = keycode < 256 ? nack__wl.keycodes[keycode] : NACK_KEY_UNKNOWN;
+        enum nack_key key = keycode < 256 ? nack__wl.keycodes[keycode] : NACK_KEY_UNKNOWN;
         uint32_t mods = nack__wl_mods();
 
         nack__emit_key(nack__wl.repeat_window, key, raw_key, mods, true, true);
@@ -203,8 +203,8 @@ static void keyboard_enter(void *data, struct wl_keyboard *keyboard, uint32_t se
     if (!surface)
         return;
     for (size_t i = 0; i < nack__g.window_count; ++i) {
-        nack_window *w = nack__g.windows[i];
-        nack_wl_window *ww = nack__wl_win(w);
+        struct nack_window *w = nack__g.windows[i];
+        struct nack_wl_window *ww = nack__wl_win(w);
         if (ww && ww->surface == surface) {
             nack__wl.keyboard_focus = w;
             nack__emit_focus(w, true);
@@ -233,12 +233,12 @@ static void keyboard_key(void *data, struct wl_keyboard *keyboard, uint32_t seri
     (void)data; (void)keyboard; (void)time;
     nack__wl.last_serial = serial;
 
-    nack_window *w = nack__wl.keyboard_focus;
+    struct nack_window *w = nack__wl.keyboard_focus;
     if (!w)
         return;
 
     xkb_keycode_t keycode = NACK_WL_KEYCODE(key);
-    nack_key nkey = keycode < 256 ? nack__wl.keycodes[keycode] : NACK_KEY_UNKNOWN;
+    enum nack_key nkey = keycode < 256 ? nack__wl.keycodes[keycode] : NACK_KEY_UNKNOWN;
     uint32_t mods = nack__wl_mods();
     bool down = (state == WL_KEYBOARD_KEY_STATE_PRESSED);
 
@@ -329,7 +329,7 @@ void nack__wl_load_cursor_theme(int scale)
     memset(nack__wl.cursors_loaded, 0, sizeof nack__wl.cursors_loaded);
 }
 
-static struct wl_cursor *nack__wl_get_cursor(nack_cursor_shape shape)
+static struct wl_cursor *nack__wl_get_cursor(enum nack_cursor_shape shape)
 {
     if (nack__wl.cursors_loaded[shape])
         return nack__wl.cursors[shape];
@@ -347,7 +347,7 @@ static struct wl_cursor *nack__wl_get_cursor(nack_cursor_shape shape)
     return cursor;
 }
 
-void nack__wl_update_cursor(nack_window *w)
+void nack__wl_update_cursor(struct nack_window *w)
 {
     if (!nack__wl.pointer || nack__wl.pointer_focus != w)
         return;
@@ -381,7 +381,7 @@ void nack__wl_update_cursor(nack_window *w)
                           (int32_t)image->hotspot_y / scale);
 }
 
-void nack__wl_set_cursor_shape(nack_window *w, nack_cursor_shape shape)
+void nack__wl_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape)
 {
     (void)shape;
     nack__wl_update_cursor(w);
@@ -400,22 +400,22 @@ static void relative_pointer_motion(void *data,
     (void)relative; (void)utime_hi; (void)utime_lo;
     (void)dx_unaccel; (void)dy_unaccel;
 
-    nack_window *w = (nack_window *)data;
+    struct nack_window *w = (struct nack_window *)data;
     if (w->cursor_mode != NACK_CURSOR_MODE_CAPTURED)
         return;
 
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     double ddx = wl_fixed_to_double(dx);
     double ddy = wl_fixed_to_double(dy);
     ww->virtual_x += ddx;
     ww->virtual_y += ddy;
 
-    nack_event *ev = nack__event_begin(NACK_EVENT_MOUSE_MOVE, w);
-    ev->motion.x = ww->virtual_x;
-    ev->motion.y = ww->virtual_y;
-    ev->motion.dx = ddx;
-    ev->motion.dy = ddy;
-    ev->motion.mods = nack__wl_mods();
+    struct nack_event *ev = nack__event_begin(NACK_EVENT_MOUSE_MOVE, w);
+    ev->data.motion.x = ww->virtual_x;
+    ev->data.motion.y = ww->virtual_y;
+    ev->data.motion.dx = ddx;
+    ev->data.motion.dy = ddy;
+    ev->data.motion.mods = nack__wl_mods();
     nack__push_event(ev);
 }
 
@@ -423,9 +423,9 @@ static const struct zwp_relative_pointer_v1_listener nack__wl_relative_listener 
     .relative_motion = relative_pointer_motion,
 };
 
-void nack__wl_set_cursor_mode(nack_window *w, nack_cursor_mode mode)
+void nack__wl_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
 
     if (mode == NACK_CURSOR_MODE_CAPTURED) {
         ww->virtual_x = w->mouse_x;
@@ -471,13 +471,13 @@ void nack__wl_set_cursor_mode(nack_window *w, nack_cursor_mode mode)
 /* Pointer                                                            */
 /* ------------------------------------------------------------------ */
 
-static nack_window *nack__wl_window_for_surface(struct wl_surface *surface)
+static struct nack_window *nack__wl_window_for_surface(struct wl_surface *surface)
 {
     if (!surface)
         return NULL;
     for (size_t i = 0; i < nack__g.window_count; ++i) {
-        nack_window *w = nack__g.windows[i];
-        nack_wl_window *ww = nack__wl_win(w);
+        struct nack_window *w = nack__g.windows[i];
+        struct nack_wl_window *ww = nack__wl_win(w);
         if (ww && ww->surface == surface)
             return w;
     }
@@ -491,10 +491,10 @@ static void pointer_enter(void *data, struct wl_pointer *pointer, uint32_t seria
     nack__wl.pointer_enter_serial = serial;
     nack__wl.last_serial = serial;
 
-    nack_window *w = nack__wl_window_for_surface(surface);
+    struct nack_window *w = nack__wl_window_for_surface(surface);
     if (!w) {
         /* The pointer may instead be over one of our decoration surfaces. */
-        nack_wl_decor_part part;
+        enum nack_wl_decor_part part;
         if (nack__wl_decor_find(surface, &w, &part)) {
             nack__wl.decor_focus = w;
             nack__wl.decor_focus_part = part;
@@ -538,7 +538,7 @@ static void pointer_motion(void *data, struct wl_pointer *pointer, uint32_t time
         return;
     }
 
-    nack_window *w = nack__wl.pointer_focus;
+    struct nack_window *w = nack__wl.pointer_focus;
     if (!w || w->cursor_mode == NACK_CURSOR_MODE_CAPTURED)
         return;   /* captured motion arrives through the relative pointer */
     nack__emit_mouse_move(w, wl_fixed_to_double(sx), wl_fixed_to_double(sy),
@@ -551,7 +551,7 @@ static void pointer_button(void *data, struct wl_pointer *pointer, uint32_t seri
     (void)data; (void)pointer; (void)time;
     nack__wl.last_serial = serial;
 
-    nack_window *w = nack__wl.pointer_focus;
+    struct nack_window *w = nack__wl.pointer_focus;
 
     /* Wayland reports Linux input event codes. */
     int index;
@@ -569,7 +569,7 @@ static void pointer_button(void *data, struct wl_pointer *pointer, uint32_t seri
     if (nack__wl.decor_focus) {
         /* Route through the multi-click tracker so a double-click on the
          * title bar is recognised, then let the decorations act on it. */
-        nack_window *decorated = nack__wl.decor_focus;
+        struct nack_window *decorated = nack__wl.decor_focus;
         if (down)
             nack__emit_mouse_button(decorated, index, true, nack__wl.decor_x,
                                     nack__wl.decor_y, nack__wl_mods());
@@ -631,7 +631,7 @@ static void pointer_frame(void *data, struct wl_pointer *pointer)
         nack__wl.axis_discrete = false;
         return;
     }
-    nack_window *w = nack__wl.pointer_focus;
+    struct nack_window *w = nack__wl.pointer_focus;
     if (w)
         nack__emit_scroll(w, nack__wl.axis_x, nack__wl.axis_y, nack__wl_mods(),
                           !nack__wl.axis_discrete);

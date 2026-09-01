@@ -34,13 +34,13 @@
 #define NACK_DECOR_GLYPH      0xFFD8DEE9u
 #define NACK_DECOR_CLOSE_HOT  0xFFBF616Au
 
-int nack__wl_decor_titlebar_height(const nack_window *w)
+int nack__wl_decor_titlebar_height(const struct nack_window *w)
 {
     (void)w;
     return NACK_DECOR_TITLEBAR;
 }
 
-int nack__wl_decor_border(const nack_window *w)
+int nack__wl_decor_border(const struct nack_window *w)
 {
     (void)w;
     return NACK_DECOR_BORDER;
@@ -81,7 +81,7 @@ static int nack__wl_create_shm_file(size_t size)
     return fd;
 }
 
-static void nack__wl_decor_release_buffer(nack_wl_decor *decor)
+static void nack__wl_decor_release_buffer(struct nack_wl_decor *decor)
 {
     if (decor->buffer) {
         wl_buffer_destroy(decor->buffer);
@@ -94,7 +94,7 @@ static void nack__wl_decor_release_buffer(nack_wl_decor *decor)
     }
 }
 
-static bool nack__wl_decor_alloc(nack_wl_decor *decor, int width, int height)
+static bool nack__wl_decor_alloc(struct nack_wl_decor *decor, int width, int height)
 {
     if (width < 1) width = 1;
     if (height < 1) height = 1;
@@ -141,7 +141,7 @@ static bool nack__wl_decor_alloc(nack_wl_decor *decor, int width, int height)
     return true;
 }
 
-static void nack__wl_fill(nack_wl_decor *decor, uint32_t colour)
+static void nack__wl_fill(struct nack_wl_decor *decor, uint32_t colour)
 {
     if (!decor->pixels)
         return;
@@ -150,7 +150,7 @@ static void nack__wl_fill(nack_wl_decor *decor, uint32_t colour)
         decor->pixels[i] = colour;
 }
 
-static void nack__wl_plot(nack_wl_decor *decor, int x, int y, uint32_t colour)
+static void nack__wl_plot(struct nack_wl_decor *decor, int x, int y, uint32_t colour)
 {
     if (!decor->pixels || x < 0 || y < 0 || x >= decor->width || y >= decor->height)
         return;
@@ -161,9 +161,9 @@ static void nack__wl_plot(nack_wl_decor *decor, int x, int y, uint32_t colour)
 /* Drawing                                                            */
 /* ------------------------------------------------------------------ */
 
-static void nack__wl_draw_close_button(nack_window *w, nack_wl_decor *decor)
+static void nack__wl_draw_close_button(struct nack_window *w, struct nack_wl_decor *decor)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
 
     int box = NACK_DECOR_BUTTON;
     int left = decor->width - box - (NACK_DECOR_TITLEBAR - box) / 2;
@@ -186,16 +186,16 @@ static void nack__wl_draw_close_button(nack_window *w, nack_wl_decor *decor)
     }
 }
 
-void nack__wl_decor_redraw(nack_window *w)
+void nack__wl_decor_redraw(struct nack_window *w)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (!ww->client_side_decorations)
         return;
 
     uint32_t title_colour = w->focused ? NACK_DECOR_ACTIVE : NACK_DECOR_INACTIVE;
 
     for (int i = 0; i < NACK_WL_DECOR_COUNT; ++i) {
-        nack_wl_decor *decor = &ww->decor[i];
+        struct nack_wl_decor *decor = &ww->decor[i];
         if (!decor->surface || !decor->buffer)
             continue;
 
@@ -214,9 +214,9 @@ void nack__wl_decor_redraw(nack_window *w)
 /* Geometry                                                           */
 /* ------------------------------------------------------------------ */
 
-void nack__wl_decor_resize(nack_window *w)
+void nack__wl_decor_resize(struct nack_window *w)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (!ww->client_side_decorations)
         return;
 
@@ -233,7 +233,7 @@ void nack__wl_decor_resize(nack_window *w)
     };
 
     for (int i = 0; i < NACK_WL_DECOR_COUNT; ++i) {
-        nack_wl_decor *decor = &ww->decor[i];
+        struct nack_wl_decor *decor = &ww->decor[i];
         if (!decor->surface)
             continue;
         if (!nack__wl_decor_alloc(decor, layout[i].w, layout[i].h))
@@ -257,16 +257,16 @@ void nack__wl_decor_resize(nack_window *w)
 /* Lifetime                                                           */
 /* ------------------------------------------------------------------ */
 
-bool nack__wl_decor_enable(nack_window *w)
+bool nack__wl_decor_enable(struct nack_window *w)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (ww->client_side_decorations)
         return true;
     if (!nack__wl.shm || !nack__wl.subcompositor || !w->decorated)
         return false;
 
     for (int i = 0; i < NACK_WL_DECOR_COUNT; ++i) {
-        nack_wl_decor *decor = &ww->decor[i];
+        struct nack_wl_decor *decor = &ww->decor[i];
         decor->surface = wl_compositor_create_surface(nack__wl.compositor);
         if (!decor->surface)
             goto fail;
@@ -302,14 +302,14 @@ fail:
     return false;
 }
 
-void nack__wl_decor_destroy(nack_window *w)
+void nack__wl_decor_destroy(struct nack_window *w)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (!ww)
         return;
 
     for (int i = 0; i < NACK_WL_DECOR_COUNT; ++i) {
-        nack_wl_decor *decor = &ww->decor[i];
+        struct nack_wl_decor *decor = &ww->decor[i];
         nack__wl_decor_release_buffer(decor);
         if (decor->subsurface) {
             wl_subsurface_destroy(decor->subsurface);
@@ -326,20 +326,20 @@ void nack__wl_decor_destroy(nack_window *w)
         nack__wl.decor_focus = NULL;
 }
 
-bool nack__wl_decor_find(struct wl_surface *surface, nack_window **out_window,
-                         nack_wl_decor_part *out_part)
+bool nack__wl_decor_find(struct wl_surface *surface, struct nack_window **out_window,
+                         enum nack_wl_decor_part *out_part)
 {
     if (!surface)
         return false;
     for (size_t i = 0; i < nack__g.window_count; ++i) {
-        nack_window *w = nack__g.windows[i];
-        nack_wl_window *ww = (nack_wl_window *)w->native;
+        struct nack_window *w = nack__g.windows[i];
+        struct nack_wl_window *ww = (struct nack_wl_window *)w->native;
         if (!ww || !ww->client_side_decorations)
             continue;
         for (int part = 0; part < NACK_WL_DECOR_COUNT; ++part) {
             if (ww->decor[part].surface == surface) {
                 *out_window = w;
-                *out_part = (nack_wl_decor_part)part;
+                *out_part = (enum nack_wl_decor_part)part;
                 return true;
             }
         }
@@ -351,13 +351,13 @@ bool nack__wl_decor_find(struct wl_surface *surface, nack_window **out_window,
 /* Pointer interaction                                                */
 /* ------------------------------------------------------------------ */
 
-static bool nack__wl_decor_in_close_button(nack_window *w, double x, double y)
+static bool nack__wl_decor_in_close_button(struct nack_window *w, double x, double y)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (nack__wl.decor_focus_part != NACK_WL_DECOR_TOP)
         return false;
 
-    const nack_wl_decor *decor = &ww->decor[NACK_WL_DECOR_TOP];
+    const struct nack_wl_decor *decor = &ww->decor[NACK_WL_DECOR_TOP];
     int box = NACK_DECOR_BUTTON;
     int left = decor->width - box - (NACK_DECOR_TITLEBAR - box) / 2;
     int top = (NACK_DECOR_TITLEBAR - box) / 2;
@@ -365,9 +365,9 @@ static bool nack__wl_decor_in_close_button(nack_window *w, double x, double y)
     return x >= left && x < left + box && y >= top && y < top + box;
 }
 
-void nack__wl_decor_pointer_motion(nack_window *w, double x, double y)
+void nack__wl_decor_pointer_motion(struct nack_window *w, double x, double y)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     nack__wl.decor_x = x;
     nack__wl.decor_y = y;
 
@@ -378,9 +378,9 @@ void nack__wl_decor_pointer_motion(nack_window *w, double x, double y)
     }
 }
 
-void nack__wl_decor_pointer_leave(nack_window *w)
+void nack__wl_decor_pointer_leave(struct nack_window *w)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (ww && ww->decor_close_hover) {
         ww->decor_close_hover = false;
         nack__wl_decor_redraw(w);
@@ -388,7 +388,7 @@ void nack__wl_decor_pointer_leave(nack_window *w)
 }
 
 /* Maps a position on a border surface to the resize edge it represents. */
-static uint32_t nack__wl_decor_resize_edge(nack_window *w, nack_wl_decor_part part,
+static uint32_t nack__wl_decor_resize_edge(struct nack_window *w, enum nack_wl_decor_part part,
                                            double x, double y)
 {
     const int corner = 16;
@@ -422,16 +422,16 @@ static uint32_t nack__wl_decor_resize_edge(nack_window *w, nack_wl_decor_part pa
     }
 }
 
-bool nack__wl_decor_pointer_button(nack_window *w, int button, bool down,
+bool nack__wl_decor_pointer_button(struct nack_window *w, int button, bool down,
                                    uint32_t serial)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (!ww->client_side_decorations || !down)
         return false;
 
     double x = nack__wl.decor_x;
     double y = nack__wl.decor_y;
-    nack_wl_decor_part part = nack__wl.decor_focus_part;
+    enum nack_wl_decor_part part = nack__wl.decor_focus_part;
 
     if (button == NACK_MOUSE_RIGHT) {
         if (nack__wl.seat)

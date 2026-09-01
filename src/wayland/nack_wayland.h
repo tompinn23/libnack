@@ -23,34 +23,34 @@
 
 #define NACK_WL_MAX_OUTPUTS 16
 
-typedef struct nack_wl_output {
+struct nack_wl_output {
     struct wl_output *output;
     uint32_t name;
     int32_t scale;
     int32_t width, height;
     int32_t physical_width, physical_height;
-} nack_wl_output;
+};
 
 /* Fallback client-side decorations, used when the compositor has no
  * xdg-decoration support (Mutter, notably) or asks the client to draw. */
-typedef enum nack_wl_decor_part {
+enum nack_wl_decor_part {
     NACK_WL_DECOR_TOP = 0,     /* title bar */
     NACK_WL_DECOR_BOTTOM,
     NACK_WL_DECOR_LEFT,
     NACK_WL_DECOR_RIGHT,
     NACK_WL_DECOR_COUNT
-} nack_wl_decor_part;
+};
 
-typedef struct nack_wl_decor {
+struct nack_wl_decor {
     struct wl_surface *surface;
     struct wl_subsurface *subsurface;
     struct wl_buffer *buffer;
     uint32_t *pixels;
     size_t size;
     int width, height;
-} nack_wl_decor;
+};
 
-typedef struct nack_wl_window {
+struct nack_wl_window {
     struct wl_surface *surface;
     struct xdg_surface *xdg_surface;
     struct xdg_toplevel *xdg_toplevel;
@@ -79,12 +79,12 @@ typedef struct nack_wl_window {
 
     double virtual_x, virtual_y;
 
-    nack_wl_decor decor[NACK_WL_DECOR_COUNT];
+    struct nack_wl_decor decor[NACK_WL_DECOR_COUNT];
     bool client_side_decorations;
     bool decor_close_hover;
-} nack_wl_window;
+};
 
-typedef struct nack_wayland_state {
+struct nack_wayland_state {
     struct wl_display *display;
     struct wl_registry *registry;
     struct wl_compositor *compositor;
@@ -109,7 +109,7 @@ typedef struct nack_wayland_state {
     struct wl_keyboard *keyboard;
     struct wl_touch *touch;
 
-    nack_wl_output outputs[NACK_WL_MAX_OUTPUTS];
+    struct nack_wl_output outputs[NACK_WL_MAX_OUTPUTS];
     size_t output_count;
 
     struct wl_cursor_theme *cursor_theme;
@@ -124,14 +124,14 @@ typedef struct nack_wayland_state {
     struct xkb_state *xkb_state;
     struct xkb_compose_table *compose_table;
     struct xkb_compose_state *compose_state;
-    nack_key keycodes[256];
+    enum nack_key keycodes[256];
 
-    nack_window *pointer_focus;
+    struct nack_window *pointer_focus;
     /* Set when the pointer is over one of a window's decoration surfaces. */
-    nack_window *decor_focus;
-    nack_wl_decor_part decor_focus_part;
+    struct nack_window *decor_focus;
+    enum nack_wl_decor_part decor_focus_part;
     double decor_x, decor_y;
-    nack_window *keyboard_focus;
+    struct nack_window *keyboard_focus;
     uint32_t pointer_enter_serial;
     uint32_t last_serial;
     double pointer_x, pointer_y;
@@ -140,7 +140,7 @@ typedef struct nack_wayland_state {
     int32_t repeat_rate, repeat_delay;
     uint32_t repeat_key;          /* raw wayland key code, 0 = idle */
     uint64_t repeat_next_ns;
-    nack_window *repeat_window;
+    struct nack_window *repeat_window;
 
     /* Accumulated axis events for the current wl_pointer frame. */
     double axis_x, axis_y;
@@ -159,13 +159,13 @@ typedef struct nack_wayland_state {
     struct zwp_primary_selection_offer_v1 *pending_primary_offer;
     bool offer_has_text;
     bool primary_offer_has_text;
-} nack_wayland_state;
+};
 
-extern nack_wayland_state nack__wl;
+extern struct nack_wayland_state nack__wl;
 
-static inline nack_wl_window *nack__wl_win(nack_window *w)
+static inline struct nack_wl_window *nack__wl_win(struct nack_window *w)
 {
-    return (nack_wl_window *)w->native;
+    return (struct nack_wl_window *)w->native;
 }
 
 /* nack_wayland_input.c */
@@ -174,9 +174,9 @@ void nack__wl_seat_release(void);
 void nack__wl_input_shutdown(void);
 void nack__wl_pump_key_repeat(void);
 double nack__wl_next_repeat_timeout(void);
-void nack__wl_set_cursor_shape(nack_window *w, nack_cursor_shape shape);
-void nack__wl_set_cursor_mode(nack_window *w, nack_cursor_mode mode);
-void nack__wl_update_cursor(nack_window *w);
+void nack__wl_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape);
+void nack__wl_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode);
+void nack__wl_update_cursor(struct nack_window *w);
 void nack__wl_load_cursor_theme(int scale);
 
 /* nack_wayland_clipboard.c */
@@ -188,22 +188,22 @@ bool nack__wl_primary_set(const char *utf8);
 const char *nack__wl_primary_get(void);
 
 /* nack_wayland_decor.c */
-bool nack__wl_decor_enable(nack_window *w);
-void nack__wl_decor_destroy(nack_window *w);
-void nack__wl_decor_resize(nack_window *w);
-void nack__wl_decor_redraw(nack_window *w);
+bool nack__wl_decor_enable(struct nack_window *w);
+void nack__wl_decor_destroy(struct nack_window *w);
+void nack__wl_decor_resize(struct nack_window *w);
+void nack__wl_decor_redraw(struct nack_window *w);
 /* Returns true when the surface belongs to this window's decorations. */
-bool nack__wl_decor_find(struct wl_surface *surface, nack_window **out_window,
-                         nack_wl_decor_part *out_part);
-void nack__wl_decor_pointer_motion(nack_window *w, double x, double y);
-bool nack__wl_decor_pointer_button(nack_window *w, int button, bool down,
+bool nack__wl_decor_find(struct wl_surface *surface, struct nack_window **out_window,
+                         enum nack_wl_decor_part *out_part);
+void nack__wl_decor_pointer_motion(struct nack_window *w, double x, double y);
+bool nack__wl_decor_pointer_button(struct nack_window *w, int button, bool down,
                                    uint32_t serial);
-void nack__wl_decor_pointer_leave(nack_window *w);
-int  nack__wl_decor_titlebar_height(const nack_window *w);
-int  nack__wl_decor_border(const nack_window *w);
+void nack__wl_decor_pointer_leave(struct nack_window *w);
+int  nack__wl_decor_titlebar_height(const struct nack_window *w);
+int  nack__wl_decor_border(const struct nack_window *w);
 
 /* nack_wayland.c */
-void nack__wl_window_update_scale(nack_window *w);
-void nack__wl_resize_egl(nack_window *w);
+void nack__wl_window_update_scale(struct nack_window *w);
+void nack__wl_resize_egl(struct nack_window *w);
 
 #endif /* NACK_WAYLAND_H_INCLUDED */

@@ -12,7 +12,7 @@
 #include <xkbcommon/xkbcommon-x11.h>
 #include <xkbcommon/xkbcommon-compose.h>
 
-typedef struct nack_xcb_window {
+struct nack_xcb_window {
     xcb_window_t handle;
     xcb_colormap_t colormap;
     EGLSurface surface;
@@ -22,9 +22,9 @@ typedef struct nack_xcb_window {
     int restore_x, restore_y, restore_w, restore_h;
     bool warp_pending;
     double virtual_x, virtual_y;
-} nack_xcb_window;
+};
 
-typedef struct nack_xcb_atoms {
+struct nack_xcb_atoms {
     xcb_atom_t WM_PROTOCOLS;
     xcb_atom_t WM_DELETE_WINDOW;
     xcb_atom_t WM_STATE;
@@ -51,15 +51,15 @@ typedef struct nack_xcb_atoms {
     xcb_atom_t INCR;
     xcb_atom_t TEXT_PLAIN_UTF8;
     xcb_atom_t NACK_SELECTION;
-} nack_xcb_atoms;
+};
 
-typedef struct nack_xcb_state {
+struct nack_xcb_state {
     xcb_connection_t *connection;
     xcb_screen_t *screen;
     int screen_number;
     xcb_window_t root;
     xcb_window_t helper;          /* owns selections, never mapped */
-    nack_xcb_atoms atom;
+    struct nack_xcb_atoms atom;
     float scale;
 
     /* Only non-NULL when the EGL implementation lacks EGL_EXT_platform_xcb
@@ -78,7 +78,7 @@ typedef struct nack_xcb_state {
     uint8_t xkb_event_base;
     bool xkb_available;
 
-    nack_key keycodes[256];
+    enum nack_key keycodes[256];
 
     xcb_cursor_context_t *cursor_context;
     xcb_cursor_t cursors[NACK_CURSOR_SHAPE_COUNT];
@@ -89,13 +89,13 @@ typedef struct nack_xcb_state {
     char *primary_owned;
     char *clipboard_received;
     char *primary_received;
-} nack_xcb_state;
+};
 
-extern nack_xcb_state nack__xcb;
+extern struct nack_xcb_state nack__xcb;
 
-static inline nack_xcb_window *nack__xcb_win(nack_window *w)
+static inline struct nack_xcb_window *nack__xcb_win(struct nack_window *w)
 {
-    return (nack_xcb_window *)w->native;
+    return (struct nack_xcb_window *)w->native;
 }
 
 /* Selection handling lives in nack_xcb_clipboard.c. */

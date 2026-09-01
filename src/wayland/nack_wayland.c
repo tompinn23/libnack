@@ -7,15 +7,15 @@
 #include <stdio.h>
 #include <unistd.h>
 
-nack_wayland_state nack__wl;
+struct nack_wayland_state nack__wl;
 
-static const nack_backend_vt *nack__wl_vt_ptr(void);
+static const struct nack_backend_vt *nack__wl_vt_ptr(void);
 
 /* ------------------------------------------------------------------ */
 /* Outputs                                                            */
 /* ------------------------------------------------------------------ */
 
-static nack_wl_output *nack__wl_find_output(struct wl_output *output)
+static struct nack_wl_output *nack__wl_find_output(struct wl_output *output)
 {
     for (size_t i = 0; i < nack__wl.output_count; ++i) {
         if (nack__wl.outputs[i].output == output)
@@ -31,7 +31,7 @@ static void output_geometry(void *data, struct wl_output *output, int32_t x, int
 {
     (void)data; (void)x; (void)y; (void)subpixel; (void)make; (void)model;
     (void)transform;
-    nack_wl_output *entry = nack__wl_find_output(output);
+    struct nack_wl_output *entry = nack__wl_find_output(output);
     if (entry) {
         entry->physical_width = physical_width;
         entry->physical_height = physical_height;
@@ -44,7 +44,7 @@ static void output_mode(void *data, struct wl_output *output, uint32_t flags,
     (void)data; (void)refresh;
     if (!(flags & WL_OUTPUT_MODE_CURRENT))
         return;
-    nack_wl_output *entry = nack__wl_find_output(output);
+    struct nack_wl_output *entry = nack__wl_find_output(output);
     if (entry) {
         entry->width = width;
         entry->height = height;
@@ -59,7 +59,7 @@ static void output_done(void *data, struct wl_output *output)
 static void output_scale(void *data, struct wl_output *output, int32_t factor)
 {
     (void)data;
-    nack_wl_output *entry = nack__wl_find_output(output);
+    struct nack_wl_output *entry = nack__wl_find_output(output);
     if (!entry)
         return;
     entry->scale = factor;
@@ -92,9 +92,9 @@ static const struct wl_output_listener nack__wl_output_listener = {
 /* Buffer scale                                                       */
 /* ------------------------------------------------------------------ */
 
-void nack__wl_resize_egl(nack_window *w)
+void nack__wl_resize_egl(struct nack_window *w)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (!ww->egl_window)
         return;
 
@@ -114,9 +114,9 @@ void nack__wl_resize_egl(nack_window *w)
  * largest integer scale among them, which is what wl_surface.set_buffer_scale
  * expects.
  */
-void nack__wl_window_update_scale(nack_window *w)
+void nack__wl_window_update_scale(struct nack_window *w)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (!ww)
         return;
 #if defined(NACK_HAS_FRACTIONAL_SCALE)
@@ -126,7 +126,7 @@ void nack__wl_window_update_scale(nack_window *w)
 
     int32_t scale = 1;
     for (size_t i = 0; i < ww->output_count; ++i) {
-        nack_wl_output *entry = nack__wl_find_output(ww->outputs[i]);
+        struct nack_wl_output *entry = nack__wl_find_output(ww->outputs[i]);
         if (entry && entry->scale > scale)
             scale = entry->scale;
     }
@@ -151,8 +151,8 @@ static void surface_enter(void *data, struct wl_surface *surface,
                           struct wl_output *output)
 {
     (void)surface;
-    nack_window *w = (nack_window *)data;
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_window *w = (struct nack_window *)data;
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (ww->output_count < NACK_WL_MAX_OUTPUTS)
         ww->outputs[ww->output_count++] = output;
     nack__wl_window_update_scale(w);
@@ -162,8 +162,8 @@ static void surface_leave(void *data, struct wl_surface *surface,
                           struct wl_output *output)
 {
     (void)surface;
-    nack_window *w = (nack_window *)data;
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_window *w = (struct nack_window *)data;
+    struct nack_wl_window *ww = nack__wl_win(w);
     for (size_t i = 0; i < ww->output_count; ++i) {
         if (ww->outputs[i] == output) {
             ww->outputs[i] = ww->outputs[--ww->output_count];
@@ -184,8 +184,8 @@ static void fractional_scale_preferred(void *data,
                                        uint32_t scale_8_24)
 {
     (void)fractional;
-    nack_window *w = (nack_window *)data;
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_window *w = (struct nack_window *)data;
+    struct nack_wl_window *ww = nack__wl_win(w);
 
     /* The protocol reports scale in 1/120ths. */
     float scale = (float)scale_8_24 / 120.0f;
@@ -233,8 +233,8 @@ static const struct xdg_wm_base_listener nack__wl_wm_base_listener = {
 static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
                                   uint32_t serial)
 {
-    nack_window *w = (nack_window *)data;
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_window *w = (struct nack_window *)data;
+    struct nack_wl_window *ww = nack__wl_win(w);
 
     /* Acknowledging here commits the whole configure sequence atomically. */
     xdg_surface_ack_configure(xdg_surface, serial);
@@ -252,7 +252,7 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
         width = ww->pending_width;
         if (w->min_width > 0 && width < w->min_width) width = w->min_width;
         if (w->max_width > 0 && width > w->max_width) width = w->max_width;
-        /* Snap to the cell grid so a terminal never sees a partial column. */
+        /* Snap to the struct cell struct grid so a terminal never sees a partial column. */
         if (w->inc_width > 1) {
             int base = w->min_width > 0 ? w->min_width : 0;
             width = base + ((width - base) / w->inc_width) * w->inc_width;
@@ -280,11 +280,11 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
         wp_viewport_set_destination(ww->viewport, w->width, w->height);
 
     if (size_changed || !ww->configured) {
-        nack_event *ev = nack__event_begin(NACK_EVENT_WINDOW_RESIZE, w);
-        ev->size.width = w->width;
-        ev->size.height = w->height;
-        ev->size.fb_width = w->fb_width;
-        ev->size.fb_height = w->fb_height;
+        struct nack_event *ev = nack__event_begin(NACK_EVENT_WINDOW_RESIZE, w);
+        ev->data.size.width = w->width;
+        ev->data.size.height = w->height;
+        ev->data.size.fb_width = w->fb_width;
+        ev->data.size.fb_height = w->fb_height;
         nack__push_event(ev);
     }
 
@@ -308,8 +308,8 @@ static void xdg_toplevel_configure(void *data, struct xdg_toplevel *toplevel,
                                    struct wl_array *states)
 {
     (void)toplevel;
-    nack_window *w = (nack_window *)data;
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_window *w = (struct nack_window *)data;
+    struct nack_wl_window *ww = nack__wl_win(w);
 
     ww->pending_width = width;
     ww->pending_height = height;
@@ -331,7 +331,7 @@ static void xdg_toplevel_configure(void *data, struct xdg_toplevel *toplevel,
 static void xdg_toplevel_close(void *data, struct xdg_toplevel *toplevel)
 {
     (void)toplevel;
-    nack_window *w = (nack_window *)data;
+    struct nack_window *w = (struct nack_window *)data;
     w->should_close = true;
     nack__emit_simple(w, NACK_EVENT_WINDOW_CLOSE);
 }
@@ -385,7 +385,7 @@ static void registry_global(void *data, struct wl_registry *registry, uint32_t n
         nack__wl_data_device_bind();
     } else if (strcmp(interface, wl_output_interface.name) == 0) {
         if (nack__wl.output_count < NACK_WL_MAX_OUTPUTS) {
-            nack_wl_output *entry = &nack__wl.outputs[nack__wl.output_count++];
+            struct nack_wl_output *entry = &nack__wl.outputs[nack__wl.output_count++];
             entry->output = wl_registry_bind(registry, name, &wl_output_interface,
                                              nack__min_u32(version, 3));
             entry->name = name;
@@ -453,7 +453,7 @@ static void decoration_configure(void *data,
                                  uint32_t mode)
 {
     (void)decoration;
-    nack_window *w = (nack_window *)data;
+    struct nack_window *w = (struct nack_window *)data;
     if (!w)
         return;
 
@@ -469,13 +469,13 @@ static const struct zxdg_toplevel_decoration_v1_listener nack__wl_decoration_lis
     .configure = decoration_configure,
 };
 
-static bool nack__wl_window_create(nack_window *w, const nack_window_desc *desc)
+static bool nack__wl_window_create(struct nack_window *w, const struct nack_window_desc *desc)
 {
     if (!nack__wl.compositor || !nack__wl.wm_base)
         return nack__fail(NACK_ERROR_PLATFORM,
                           "compositor is missing wl_compositor or xdg_wm_base");
 
-    nack_wl_window *ww = (nack_wl_window *)nack__calloc(1, sizeof *ww);
+    struct nack_wl_window *ww = (struct nack_wl_window *)nack__calloc(1, sizeof *ww);
     if (!ww)
         return false;
     ww->egl_surface = EGL_NO_SURFACE;
@@ -565,9 +565,9 @@ static bool nack__wl_window_create(nack_window *w, const nack_window_desc *desc)
     return true;
 }
 
-static void nack__wl_window_destroy(nack_window *w)
+static void nack__wl_window_destroy(struct nack_window *w)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (!ww)
         return;
 
@@ -599,9 +599,9 @@ static void nack__wl_window_destroy(nack_window *w)
     wl_display_flush(nack__wl.display);
 }
 
-static void nack__wl_window_show(nack_window *w, bool show)
+static void nack__wl_window_show(struct nack_window *w, bool show)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (show) {
         wl_surface_commit(ww->surface);
     } else {
@@ -613,22 +613,22 @@ static void nack__wl_window_show(nack_window *w, bool show)
     wl_display_flush(nack__wl.display);
 }
 
-static void nack__wl_window_set_title(nack_window *w, const char *title)
+static void nack__wl_window_set_title(struct nack_window *w, const char *title)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (ww->xdg_toplevel)
         xdg_toplevel_set_title(ww->xdg_toplevel, title);
     wl_display_flush(nack__wl.display);
 }
 
-static void nack__wl_window_set_size(nack_window *w, int width, int height)
+static void nack__wl_window_set_size(struct nack_window *w, int width, int height)
 {
     /*
      * Wayland clients own their own size: there is no "resize request", the
      * client simply renders at the size it wants and the compositor accepts
      * it. Update the surface and report the change ourselves.
      */
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     w->width = width;
     w->height = height;
     nack__wl_resize_egl(w);
@@ -636,20 +636,20 @@ static void nack__wl_window_set_size(nack_window *w, int width, int height)
     if (ww->viewport)
         wp_viewport_set_destination(ww->viewport, width, height);
 
-    nack_event *ev = nack__event_begin(NACK_EVENT_WINDOW_RESIZE, w);
-    ev->size.width = w->width;
-    ev->size.height = w->height;
-    ev->size.fb_width = w->fb_width;
-    ev->size.fb_height = w->fb_height;
+    struct nack_event *ev = nack__event_begin(NACK_EVENT_WINDOW_RESIZE, w);
+    ev->data.size.width = w->width;
+    ev->data.size.height = w->height;
+    ev->data.size.fb_width = w->fb_width;
+    ev->data.size.fb_height = w->fb_height;
     nack__push_event(ev);
 
     wl_surface_commit(ww->surface);
     wl_display_flush(nack__wl.display);
 }
 
-static void nack__wl_apply_size_hints(nack_window *w)
+static void nack__wl_apply_size_hints(struct nack_window *w)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (!ww->xdg_toplevel)
         return;
     if (!w->resizable) {
@@ -663,9 +663,9 @@ static void nack__wl_apply_size_hints(nack_window *w)
     wl_display_flush(nack__wl.display);
 }
 
-static void nack__wl_window_set_fullscreen(nack_window *w, bool fullscreen)
+static void nack__wl_window_set_fullscreen(struct nack_window *w, bool fullscreen)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (!ww->xdg_toplevel)
         return;
     if (fullscreen)
@@ -675,25 +675,25 @@ static void nack__wl_window_set_fullscreen(nack_window *w, bool fullscreen)
     wl_display_flush(nack__wl.display);
 }
 
-static void nack__wl_window_minimize(nack_window *w)
+static void nack__wl_window_minimize(struct nack_window *w)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (ww->xdg_toplevel)
         xdg_toplevel_set_minimized(ww->xdg_toplevel);
     wl_display_flush(nack__wl.display);
 }
 
-static void nack__wl_window_maximize(nack_window *w)
+static void nack__wl_window_maximize(struct nack_window *w)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (ww->xdg_toplevel)
         xdg_toplevel_set_maximized(ww->xdg_toplevel);
     wl_display_flush(nack__wl.display);
 }
 
-static void nack__wl_window_restore(nack_window *w)
+static void nack__wl_window_restore(struct nack_window *w)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (!ww->xdg_toplevel)
         return;
     if (w->fullscreen)
@@ -703,17 +703,17 @@ static void nack__wl_window_restore(nack_window *w)
     wl_display_flush(nack__wl.display);
 }
 
-static void nack__wl_window_request_redraw(nack_window *w)
+static void nack__wl_window_request_redraw(struct nack_window *w)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     wl_surface_damage_buffer(ww->surface, 0, 0, INT32_MAX, INT32_MAX);
     nack__emit_simple(w, NACK_EVENT_WINDOW_EXPOSE);
     wl_display_flush(nack__wl.display);
 }
 
-static void nack__wl_window_get_native(const nack_window *w, nack_native_window *out)
+static void nack__wl_window_get_native(const struct nack_window *w, struct nack_native_window *out)
 {
-    nack_wl_window *ww = (nack_wl_window *)w->native;
+    struct nack_wl_window *ww = (struct nack_wl_window *)w->native;
     out->display = nack__wl.display;
     out->surface = ww ? ww->surface : NULL;
     out->handle = 0;
@@ -723,9 +723,9 @@ static void nack__wl_window_get_native(const nack_window *w, nack_native_window 
 /* OpenGL                                                             */
 /* ------------------------------------------------------------------ */
 
-static bool nack__wl_ensure_surface(nack_window *w, EGLConfig config)
+static bool nack__wl_ensure_surface(struct nack_window *w, EGLConfig config)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (ww->egl_surface != EGL_NO_SURFACE)
         return true;
     if (!ww->egl_window)
@@ -736,13 +736,13 @@ static bool nack__wl_ensure_surface(nack_window *w, EGLConfig config)
     return ww->egl_surface != EGL_NO_SURFACE;
 }
 
-static nack_gl_context *nack__wl_gl_create(nack_window *w, const nack_gl_desc *desc)
+static struct nack_gl_context *nack__wl_gl_create(struct nack_window *w, const struct nack_gl_desc *desc)
 {
     if (!nack__egl.initialized) {
         nack__fail(NACK_ERROR_UNSUPPORTED, "EGL is not available");
         return NULL;
     }
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (!ww->has_config) {
         nack__fail(NACK_ERROR_NO_PIXEL_FORMAT,
                    "window was created without a usable EGL config");
@@ -753,21 +753,21 @@ static nack_gl_context *nack__wl_gl_create(nack_window *w, const nack_gl_desc *d
     return nack__egl_create_context(w, desc, ww->config, nack__wl_vt_ptr());
 }
 
-static bool nack__wl_gl_make_current(nack_window *w, nack_gl_context *ctx)
+static bool nack__wl_gl_make_current(struct nack_window *w, struct nack_gl_context *ctx)
 {
     if (!ctx)
         return nack__egl_make_current(EGL_NO_SURFACE, NULL);
     if (!w)
         return nack__fail(NACK_ERROR_INVALID_ARGUMENT,
                           "nack_gl_make_current needs a window for this context");
-    nack_wl_window *ww = nack__wl_win(w);
+    struct nack_wl_window *ww = nack__wl_win(w);
     if (ww->egl_surface == EGL_NO_SURFACE &&
-        !nack__wl_ensure_surface(w, ((nack_egl_context *)ctx->native)->config))
+        !nack__wl_ensure_surface(w, ((struct nack_egl_context *)ctx->native)->config))
         return false;
     return nack__egl_make_current(ww->egl_surface, ctx);
 }
 
-static void nack__wl_gl_swap_buffers(nack_window *w)
+static void nack__wl_gl_swap_buffers(struct nack_window *w)
 {
     nack__egl_swap_buffers(nack__wl_win(w)->egl_surface);
 }
@@ -869,7 +869,7 @@ static void nack__wl_pump_events(double timeout)
 /* Init / shutdown                                                    */
 /* ------------------------------------------------------------------ */
 
-static bool nack__wl_init(const nack_init_desc *desc)
+static bool nack__wl_init(const struct nack_init_desc *desc)
 {
     (void)desc;
     memset(&nack__wl, 0, sizeof nack__wl);
@@ -973,7 +973,7 @@ static void nack__wl_shutdown(void)
 
 /* ------------------------------------------------------------------ */
 
-static const nack_backend_vt nack__wl_vt = {
+static const struct nack_backend_vt nack__wl_vt = {
     .name = "wayland",
     .id = NACK_BACKEND_WAYLAND,
     .init = nack__wl_init,
@@ -1006,12 +1006,12 @@ static const nack_backend_vt nack__wl_vt = {
     .primary_get = nack__wl_primary_get,
 };
 
-static const nack_backend_vt *nack__wl_vt_ptr(void)
+static const struct nack_backend_vt *nack__wl_vt_ptr(void)
 {
     return &nack__wl_vt;
 }
 
-const nack_backend_vt *nack__backend_wayland(void)
+const struct nack_backend_vt *nack__backend_wayland(void)
 {
     return &nack__wl_vt;
 }

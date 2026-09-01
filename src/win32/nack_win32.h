@@ -21,7 +21,7 @@
 /* WM_ codes above WM_APP are ours to use. */
 #define NACK_WM_WAKEUP (WM_APP + 1)
 
-typedef struct nack_win32_window {
+struct nack_win32_window {
     HWND hwnd;
     HDC hdc;
     HGLRC glrc;                 /* set once a context is made current here  */
@@ -36,9 +36,9 @@ typedef struct nack_win32_window {
     WCHAR high_surrogate;       /* pending half of a UTF-16 pair from WM_CHAR */
     int captured_center_x, captured_center_y;
     bool cursor_clipped;
-} nack_win32_window;
+};
 
-typedef struct nack_win32_state {
+struct nack_win32_state {
     HINSTANCE instance;
     DWORD main_thread;
     HCURSOR cursors[NACK_CURSOR_SHAPE_COUNT];
@@ -55,24 +55,24 @@ typedef struct nack_win32_state {
     BOOL (WINAPI *EnableNonClientDpiScaling_)(HWND);
     HRESULT (WINAPI *SetProcessDpiAwareness_)(int);
     BOOL (WINAPI *SetProcessDpiAwarenessContext_)(void *);
-} nack_win32_state;
+};
 
-extern nack_win32_state nack__win32;
+extern struct nack_win32_state nack__win32;
 
-static inline nack_win32_window *nack__win32_win(nack_window *w)
+static inline struct nack_win32_window *nack__win32_win(struct nack_window *w)
 {
-    return (nack_win32_window *)w->native;
+    return (struct nack_win32_window *)w->native;
 }
 
 /* nack_wgl.c */
 bool  nack__wgl_init(void);
 void  nack__wgl_terminate(void);
-bool  nack__wgl_choose_pixel_format(nack_window *w, HDC hdc, int *out_format);
-nack_gl_context *nack__wgl_create_context(nack_window *w, const nack_gl_desc *desc,
-                                          const nack_backend_vt *vt);
-void  nack__wgl_destroy_context(nack_gl_context *ctx);
-bool  nack__wgl_make_current(nack_window *w, nack_gl_context *ctx);
-void  nack__wgl_swap_buffers(nack_window *w);
+bool  nack__wgl_choose_pixel_format(struct nack_window *w, HDC hdc, int *out_format);
+struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const struct nack_gl_desc *desc,
+                                          const struct nack_backend_vt *vt);
+void  nack__wgl_destroy_context(struct nack_gl_context *ctx);
+bool  nack__wgl_make_current(struct nack_window *w, struct nack_gl_context *ctx);
+void  nack__wgl_swap_buffers(struct nack_window *w);
 void  nack__wgl_set_swap_interval(int interval);
 void *nack__wgl_get_proc_address(const char *name);
 

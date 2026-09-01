@@ -3,7 +3,7 @@
  *
  * Backends: Win32, Cocoa, Wayland, X11.
  *
- * The API is deliberately shaped for the needs of a grid/terminal renderer:
+ * The API is deliberately shaped for the needs of a struct grid/terminal renderer:
  * blocking event waits with timeouts, thread-safe wakeups, size increments,
  * per-monitor DPI scaling, clipboard access and UTF-8 text input.
  *
@@ -42,15 +42,15 @@ extern "C" {
 /* Enumerations                                                               */
 /* -------------------------------------------------------------------------- */
 
-typedef enum nack_backend {
+enum nack_backend {
     NACK_BACKEND_NONE = 0,
     NACK_BACKEND_WIN32,
     NACK_BACKEND_COCOA,
     NACK_BACKEND_WAYLAND,
     NACK_BACKEND_X11
-} nack_backend;
+};
 
-typedef enum nack_result {
+enum nack_result {
     NACK_OK = 0,
     NACK_ERROR_UNKNOWN = -1,
     NACK_ERROR_NOT_INITIALIZED = -2,
@@ -61,9 +61,9 @@ typedef enum nack_result {
     NACK_ERROR_NO_PIXEL_FORMAT = -7,
     NACK_ERROR_CONTEXT_CREATION = -8,
     NACK_ERROR_UNSUPPORTED = -9
-} nack_result;
+};
 
-typedef enum nack_event_type {
+enum nack_event_type {
     NACK_EVENT_NONE = 0,
 
     NACK_EVENT_WINDOW_CLOSE,       /* user asked to close the window        */
@@ -90,32 +90,32 @@ typedef enum nack_event_type {
 
     NACK_EVENT_WAKEUP,             /* produced by nack_wakeup()              */
     NACK_EVENT_QUIT                /* app-level quit request (macOS/Windows) */
-} nack_event_type;
+};
 
-typedef enum nack_mod {
+enum nack_mod {
     NACK_MOD_SHIFT    = 1u << 0,
     NACK_MOD_CTRL     = 1u << 1,
     NACK_MOD_ALT      = 1u << 2,
     NACK_MOD_SUPER    = 1u << 3,   /* Windows key / Command                  */
     NACK_MOD_CAPSLOCK = 1u << 4,
     NACK_MOD_NUMLOCK  = 1u << 5
-} nack_mod;
+};
 
-typedef enum nack_mouse_button {
+enum nack_mouse_button {
     NACK_MOUSE_LEFT = 0,
     NACK_MOUSE_RIGHT = 1,
     NACK_MOUSE_MIDDLE = 2,
     NACK_MOUSE_X1 = 3,
     NACK_MOUSE_X2 = 4,
     NACK_MOUSE_BUTTON_COUNT = 8
-} nack_mouse_button;
+};
 
 /*
  * Physical key identifiers. Values are USB HID keyboard usage codes, so they
  * describe the *position* of the key rather than the symbol printed on it;
  * the symbol arrives separately as NACK_EVENT_TEXT.
  */
-typedef enum nack_key {
+enum nack_key {
     NACK_KEY_UNKNOWN = 0,
 
     NACK_KEY_A = 4, NACK_KEY_B, NACK_KEY_C, NACK_KEY_D, NACK_KEY_E, NACK_KEY_F,
@@ -197,9 +197,9 @@ typedef enum nack_key {
     NACK_KEY_RIGHT_SUPER = 231,
 
     NACK_KEY_COUNT = 256
-} nack_key;
+};
 
-typedef enum nack_cursor_shape {
+enum nack_cursor_shape {
     NACK_CURSOR_ARROW = 0,
     NACK_CURSOR_IBEAM,
     NACK_CURSOR_CROSSHAIR,
@@ -212,37 +212,38 @@ typedef enum nack_cursor_shape {
     NACK_CURSOR_NOT_ALLOWED,
     NACK_CURSOR_WAIT,
     NACK_CURSOR_SHAPE_COUNT
-} nack_cursor_shape;
+};
 
-typedef enum nack_cursor_mode {
+enum nack_cursor_mode {
     NACK_CURSOR_MODE_NORMAL = 0,
     NACK_CURSOR_MODE_HIDDEN,     /* hidden while over the window            */
     NACK_CURSOR_MODE_CAPTURED    /* hidden + confined, relative motion only */
-} nack_cursor_mode;
+};
 
-typedef enum nack_gl_profile {
+enum nack_gl_profile {
     NACK_GL_PROFILE_CORE = 0,
     NACK_GL_PROFILE_COMPAT,
     NACK_GL_PROFILE_ES
-} nack_gl_profile;
+};
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
 
-typedef struct nack_window nack_window;
-typedef struct nack_gl_context nack_gl_context;
+struct nack_window;
+struct nack_gl_context;
 
-typedef struct nack_event {
-    nack_event_type type;
-    nack_window *window;
+struct nack_event {
+    enum nack_event_type type;
+    struct nack_window *window;
     uint64_t time_ns;
+    /* Named rather than anonymous: anonymous members are C11, not C99. */
     union {
         struct { int width, height, fb_width, fb_height; } size;
         struct { int x, y; } move;
         struct { float scale; } scale;
         struct {
-            nack_key key;
+            enum nack_key key;
             uint32_t scancode;   /* raw platform scancode                    */
             uint32_t mods;
             bool repeat;
@@ -264,39 +265,39 @@ typedef struct nack_event {
             uint32_t mods;
             bool precise;        /* true for trackpads / high-res wheels     */
         } scroll;
-    };
-} nack_event;
+    } data;
+};
 
-typedef struct nack_init_desc {
+struct nack_init_desc {
     /* Preferred backend, or NACK_BACKEND_NONE to auto-detect. On Unix the
      * NACK_BACKEND environment variable ("wayland"/"x11") overrides this. */
-    nack_backend backend;
+    enum nack_backend backend;
     /* Application identifier: Wayland xdg app-id and X11 WM_CLASS. */
     const char *app_id;
     /* Optional diagnostic sink; receives NUL-terminated messages. */
     void (*log_fn)(const char *message, void *user_data);
     void *log_user_data;
-} nack_init_desc;
+};
 
 /*
  * Framebuffer format. This is a property of the window, not of the context:
  * on EGL and Wayland the window's visual is derived from the pixel format, so
  * it has to be fixed when the window is created.
  */
-typedef struct nack_framebuffer_desc {
+struct nack_framebuffer_desc {
     int red_bits, green_bits, blue_bits, alpha_bits;
     int depth_bits, stencil_bits;
     int samples;                  /* MSAA sample count, 0 = off              */
     bool srgb;
     bool double_buffer;
-} nack_framebuffer_desc;
+};
 
-typedef struct nack_window_desc {
+struct nack_window_desc {
     const char *title;
     int width, height;            /* logical pixels; <= 0 picks a default   */
     int min_width, min_height;    /* 0 = unconstrained                       */
     int max_width, max_height;    /* 0 = unconstrained                       */
-    int width_increment;          /* 0 = none (cell-size snapping)           */
+    int width_increment;          /* 0 = none (struct cell-size snapping)           */
     int height_increment;
     bool resizable;
     bool decorated;
@@ -305,36 +306,36 @@ typedef struct nack_window_desc {
     bool maximized;
     bool transparent;
     bool high_dpi;                /* opt in to a framebuffer at native DPI   */
-    nack_framebuffer_desc framebuffer;
+    struct nack_framebuffer_desc framebuffer;
     void *user_data;
-} nack_window_desc;
+};
 
 /* Context attributes. The framebuffer format comes from the window. */
-typedef struct nack_gl_desc {
+struct nack_gl_desc {
     int major, minor;             /* 0 = "any", library picks a sane default */
-    nack_gl_profile profile;
+    enum nack_gl_profile profile;
     bool debug;
     bool forward_compatible;
     bool robust;
-    nack_gl_context *share;
-} nack_gl_desc;
+    struct nack_gl_context *share;
+};
 
 /* -------------------------------------------------------------------------- */
 /* Library lifetime                                                           */
 /* -------------------------------------------------------------------------- */
 
-NACK_API bool         nack_init(const nack_init_desc *desc);
+NACK_API bool         nack_init(const struct nack_init_desc *desc);
 NACK_API void         nack_shutdown(void);
 NACK_API bool         nack_is_initialized(void);
-NACK_API nack_backend nack_get_backend(void);
-NACK_API const char  *nack_backend_name(nack_backend backend);
+NACK_API enum nack_backend nack_get_backend(void);
+NACK_API const char  *nack_backend_name(enum nack_backend backend);
 
 /* Last error for the calling thread; valid until the next failing call. */
-NACK_API nack_result  nack_get_error(const char **message);
+NACK_API enum nack_result  nack_get_error(const char **message);
 
-NACK_API void nack_window_desc_defaults(nack_window_desc *desc);
-NACK_API void nack_gl_desc_defaults(nack_gl_desc *desc);
-NACK_API void nack_framebuffer_desc_defaults(nack_framebuffer_desc *desc);
+NACK_API void nack_window_desc_defaults(struct nack_window_desc *desc);
+NACK_API void nack_gl_desc_defaults(struct nack_gl_desc *desc);
+NACK_API void nack_framebuffer_desc_defaults(struct nack_framebuffer_desc *desc);
 
 /* -------------------------------------------------------------------------- */
 /* Windows                                                                    */
@@ -347,78 +348,78 @@ NACK_API void nack_framebuffer_desc_defaults(nack_framebuffer_desc *desc);
  * least one frame (nack_gl_swap_buffers) after creating the window, or it will
  * appear to do nothing on a Wayland session.
  */
-NACK_API nack_window *nack_window_create(const nack_window_desc *desc);
-NACK_API void         nack_window_destroy(nack_window *window);
+NACK_API struct nack_window *nack_window_create(const struct nack_window_desc *desc);
+NACK_API void         nack_window_destroy(struct nack_window *window);
 
-NACK_API void  nack_window_show(nack_window *window);
-NACK_API void  nack_window_hide(nack_window *window);
-NACK_API void  nack_window_focus(nack_window *window);
-NACK_API void  nack_window_minimize(nack_window *window);
-NACK_API void  nack_window_maximize(nack_window *window);
-NACK_API void  nack_window_restore(nack_window *window);
-NACK_API void  nack_window_request_attention(nack_window *window);
+NACK_API void  nack_window_show(struct nack_window *window);
+NACK_API void  nack_window_hide(struct nack_window *window);
+NACK_API void  nack_window_focus(struct nack_window *window);
+NACK_API void  nack_window_minimize(struct nack_window *window);
+NACK_API void  nack_window_maximize(struct nack_window *window);
+NACK_API void  nack_window_restore(struct nack_window *window);
+NACK_API void  nack_window_request_attention(struct nack_window *window);
 
-NACK_API void  nack_window_set_title(nack_window *window, const char *title);
-NACK_API void  nack_window_set_size(nack_window *window, int width, int height);
-NACK_API void  nack_window_get_size(const nack_window *window, int *width, int *height);
-NACK_API void  nack_window_get_framebuffer_size(const nack_window *window, int *width, int *height);
-NACK_API void  nack_window_get_position(const nack_window *window, int *x, int *y);
-NACK_API void  nack_window_set_position(nack_window *window, int x, int y);
-NACK_API float nack_window_get_content_scale(const nack_window *window);
+NACK_API void  nack_window_set_title(struct nack_window *window, const char *title);
+NACK_API void  nack_window_set_size(struct nack_window *window, int width, int height);
+NACK_API void  nack_window_get_size(const struct nack_window *window, int *width, int *height);
+NACK_API void  nack_window_get_framebuffer_size(const struct nack_window *window, int *width, int *height);
+NACK_API void  nack_window_get_position(const struct nack_window *window, int *x, int *y);
+NACK_API void  nack_window_set_position(struct nack_window *window, int x, int y);
+NACK_API float nack_window_get_content_scale(const struct nack_window *window);
 
-NACK_API void  nack_window_set_size_limits(nack_window *window,
+NACK_API void  nack_window_set_size_limits(struct nack_window *window,
                                            int min_width, int min_height,
                                            int max_width, int max_height);
-NACK_API void  nack_window_set_size_increments(nack_window *window, int dw, int dh);
+NACK_API void  nack_window_set_size_increments(struct nack_window *window, int dw, int dh);
 
-NACK_API void  nack_window_set_fullscreen(nack_window *window, bool fullscreen);
-NACK_API bool  nack_window_is_fullscreen(const nack_window *window);
-NACK_API bool  nack_window_is_focused(const nack_window *window);
-NACK_API bool  nack_window_is_minimized(const nack_window *window);
-NACK_API bool  nack_window_is_maximized(const nack_window *window);
+NACK_API void  nack_window_set_fullscreen(struct nack_window *window, bool fullscreen);
+NACK_API bool  nack_window_is_fullscreen(const struct nack_window *window);
+NACK_API bool  nack_window_is_focused(const struct nack_window *window);
+NACK_API bool  nack_window_is_minimized(const struct nack_window *window);
+NACK_API bool  nack_window_is_maximized(const struct nack_window *window);
 
-NACK_API bool  nack_window_should_close(const nack_window *window);
-NACK_API void  nack_window_set_should_close(nack_window *window, bool value);
+NACK_API bool  nack_window_should_close(const struct nack_window *window);
+NACK_API void  nack_window_set_should_close(struct nack_window *window, bool value);
 
-NACK_API void *nack_window_get_user_data(const nack_window *window);
-NACK_API void  nack_window_set_user_data(nack_window *window, void *user_data);
+NACK_API void *nack_window_get_user_data(const struct nack_window *window);
+NACK_API void  nack_window_set_user_data(struct nack_window *window, void *user_data);
 
-NACK_API void  nack_window_set_cursor_shape(nack_window *window, nack_cursor_shape shape);
-NACK_API void  nack_window_set_cursor_mode(nack_window *window, nack_cursor_mode mode);
-NACK_API nack_cursor_mode nack_window_get_cursor_mode(const nack_window *window);
+NACK_API void  nack_window_set_cursor_shape(struct nack_window *window, enum nack_cursor_shape shape);
+NACK_API void  nack_window_set_cursor_mode(struct nack_window *window, enum nack_cursor_mode mode);
+NACK_API enum nack_cursor_mode nack_window_get_cursor_mode(const struct nack_window *window);
 
 /* Marks the whole window as needing a repaint; produces a WINDOW_EXPOSE. */
-NACK_API void  nack_window_request_redraw(nack_window *window);
+NACK_API void  nack_window_request_redraw(struct nack_window *window);
 
 /* -------------------------------------------------------------------------- */
 /* Events                                                                     */
 /* -------------------------------------------------------------------------- */
 
 /* Non-blocking: returns false when the queue is empty. */
-NACK_API bool nack_poll_event(nack_event *event);
+NACK_API bool nack_poll_event(struct nack_event *event);
 /* Blocks until at least one event is available. */
-NACK_API bool nack_wait_event(nack_event *event);
+NACK_API bool nack_wait_event(struct nack_event *event);
 /* Blocks for at most `timeout` seconds; returns false on timeout. */
-NACK_API bool nack_wait_event_timeout(nack_event *event, double timeout);
+NACK_API bool nack_wait_event_timeout(struct nack_event *event, double timeout);
 /* Thread-safe: unblocks a waiting nack_wait_event* and queues NACK_EVENT_WAKEUP. */
 NACK_API void nack_wakeup(void);
 
 /* Instantaneous input state, updated as events are generated. */
-NACK_API bool     nack_key_is_down(nack_key key);
+NACK_API bool     nack_key_is_down(enum nack_key key);
 NACK_API uint32_t nack_get_mods(void);
 NACK_API bool     nack_mouse_button_is_down(int button);
-NACK_API void     nack_get_mouse_position(nack_window *window, double *x, double *y);
+NACK_API void     nack_get_mouse_position(struct nack_window *window, double *x, double *y);
 
-NACK_API const char *nack_key_get_name(nack_key key);
+NACK_API const char *nack_key_get_name(enum nack_key key);
 
 /* -------------------------------------------------------------------------- */
 /* OpenGL                                                                     */
 /* -------------------------------------------------------------------------- */
 
-NACK_API nack_gl_context *nack_gl_context_create(nack_window *window, const nack_gl_desc *desc);
-NACK_API void  nack_gl_context_destroy(nack_gl_context *context);
-NACK_API bool  nack_gl_make_current(nack_window *window, nack_gl_context *context);
-NACK_API void  nack_gl_swap_buffers(nack_window *window);
+NACK_API struct nack_gl_context *nack_gl_context_create(struct nack_window *window, const struct nack_gl_desc *desc);
+NACK_API void  nack_gl_context_destroy(struct nack_gl_context *context);
+NACK_API bool  nack_gl_make_current(struct nack_window *window, struct nack_gl_context *context);
+NACK_API void  nack_gl_swap_buffers(struct nack_window *window);
 NACK_API void  nack_gl_set_swap_interval(int interval);
 /*
  * Resolves an OpenGL entry point. Suitable as the loader callback for glad,
@@ -456,14 +457,14 @@ NACK_API double   nack_time_seconds(void);
 /* Native handles (for interop; fields are backend-specific)                  */
 /* -------------------------------------------------------------------------- */
 
-typedef struct nack_native_window {
-    nack_backend backend;
+struct nack_native_window {
+    enum nack_backend backend;
     void *display;      /* Display* / wl_display* / NULL                     */
     void *surface;      /* wl_surface* / NSWindow* / HWND                    */
     uintptr_t handle;   /* X11 Window id / HWND / 0                          */
-} nack_native_window;
+};
 
-NACK_API void nack_window_get_native(const nack_window *window, nack_native_window *out);
+NACK_API void nack_window_get_native(const struct nack_window *window, struct nack_native_window *out);
 
 #if defined(__cplusplus)
 }

@@ -24,7 +24,7 @@ static void log_message(const char *message, void *user_data)
 
 int main(void)
 {
-    nack_init_desc init = { .app_id = "nack.hello", .log_fn = log_message };
+    struct nack_init_desc init = { .app_id = "nack.hello", .log_fn = log_message };
     if (!nack_init(&init)) {
         const char *message = NULL;
         nack_get_error(&message);
@@ -32,13 +32,13 @@ int main(void)
         return 1;
     }
 
-    nack_window_desc desc;
+    struct nack_window_desc desc;
     nack_window_desc_defaults(&desc);
     desc.title = "libnack - hello";
     desc.width = 960;
     desc.height = 600;
 
-    nack_window *window = nack_window_create(&desc);
+    struct nack_window *window = nack_window_create(&desc);
     if (!window) {
         const char *message = NULL;
         nack_get_error(&message);
@@ -49,9 +49,9 @@ int main(void)
 
     printf("backend: %s\n", nack_backend_name(nack_get_backend()));
 
-    nack_gl_desc gl_desc;
+    struct nack_gl_desc gl_desc;
     nack_gl_desc_defaults(&gl_desc);
-    nack_gl_context *context = nack_gl_context_create(window, &gl_desc);
+    struct nack_gl_context *context = nack_gl_context_create(window, &gl_desc);
     if (!context) {
         const char *message = NULL;
         nack_get_error(&message);
@@ -78,7 +78,7 @@ int main(void)
     bool needs_redraw = true;
 
     while (!nack_window_should_close(window)) {
-        nack_event event;
+        struct nack_event event;
         if (!nack_wait_event(&event))
             break;
 
@@ -86,33 +86,33 @@ int main(void)
             switch (event.type) {
             case NACK_EVENT_WINDOW_RESIZE:
                 printf("resize %dx%d (framebuffer %dx%d)\n",
-                       event.size.width, event.size.height,
-                       event.size.fb_width, event.size.fb_height);
+                       event.data.size.width, event.data.size.height,
+                       event.data.size.fb_width, event.data.size.fb_height);
                 needs_redraw = true;
                 break;
             case NACK_EVENT_WINDOW_EXPOSE:
                 needs_redraw = true;
                 break;
             case NACK_EVENT_WINDOW_SCALE:
-                printf("content scale is now %.2f\n", (double)event.scale.scale);
+                printf("content scale is now %.2f\n", (double)event.data.scale.scale);
                 needs_redraw = true;
                 break;
             case NACK_EVENT_KEY_DOWN:
-                printf("key down: %s%s\n", nack_key_get_name(event.key.key),
-                       event.key.repeat ? " (repeat)" : "");
-                if (event.key.key == NACK_KEY_ESCAPE)
+                printf("key down: %s%s\n", nack_key_get_name(event.data.key.key),
+                       event.data.key.repeat ? " (repeat)" : "");
+                if (event.data.key.key == NACK_KEY_ESCAPE)
                     nack_window_set_should_close(window, true);
                 break;
             case NACK_EVENT_TEXT:
-                printf("text: %s\n", event.text.utf8);
+                printf("text: %s\n", event.data.text.utf8);
                 break;
             case NACK_EVENT_MOUSE_DOWN:
                 printf("mouse %d down at %.0f,%.0f (%d clicks)\n",
-                       event.button.button, event.button.x, event.button.y,
-                       event.button.click_count);
+                       event.data.button.button, event.data.button.x, event.data.button.y,
+                       event.data.button.click_count);
                 break;
             case NACK_EVENT_MOUSE_SCROLL:
-                printf("scroll %.2f,%.2f\n", event.scroll.dx, event.scroll.dy);
+                printf("scroll %.2f,%.2f\n", event.data.scroll.dx, event.data.scroll.dy);
                 break;
             case NACK_EVENT_WINDOW_FOCUS:
                 printf("focused\n");

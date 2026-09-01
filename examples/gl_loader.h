@@ -152,14 +152,15 @@ static GLuint nack_example_compile(GLenum stage, const char *source)
 static GLuint nack_example_program(const char *vertex_source,
                                    const char *fragment_source)
 {
-    GLuint vertex = nack_example_compile(GL_VERTEX_SHADER, vertex_source);
-    GLuint fragment = nack_example_compile(GL_FRAGMENT_SHADER, fragment_source);
-    if (!vertex || !fragment)
+    GLuint vertex_shader = nack_example_compile(GL_VERTEX_SHADER, vertex_source);
+    GLuint fragment_shader = nack_example_compile(GL_FRAGMENT_SHADER,
+                                                  fragment_source);
+    if (!vertex_shader || !fragment_shader)
         return 0;
 
     GLuint program = glCreateProgram();
-    glAttachShader(program, vertex);
-    glAttachShader(program, fragment);
+    glAttachShader(program, vertex_shader);
+    glAttachShader(program, fragment_shader);
     glLinkProgram(program);
 
     GLint status = 0;
@@ -172,8 +173,8 @@ static GLuint nack_example_program(const char *vertex_source,
         program = 0;
     }
 
-    glDeleteShader(vertex);
-    glDeleteShader(fragment);
+    glDeleteShader(vertex_shader);
+    glDeleteShader(fragment_shader);
     return program;
 }
 
