@@ -113,7 +113,7 @@ jobs:
         run: ctest --test-dir build -R win32_abi --output-on-failure
 
   macos:
-    name: macos (metal)
+    name: macos (metal, opengl fallback compiled in)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -121,13 +121,19 @@ jobs:
         run: cmake -S . -B build
       - name: Build
         run: cmake --build build
+      # Neither the author nor CI has a Mac to develop on, so running the
+      # smoke test here is the only thing that ever executes the Metal path.
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
 
   macos-opengl:
-    name: macos (opengl fallback)
+    name: macos (opengl only)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -S . -B build -DNACK_MACOS_USE_OPENGL=ON
+        run: cmake -S . -B build -DNACK_MACOS_OPENGL_ONLY=ON
       - name: Build
         run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure

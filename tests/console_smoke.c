@@ -5,6 +5,7 @@
  */
 #include "nack/nack.h"
 #include "console/nack_console_internal.h"
+#include "console/nack_gfx.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -34,10 +35,33 @@ int main(void)
     config.vsync = false;
 
     if (!nack_init(&config)) {
-        fprintf(stderr, "nack_init failed: %s\n", nack_get_error());
+        const char *why = nack_get_error();
+
+        if (!why)
+            why = "no reason given";
+        /*
+         * No display is the build machine's problem, not the library's, so
+         * report it to ctest as a skip. Anything else - a renderer that will
+         * not start, above all - is a real failure and has to be one, because
+         * this is the only test that runs the whole stack.
+         */
+        if (strncmp(why, "cannot open a window", 20) == 0 ||
+            strncmp(why, "cannot create a window", 22) == 0) {
+            printf("no display available (%s), skipping\n", why);
+            return 77;
+        }
+        fprintf(stderr, "nack_init failed: %s\n", why);
         return 1;
     }
+    printf("rendering with the %s backend\n", nack__gfx_name());
     check(1, "nack_init with the built-in font");
+    /*
+     * Under NACK_RENDERER=test-fail the preferred renderer refuses to start,
+     * which is how the fallback gets exercised on a machine with only one real
+     * one. Either way, what ends up active must be a renderer that works.
+     */
+    check(strcmp(nack__gfx_name(), "test-fail") != 0,
+          "a working renderer is active");
 
     nack_console_size(NULL, &columns, &rows);
     check(columns == 40 && rows == 20, "root console has the requested size");

@@ -5,6 +5,11 @@
  * that will still be there in a few years. The console layer above this is
  * unchanged: it produces the same quads and calls the same interface.
  *
+ * The OpenGL backend is compiled into the macOS build too, and nack_gfx.c
+ * falls back to it if anything here refuses to start. Restoring the view is
+ * therefore part of the contract: nack__mtl_shutdown has to undo whatever
+ * nack__mtl_init managed to do, however far it got.
+ *
  * The shaders are Metal Shading Language, which is C++ based - that is not a
  * choice, it is the only shading language Metal accepts. No host code here is
  * anything but Objective-C.
@@ -19,7 +24,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct nack_texture {
+/*
+ * A texture is opaque to everything above, and both backends are linked
+ * together here, so each keeps its own type rather than two definitions of one
+ * tag. Only the backend that made a texture ever looks inside it.
+ */
+struct nack__mtl_texture {
     id<MTLTexture> texture;
 };
 
@@ -116,12 +126,7 @@ struct nack_uniforms {
     int padding;         /* keep the struct 16-byte aligned for Metal */
 };
 
-const char *nack__gfx_name(void)
-{
-    return "metal";
-}
-
-bool nack__gfx_init(struct nack_window *window)
+static bool nack__mtl_init(struct nack_window *window)
 {
     @autoreleasepool {
         struct nack_native_window native;
@@ -221,7 +226,7 @@ bool nack__gfx_init(struct nack_window *window)
     }
 }
 
-void nack__gfx_shutdown(void)
+static void nack__mtl_shutdown(void)
 {
     @autoreleasepool {
         [nack__mtl.vertices release];
@@ -240,14 +245,14 @@ void nack__gfx_shutdown(void)
     }
 }
 
-struct nack_texture *nack__gfx_texture_create(const uint8_t *rgba, int width,
-                                              int height)
+static struct nack_texture *nack__mtl_texture_create(const uint8_t *rgba,
+                                                     int width, int height)
 {
     @autoreleasepool {
-        struct nack_texture *texture;
+        struct nack__mtl_texture *texture;
         MTLTextureDescriptor *descriptor;
 
-        texture = (struct nack_texture *)calloc(1, sizeof *texture);
+        texture = (struct nack__mtl_texture *)calloc(1, sizeof *texture);
         if (!texture) {
             nack__error("out of memory");
             return NULL;
@@ -272,21 +277,24 @@ struct nack_texture *nack__gfx_texture_create(const uint8_t *rgba, int width,
                             mipmapLevel:0
                               withBytes:rgba
                             bytesPerRow:(NSUInteger)width * 4];
-        return texture;
+        return (struct nack_texture *)texture;
     }
 }
 
-void nack__gfx_texture_destroy(struct nack_texture *texture)
+static void nack__mtl_texture_destroy(struct nack_texture *handle)
 {
+    struct nack__mtl_texture *texture = (struct nack__mtl_texture *)handle;
+
     if (!texture)
         return;
     [texture->texture release];
     free(texture);
 }
 
-void nack__gfx_begin_frame(struct nack_color clear, int fb_width, int fb_height,
-                           int viewport_x, int viewport_y, int viewport_w,
-                           int viewport_h)
+static void nack__mtl_begin_frame(struct nack_color clear, int fb_width,
+                                  int fb_height, int viewport_x,
+                                  int viewport_y, int viewport_w,
+                                  int viewport_h)
 {
     @autoreleasepool {
         MTLRenderPassDescriptor *pass;
@@ -368,9 +376,10 @@ static bool nack__reserve(size_t vertex_count)
     return true;
 }
 
-void nack__gfx_draw(const float *vertices, size_t vertex_count, int mode,
-                    struct nack_texture *texture)
+static void nack__mtl_draw(const float *vertices, size_t vertex_count,
+                           int mode, struct nack_texture *handle)
 {
+    struct nack__mtl_texture *texture = (struct nack__mtl_texture *)handle;
     struct nack_uniforms uniforms;
 
     if (!nack__mtl.encoder || vertex_count == 0)
@@ -397,7 +406,7 @@ void nack__gfx_draw(const float *vertices, size_t vertex_count, int mode,
                           vertexCount:(NSUInteger)vertex_count];
 }
 
-void nack__gfx_end_frame(void)
+static void nack__mtl_end_frame(void)
 {
     @autoreleasepool {
         if (!nack__mtl.encoder)
@@ -422,7 +431,7 @@ void nack__gfx_end_frame(void)
     }
 }
 
-void nack__gfx_resize(int fb_width, int fb_height)
+static void nack__mtl_resize(int fb_width, int fb_height)
 {
     @autoreleasepool {
         nack__mtl.fb_width = fb_width;
@@ -432,7 +441,7 @@ void nack__gfx_resize(int fb_width, int fb_height)
     }
 }
 
-void nack__gfx_set_vsync(bool vsync)
+static void nack__mtl_set_vsync(bool vsync)
 {
     nack__mtl.vsync = vsync;
     if (!nack__mtl.layer)
@@ -442,7 +451,7 @@ void nack__gfx_set_vsync(bool vsync)
         nack__mtl.layer.displaySyncEnabled = vsync ? YES : NO;
 }
 
-bool nack__gfx_read_pixel(int x, int y, uint8_t rgba[4])
+static bool nack__mtl_read_pixel(int x, int y, uint8_t rgba[4])
 {
     @autoreleasepool {
         uint8_t bgra[4] = { 0, 0, 0, 0 };
@@ -484,4 +493,23 @@ bool nack__gfx_read_pixel(int x, int y, uint8_t rgba[4])
         rgba[3] = bgra[3];
         return true;
     }
+}
+
+static const struct nack_gfx_backend nack__mtl_backend = {
+    "metal",
+    nack__mtl_init,
+    nack__mtl_shutdown,
+    nack__mtl_texture_create,
+    nack__mtl_texture_destroy,
+    nack__mtl_begin_frame,
+    nack__mtl_draw,
+    nack__mtl_end_frame,
+    nack__mtl_resize,
+    nack__mtl_set_vsync,
+    nack__mtl_read_pixel
+};
+
+const struct nack_gfx_backend *nack__gfx_backend_metal(void)
+{
+    return &nack__mtl_backend;
 }

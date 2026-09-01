@@ -12,6 +12,12 @@
 
 struct nack_console_state nack__c;
 
+static void nack__log_to_stderr(const char *message, void *user_data)
+{
+    (void)user_data;
+    fprintf(stderr, "%s\n", message);
+}
+
 bool nack__error(const char *fmt, ...)
 {
     va_list args;
@@ -20,6 +26,12 @@ bool nack__error(const char *fmt, ...)
     va_end(args);
     nack__c.has_error = true;
     return false;
+}
+
+void nack__clear_error(void)
+{
+    nack__c.has_error = false;
+    nack__c.error[0] = '\0';
 }
 
 const char *nack_get_error(void)
@@ -79,6 +91,14 @@ bool nack_init(const struct nack_config *config)
 
     memset(&init, 0, sizeof init);
     init.app_id = cfg.title;
+    /*
+     * The public API has nowhere to hand a log callback, so the diagnostics -
+     * which backend was picked, which renderer, why one of them was passed
+     * over - are behind an environment variable instead. It is the only way a
+     * user can tell us what happened on a machine we cannot reach.
+     */
+    if (getenv("NACK_DEBUG"))
+        init.log_fn = nack__log_to_stderr;
     if (!nack__win_init(&init)) {
         const char *message = NULL;
         nack__win_get_error(&message);

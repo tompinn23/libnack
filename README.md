@@ -154,13 +154,26 @@ is Mesa-only. Where that extension exists the connection stays pure XCB.
 `-DNACK_XCB_XLIB_FALLBACK=OFF` drops the dependency, at the cost of EGL on
 NVIDIA. GLX is not used.
 
-**macOS renders with Metal.** Apple deprecated OpenGL in 10.14 and capped it
-at 4.1, so the console draws through Metal there: a `CAMetalLayer` on the
-window's view, one pipeline built from Metal Shading Language at startup, and
-the same quads the OpenGL backend gets. `-DNACK_MACOS_USE_OPENGL=ON` selects
-the OpenGL renderer instead, and CI builds both. The renderer sits behind an
-internal interface (`src/console/nack_gfx.h`), so the console layer is unaware
-of which one it is talking to.
+**macOS renders with Metal, and falls back to OpenGL.** Apple deprecated
+OpenGL in 10.14 and capped it at 4.1, so the console prefers Metal there: a
+`CAMetalLayer` on the window's view, one pipeline built from Metal Shading
+Language at startup, and the same quads the OpenGL backend gets. Both
+renderers are compiled into the macOS build and the choice is made at run
+time; if Metal cannot start, the OpenGL renderer takes the window over and the
+library keeps working. `-DNACK_MACOS_OPENGL_ONLY=ON` leaves Metal out
+altogether, and CI builds and tests both configurations. The renderer sits
+behind an internal interface (`src/console/nack_gfx.h`), so the console layer
+is unaware of which one it is talking to.
+
+**Environment variables.** All of these are diagnostic escape hatches, meant
+for reporting or working around a problem without a rebuild.
+
+| Variable | Effect |
+| --- | --- |
+| `NACK_DEBUG=1` | Writes the backend and renderer chosen, and why anything was passed over, to stderr. |
+| `NACK_BACKEND=wayland\|x11` | Forces the windowing backend on Unix. |
+| `NACK_RENDERER=metal\|opengl` | Tries that renderer first; the others stay behind it as fallbacks. |
+| `NACK_WAYLAND_FORCE_CSD=1` | Draws libnack's own decorations even where xdg-decoration exists. |
 
 **Wayland decorations.** xdg-decoration is optional and some compositors never
 implement it (Mutter and WSLg among them). Where it is missing, libnack draws

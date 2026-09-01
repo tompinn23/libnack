@@ -3,7 +3,10 @@
  *
  * There are two implementations: OpenGL 3.3 (nack_gfx_gl.c) everywhere, and
  * Metal (nack_gfx_metal.m) on macOS, where OpenGL is deprecated and capped at
- * 4.1. Exactly one is compiled in, chosen by the build.
+ * 4.1. On macOS both are compiled in and selected at run time, so a Metal
+ * failure falls back to OpenGL rather than leaving the library with nothing to
+ * draw with. Elsewhere there is only OpenGL and the indirection costs a handful
+ * of calls per frame.
  *
  * The console layer above this knows nothing about either API: it produces
  * quads and hands them over.
@@ -19,6 +22,33 @@
 
 /* An atlas, whatever the backend calls one. */
 struct nack_texture;
+
+/*
+ * One renderer. Mirrors how the window layer selects its platform backend, for
+ * the same reason: the choice cannot always be made at build time.
+ */
+struct nack_gfx_backend {
+    const char *name;
+    bool (*init)(struct nack_window *window);
+    void (*shutdown)(void);
+    struct nack_texture *(*texture_create)(const uint8_t *rgba, int width,
+                                           int height);
+    void (*texture_destroy)(struct nack_texture *texture);
+    void (*begin_frame)(struct nack_color clear, int fb_width, int fb_height,
+                        int viewport_x, int viewport_y, int viewport_w,
+                        int viewport_h);
+    void (*draw)(const float *vertices, size_t vertex_count, int mode,
+                 struct nack_texture *texture);
+    void (*end_frame)(void);
+    void (*resize)(int fb_width, int fb_height);
+    void (*set_vsync)(bool vsync);
+    bool (*read_pixel)(int x, int y, uint8_t rgba[4]);
+};
+
+const struct nack_gfx_backend *nack__gfx_backend_gl(void);
+#if defined(__APPLE__)
+const struct nack_gfx_backend *nack__gfx_backend_metal(void);
+#endif
 
 /*
  * Brings up the device, swap chain and pipeline for the window. The window

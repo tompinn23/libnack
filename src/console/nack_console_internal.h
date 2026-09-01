@@ -80,6 +80,9 @@ extern struct nack_console_state nack__c;
 /* Sets the error reported by nack_get_error and returns false. */
 bool nack__error(const char *fmt, ...);
 
+/* Forgets it again, for a failure that was recovered from. */
+void nack__clear_error(void);
+
 /* nack_tileset.c */
 struct nack_tileset *nack__tileset_from_rgba(uint8_t *rgba, int width, int height,
                                              int tile_width, int tile_height,

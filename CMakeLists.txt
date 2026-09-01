@@ -22,8 +22,8 @@ cmake_dependent_option(NACK_ENABLE_XCB
     "Build the XCB backend" ON "UNIX;NOT APPLE" OFF)
 cmake_dependent_option(NACK_ENABLE_WAYLAND
     "Build the Wayland backend" ON "UNIX;NOT APPLE" OFF)
-option(NACK_MACOS_USE_OPENGL
-    "Use the OpenGL renderer on macOS instead of Metal" OFF)
+option(NACK_MACOS_OPENGL_ONLY
+    "Leave the Metal renderer out of the macOS build and always use OpenGL" OFF)
 
 option(NACK_WIN32_USE_SDK_HEADERS
     "Use <windows.h> instead of libnack's hand-rolled Win32 declarations" OFF)
@@ -44,14 +44,16 @@ set(NACK_SOURCES
     src/console/nack_console.c
     src/console/nack_png.c
     src/console/nack_render.c
-    src/console/nack_tileset.c)
+    src/console/nack_tileset.c
+    src/console/nack_gfx.c
+    src/console/nack_gfx_gl.c
+    src/console/nack_gl.c)
 
-# Exactly one graphics backend is compiled in. macOS defaults to Metal, since
-# Apple deprecated OpenGL and capped it at 4.1.
-if(APPLE AND NOT NACK_MACOS_USE_OPENGL)
+# macOS gets both renderers and picks between them at run time: Metal first,
+# because Apple deprecated OpenGL and capped it at 4.1, but OpenGL still there
+# to fall back on. Everywhere else there is only OpenGL.
+if(APPLE AND NOT NACK_MACOS_OPENGL_ONLY)
     list(APPEND NACK_SOURCES src/console/nack_gfx_metal.m)
-else()
-    list(APPEND NACK_SOURCES src/console/nack_gfx_gl.c src/console/nack_gl.c)
 endif()
 
 set(NACK_LIBRARIES "")
@@ -154,7 +156,9 @@ elseif(APPLE)
     list(APPEND NACK_LIBRARIES
         ${COCOA_FRAMEWORK} ${QUARTZCORE_FRAMEWORK}
         ${OPENGL_FRAMEWORK} ${IOKIT_FRAMEWORK})
-    if(NOT NACK_MACOS_USE_OPENGL)
+    if(NACK_MACOS_OPENGL_ONLY)
+        list(APPEND NACK_DEFINITIONS NACK_MACOS_OPENGL_ONLY=1)
+    else()
         find_library(METAL_FRAMEWORK Metal REQUIRED)
         list(APPEND NACK_LIBRARIES ${METAL_FRAMEWORK})
     endif()
@@ -244,6 +248,17 @@ if(PROJECT_IS_TOP_LEVEL)
     set_target_properties(nack_smoke PROPERTIES
         C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
     add_test(NAME smoke COMMAND nack_smoke)
+    # The test tells a machine with no display (exit 77) apart from a real
+    # failure; only the first is allowed to pass silently.
+    set_tests_properties(smoke PROPERTIES SKIP_RETURN_CODE 77)
+
+    # The same test with the preferred renderer refusing to start. macOS is
+    # the only platform with two renderers to choose between and neither the
+    # author nor CI develops there, so this is what keeps the fallback honest.
+    add_test(NAME smoke_renderer_fallback COMMAND nack_smoke)
+    set_tests_properties(smoke_renderer_fallback PROPERTIES
+        ENVIRONMENT "NACK_RENDERER=test-fail"
+        SKIP_RETURN_CODE 77)
 
     add_executable(nack_png_test tests/png_test.c src/console/nack_png.c)
     target_include_directories(nack_png_test PRIVATE

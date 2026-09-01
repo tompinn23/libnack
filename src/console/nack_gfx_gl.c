@@ -12,7 +12,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct nack_texture {
+/*
+ * A texture is opaque to everything above, and on macOS both backends are
+ * linked together, so each keeps its own type rather than two definitions of
+ * one tag. Only the backend that made a texture ever looks inside it.
+ */
+struct nack__gl_texture {
     nack_gluint id;
 };
 
@@ -66,11 +71,6 @@ static const char *nack__fragment_source =
     "    if (frag_colour.a <= 0.0) discard;\n"
     "}\n";
 
-const char *nack__gfx_name(void)
-{
-    return "opengl";
-}
-
 static nack_gluint nack__compile(nack_glenum stage, const char *source)
 {
     nack_gluint shader = glCreateShader(stage);
@@ -89,7 +89,7 @@ static nack_gluint nack__compile(nack_glenum stage, const char *source)
     return shader;
 }
 
-bool nack__gfx_init(struct nack_window *window)
+static bool nack__glr_init(struct nack_window *window)
 {
     struct nack__gl_desc desc;
     const char *missing = NULL;
@@ -172,7 +172,7 @@ bool nack__gfx_init(struct nack_window *window)
     return true;
 }
 
-void nack__gfx_shutdown(void)
+static void nack__glr_shutdown(void)
 {
     if (nack__gl.vbo) glDeleteBuffers(1, &nack__gl.vbo);
     if (nack__gl.vao) glDeleteVertexArrays(1, &nack__gl.vao);
@@ -181,11 +181,11 @@ void nack__gfx_shutdown(void)
     memset(&nack__gl, 0, sizeof nack__gl);
 }
 
-struct nack_texture *nack__gfx_texture_create(const uint8_t *rgba, int width,
-                                              int height)
+static struct nack_texture *nack__glr_texture_create(const uint8_t *rgba,
+                                                     int width, int height)
 {
-    struct nack_texture *texture =
-        (struct nack_texture *)calloc(1, sizeof *texture);
+    struct nack__gl_texture *texture =
+        (struct nack__gl_texture *)calloc(1, sizeof *texture);
 
     if (!texture) {
         nack__error("out of memory");
@@ -202,11 +202,13 @@ struct nack_texture *nack__gfx_texture_create(const uint8_t *rgba, int width,
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    return texture;
+    return (struct nack_texture *)texture;
 }
 
-void nack__gfx_texture_destroy(struct nack_texture *texture)
+static void nack__glr_texture_destroy(struct nack_texture *handle)
 {
+    struct nack__gl_texture *texture = (struct nack__gl_texture *)handle;
+
     if (!texture)
         return;
     if (texture->id)
@@ -214,9 +216,10 @@ void nack__gfx_texture_destroy(struct nack_texture *texture)
     free(texture);
 }
 
-void nack__gfx_begin_frame(struct nack_color clear, int fb_width, int fb_height,
-                           int viewport_x, int viewport_y, int viewport_w,
-                           int viewport_h)
+static void nack__glr_begin_frame(struct nack_color clear, int fb_width,
+                                  int fb_height, int viewport_x,
+                                  int viewport_y, int viewport_w,
+                                  int viewport_h)
 {
     nack__gl.viewport_w = viewport_w;
     nack__gl.viewport_h = viewport_h;
@@ -238,9 +241,11 @@ void nack__gfx_begin_frame(struct nack_color clear, int fb_width, int fb_height,
     glActiveTexture(GL_TEXTURE0);
 }
 
-void nack__gfx_draw(const float *vertices, size_t vertex_count, int mode,
-                    struct nack_texture *texture)
+static void nack__glr_draw(const float *vertices, size_t vertex_count,
+                           int mode, struct nack_texture *handle)
 {
+    struct nack__gl_texture *texture = (struct nack__gl_texture *)handle;
+
     if (vertex_count == 0)
         return;
 
@@ -255,23 +260,23 @@ void nack__gfx_draw(const float *vertices, size_t vertex_count, int mode,
     glDrawArrays(GL_TRIANGLES, 0, (nack_glsizei)vertex_count);
 }
 
-void nack__gfx_end_frame(void)
+static void nack__glr_end_frame(void)
 {
     nack__gl_swap_buffers(nack__gl.window);
 }
 
-void nack__gfx_resize(int fb_width, int fb_height)
+static void nack__glr_resize(int fb_width, int fb_height)
 {
     (void)fb_width;
     nack__gl.fb_height = fb_height;
 }
 
-void nack__gfx_set_vsync(bool vsync)
+static void nack__glr_set_vsync(bool vsync)
 {
     nack__gl_set_swap_interval(vsync ? 1 : 0);
 }
 
-bool nack__gfx_read_pixel(int x, int y, uint8_t rgba[4])
+static bool nack__glr_read_pixel(int x, int y, uint8_t rgba[4])
 {
     if (!nack__gl.program)
         return false;
@@ -279,4 +284,23 @@ bool nack__gfx_read_pixel(int x, int y, uint8_t rgba[4])
     glReadPixels(x, nack__gl.fb_height - 1 - y, 1, 1, GL_RGBA,
                  GL_UNSIGNED_BYTE, rgba);
     return true;
+}
+
+static const struct nack_gfx_backend nack__glr_backend = {
+    "opengl",
+    nack__glr_init,
+    nack__glr_shutdown,
+    nack__glr_texture_create,
+    nack__glr_texture_destroy,
+    nack__glr_begin_frame,
+    nack__glr_draw,
+    nack__glr_end_frame,
+    nack__glr_resize,
+    nack__glr_set_vsync,
+    nack__glr_read_pixel
+};
+
+const struct nack_gfx_backend *nack__gfx_backend_gl(void)
+{
+    return &nack__glr_backend;
 }
