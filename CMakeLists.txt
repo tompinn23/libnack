@@ -300,7 +300,7 @@ if(PROJECT_IS_TOP_LEVEL)
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_BINARY_DIR})
         set_target_properties(nack_cpp_smoke PROPERTIES
-            CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+            CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
         if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
             target_compile_options(nack_cpp_smoke PRIVATE
                 -Wall -Wextra -Wpedantic)
@@ -309,6 +309,30 @@ if(PROJECT_IS_TOP_LEVEL)
         endif()
         add_test(NAME cpp COMMAND nack_cpp_smoke)
         set_tests_properties(cpp PROPERTIES SKIP_RETURN_CODE 77)
+
+        #
+        # A format string that does not match its arguments must be rejected
+        # where it is written. That cannot be asserted from inside a program
+        # that has to compile, so the bad call lives in its own target which
+        # is left out of the default build, and the test is that building it
+        # fails. WILL_FAIL inverts the result.
+        #
+        # An OBJECT library rather than an executable, deliberately: an
+        # executable with no main() fails to *link* whatever the format string
+        # says, which would make this test pass for a reason that has nothing
+        # to do with {fmt}. Only the compile is allowed to decide.
+        #
+        add_library(nack_cpp_bad_format OBJECT EXCLUDE_FROM_ALL
+            tests/cpp_bad_format.cpp)
+        target_link_libraries(nack_cpp_bad_format PRIVATE nack_fmt)
+        target_include_directories(nack_cpp_bad_format PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include)
+        set_target_properties(nack_cpp_bad_format PROPERTIES
+            CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+        add_test(NAME cpp_format_rejected
+            COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+                    --target nack_cpp_bad_format --config $<CONFIG>)
+        set_tests_properties(cpp_format_rejected PROPERTIES WILL_FAIL TRUE)
     else()
         message(STATUS "No C++ compiler: the C++ header test will be skipped")
     endif()

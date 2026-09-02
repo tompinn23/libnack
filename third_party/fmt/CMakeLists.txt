@@ -10,3 +10,13 @@ add_library(nack_fmt INTERFACE)
 
 target_include_directories(nack_fmt INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(nack_fmt INTERFACE FMT_HEADER_ONLY=1)
+
+#
+# {fmt} static_asserts that MSVC is building with /utf-8, because without it
+# MSVC reads the source in the system code page and its Unicode handling is
+# wrong. GCC and Clang are UTF-8 already and need nothing. INTERFACE, because
+# it is whoever includes the header that has to be compiled that way.
+#
+if(MSVC)
+    target_compile_options(nack_fmt INTERFACE /utf-8)
+endif()

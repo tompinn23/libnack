@@ -101,24 +101,15 @@ int main()
     check(app->console().print(0, 9, nack::white, nack::black, "{:>6.2f}|",
                                3.14159) == 7,
           "fmt's own formatting reaches the console");
-#if NACK_HPP_EXCEPTIONS
     /*
-     * A format string that does not match its arguments. Under C++20 this
-     * would not compile at all; under C++17, which is what the header asks
-     * for, {fmt}'s consteval checking is unavailable and it throws instead.
-     * Either is fine. Silently printing rubbish, which is what varargs did,
-     * is not - so the behaviour is pinned here rather than assumed.
+     * A format string that does not match its arguments cannot be tested from
+     * here any more, because under C++20 it does not compile - which is the
+     * point. tests/cpp_bad_format.cpp holds that case and the
+     * cpp_format_rejected test builds it and expects the build to fail.
      */
-    {
-        bool caught = false;
-        try {
-            app->console().print(0, 10, nack::white, nack::black, "{} {}", 1);
-        } catch (const fmt::format_error &) {
-            caught = true;
-        }
-        check(caught, "a format string that does not match is refused");
-    }
-#endif
+    static_assert(__cplusplus >= 202002L,
+                  "the C++ header wants C++20 so {fmt} checks format strings "
+                  "at compile time");
 
     /* Owning consoles free themselves, and work with the same helper. */
     {
@@ -196,7 +187,7 @@ int main()
 
         raw = ::nack_event{};
         raw.type = NACK_EVENT_TEXT;
-        std::strcpy(raw.data.text.utf8, "\xE2\x94\x80");
+        std::memcpy(raw.data.text.utf8, "\xE2\x94\x80", 4);   /* with the NUL */
         ev = nack::detail::to_event(raw);
         const auto *text = std::get_if<nack::text_event>(&*ev);
         check(text && text->text() == "\xE2\x94\x80",
