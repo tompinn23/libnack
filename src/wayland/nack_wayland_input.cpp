@@ -714,7 +714,7 @@ void nack__wl_seat_bind(uint32_t name, uint32_t version)
     if (nack__wl.seat)
         return;
 
-    nack__wl.seat = wl_registry_bind(nack__wl.registry, name, &wl_seat_interface,
+    nack__wl.seat = (struct wl_seat *)wl_registry_bind(nack__wl.registry, name, &wl_seat_interface,
                                      version);
     wl_seat_add_listener(nack__wl.seat, &nack__wl_seat_listener, NULL);
 

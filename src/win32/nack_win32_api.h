@@ -28,6 +28,15 @@ build with -DNACK_WIN32_USE_SDK_HEADERS=ON to use the SDK headers instead"
 #include <stddef.h>
 #include <stdint.h>
 
+/*
+ * libnack is C++ now, but its API is C and its tests and examples are C, so
+ * these declarations keep C linkage. This is what lets a C program - and
+ * anything binding through a C ABI - keep using the library unchanged.
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* ------------------------------------------------------------------ */
 /* Calling convention and linkage                                     */
 /* ------------------------------------------------------------------ */
@@ -506,4 +515,8 @@ NACK_WINIMPORT BOOL WINAPI SwapBuffers(HDC);
 NACK_WINIMPORT HGLRC WINAPI wglGetCurrentContext(void);
 NACK_WINIMPORT HDC   WINAPI wglGetCurrentDC(void);
 
+
+#ifdef __cplusplus
+}   /* extern "C" */
+#endif
 #endif /* NACK_WIN32_API_H_INCLUDED */

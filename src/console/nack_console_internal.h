@@ -4,6 +4,15 @@
 #include "../nack_internal.h"
 #include "nack_gfx.h"
 
+/*
+ * libnack is C++ now, but its API is C and its tests and examples are C, so
+ * these declarations keep C linkage. This is what lets a C program - and
+ * anything binding through a C ABI - keep using the library unchanged.
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define NACK_MAX_TILESETS 16
 
 /*
@@ -11,6 +20,16 @@
  * in it. Fonts and graphical tilesets differ only in how the renderer tints
  * them, which is decided at load time from the image's contents.
  */
+/*
+ * One codepoint's tile. Declared here rather than inside nack_tileset because
+ * C++ scopes a nested type to its enclosing class where C does not, and this
+ * header is compiled as both.
+ */
+struct nack_codepoint_map {
+    uint32_t codepoint;
+    int index;
+};
+
 struct nack_tileset {
     struct nack_texture *texture;
     int tile_width, tile_height;
@@ -25,10 +44,7 @@ struct nack_tileset {
      * entry table.
      */
     int16_t direct[256];
-    struct nack_codepoint_map {
-        uint32_t codepoint;
-        int index;
-    } *sparse;
+    struct nack_codepoint_map *sparse;
     size_t sparse_count, sparse_capacity;
 };
 
@@ -114,4 +130,8 @@ bool nack__debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4]);
 struct nack_console *nack__console_resolve(struct nack_console *console);
 uint32_t nack__utf8_next(const char **cursor);
 
+
+#ifdef __cplusplus
+}   /* extern "C" */
+#endif
 #endif /* NACK_CONSOLE_INTERNAL_H_INCLUDED */

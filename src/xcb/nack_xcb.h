@@ -5,7 +5,16 @@
 #include "../common/nack_egl.h"
 
 #include <xcb/xcb.h>
+/*
+ * xcb/xkb.h names two struct members `explicit`, which is a keyword in C++.
+ * Renaming it around the include is the usual workaround and is safe here
+ * because nothing in libnack touches those members - they belong to
+ * xcb_xkb_get_map_map_t and the set-explicit request, neither of which this
+ * backend uses. If that ever changes, the field is spelled explicit_.
+ */
+#define explicit nack__xcb_explicit
 #include <xcb/xkb.h>
+#undef explicit
 #include <xcb/xcb_cursor.h>
 
 #include <xkbcommon/xkbcommon.h>

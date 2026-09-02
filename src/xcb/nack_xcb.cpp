@@ -162,7 +162,9 @@ static xcb_atom_t nack__xcb_intern(const char *name)
         xcb_intern_atom(nack__xcb.connection, 0, (uint16_t)strlen(name), name);
     xcb_intern_atom_reply_t *reply =
         xcb_intern_atom_reply(nack__xcb.connection, cookie, NULL);
-    xcb_atom_t atom = reply ? reply->atom : XCB_ATOM_NONE;
+    /* XCB_ATOM_NONE is an enumerator and reply->atom is an xcb_atom_t, which
+     * C++ will not merge into one conditional type on its own. */
+    xcb_atom_t atom = reply ? reply->atom : (xcb_atom_t)XCB_ATOM_NONE;
     free(reply);
     return atom;
 }

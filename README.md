@@ -1,6 +1,6 @@
 # libnack
 
-A cell console for roguelikes, in C99. You get a grid of cells to draw glyphs
+A cell console for roguelikes, in C++20 behind a C API. You get a grid of cells to draw glyphs
 and tiles into, in the spirit of libtcod and BearLibTerminal.
 
 libnack owns the window, the OpenGL context and the renderer. None of that is
@@ -42,9 +42,13 @@ int main(void)
 | Windows | Win32 | OpenGL 3.3 via WGL |
 | macOS | Cocoa | Metal |
 
-The library is C99 throughout, with no C++ anywhere — not even `extern "C"`
-guards in the headers, since it is not meant to be included from C++ without
-the caller saying so themselves.
+The implementation is C++20. The API is C, in `<nack/nack.h>`, with
+`extern "C"` guards — that is the ABI other languages bind to, and the
+examples and most of the test suite are C precisely so it stays honest.
+`<nack/nack.hpp>` is a C++ face on the same library; see below.
+
+Because the library is C++, linking it pulls in the C++ runtime even from a C
+program. If that is a problem for you, this is not the library for you.
 
 ## Why it looks like this
 
@@ -151,13 +155,12 @@ void draw_panel(nack::console_view console);   // the root or an owned console
 
 `print` takes a {fmt} format string when you give it arguments, and plain text
 when you do not — so a runtime string prints as it stands rather than being
-mistaken for a format. {fmt}'s compile-time checking needs C++20; under C++17
-a mismatched format string is a `fmt::format_error` at run time instead. Both
-beat C varargs reading whatever was on the stack.
+mistaken for a format. A format string that does not match its arguments is
+rejected where it is written — {fmt}'s compile-time checking, which is one of
+the reasons the header asks for C++20. `tests/cpp_bad_format.cpp` is a file
+that must fail to compile, and the test suite checks that it does.
 
-Two things the header has to do for you, which is half the reason it exists.
-`<nack/nack.h>` carries no `extern "C"` guards, because the C library does not
-pretend to be C++; the wrapper supplies them. And the `NACK_RGB` family are
+One thing the header still has to do for you: the `NACK_RGB` family are
 compound literals — a GCC and Clang extension in C++, rejected outright by
 MSVC — so the colours are `constexpr` there instead. Do not reach for the C
 macros from C++.
@@ -167,10 +170,10 @@ Exceptions are used only where construction fails, and every constructor has a
 the throwing paths abort with the message instead.
 
 {fmt} is vendored under `third_party/fmt` and built header-only, so it is
-compiled into whoever includes `<nack/nack.hpp>` and never into libnack. A C
-program links no C++ runtime.
+compiled into whoever includes `<nack/nack.hpp>` and never into libnack
+itself.
 
-The C library is unchanged and stays the ABI other languages bind to.
+The C API is unchanged by any of this and stays what other languages bind to.
 
 ## Consoles
 

@@ -1116,7 +1116,9 @@ static const char *nack__win32_clipboard_get(void)
         CloseClipboard();
         return NULL;
     }
-    const WCHAR *wide = (const WCHAR *)GlobalLock(handle);
+    /* GetClipboardData hands back a plain HANDLE; GlobalLock wants the
+     * HGLOBAL it really is. C converted between them silently, C++ does not. */
+    const WCHAR *wide = (const WCHAR *)GlobalLock((HGLOBAL)handle);
     if (!wide) {
         CloseClipboard();
         return NULL;
@@ -1125,7 +1127,7 @@ static const char *nack__win32_clipboard_get(void)
     free(nack__win32.clipboard_text);
     nack__win32.clipboard_text = nack__win32_wide_to_utf8(wide);
 
-    GlobalUnlock(handle);
+    GlobalUnlock((HGLOBAL)handle);
     CloseClipboard();
     return nack__win32.clipboard_text;
 }

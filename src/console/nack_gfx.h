@@ -16,6 +16,15 @@
 
 #include "../nack_internal.h"
 
+/*
+ * libnack is C++ now, but its API is C and its tests and examples are C, so
+ * these declarations keep C linkage. This is what lets a C program - and
+ * anything binding through a C ABI - keep using the library unchanged.
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* position.xy, uv.xy, fg.rgba, bg.rgba */
 #define NACK_FLOATS_PER_VERTEX 12
 #define NACK_VERTICES_PER_CELL 6
@@ -108,4 +117,8 @@ bool nack__gfx_read_pixel(int x, int y, uint8_t rgba[4]);
 /* Name of the backend actually in use, for diagnostics. */
 const char *nack__gfx_name(void);
 
+
+#ifdef __cplusplus
+}   /* extern "C" */
+#endif
 #endif /* NACK_GFX_H_INCLUDED */

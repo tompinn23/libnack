@@ -322,8 +322,15 @@ static void xdg_toplevel_configure(void *data, struct xdg_toplevel *toplevel,
     ww->pending_fullscreen = false;
     ww->pending_activated = false;
 
-    uint32_t *state;
-    wl_array_for_each(state, states) {
+    /*
+     * Spelled out rather than using wl_array_for_each: that macro assigns
+     * the array's void* data straight to the loop pointer, which C++ will
+     * not do implicitly.
+     */
+    const uint32_t *state;
+    const uint32_t *state_end =
+        (const uint32_t *)((const char *)states->data + states->size);
+    for (state = (const uint32_t *)states->data; state < state_end; ++state) {
         switch (*state) {
         case XDG_TOPLEVEL_STATE_MAXIMIZED:  ww->pending_maximized = true; break;
         case XDG_TOPLEVEL_STATE_FULLSCREEN: ww->pending_fullscreen = true; break;
@@ -372,15 +379,15 @@ static void registry_global(void *data, struct wl_registry *registry, uint32_t n
     (void)data;
 
     if (strcmp(interface, wl_compositor_interface.name) == 0) {
-        nack__wl.compositor = wl_registry_bind(registry, name, &wl_compositor_interface,
+        nack__wl.compositor = (struct wl_compositor *)wl_registry_bind(registry, name, &wl_compositor_interface,
                                                nack__min_u32(version, 4));
     } else if (strcmp(interface, wl_subcompositor_interface.name) == 0) {
-        nack__wl.subcompositor = wl_registry_bind(registry, name,
+        nack__wl.subcompositor = (struct wl_subcompositor *)wl_registry_bind(registry, name,
                                                   &wl_subcompositor_interface, 1);
     } else if (strcmp(interface, wl_shm_interface.name) == 0) {
-        nack__wl.shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
+        nack__wl.shm = (struct wl_shm *)wl_registry_bind(registry, name, &wl_shm_interface, 1);
     } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
-        nack__wl.wm_base = wl_registry_bind(registry, name, &xdg_wm_base_interface,
+        nack__wl.wm_base = (struct xdg_wm_base *)wl_registry_bind(registry, name, &xdg_wm_base_interface,
                                             nack__min_u32(version, 4));
         xdg_wm_base_add_listener(nack__wl.wm_base, &nack__wl_wm_base_listener, NULL);
     } else if (strcmp(interface, wl_seat_interface.name) == 0) {
@@ -391,7 +398,7 @@ static void registry_global(void *data, struct wl_registry *registry, uint32_t n
     } else if (strcmp(interface, wl_output_interface.name) == 0) {
         if (nack__wl.output_count < NACK_WL_MAX_OUTPUTS) {
             struct nack_wl_output *entry = &nack__wl.outputs[nack__wl.output_count++];
-            entry->output = wl_registry_bind(registry, name, &wl_output_interface,
+            entry->output = (struct wl_output *)wl_registry_bind(registry, name, &wl_output_interface,
                                              nack__min_u32(version, 3));
             entry->name = name;
             entry->scale = 1;
@@ -399,32 +406,33 @@ static void registry_global(void *data, struct wl_registry *registry, uint32_t n
         }
     } else if (strcmp(interface, zxdg_decoration_manager_v1_interface.name) == 0) {
         nack__wl.decoration_manager =
-            wl_registry_bind(registry, name, &zxdg_decoration_manager_v1_interface, 1);
+            (struct zxdg_decoration_manager_v1 *)wl_registry_bind(registry, name, &zxdg_decoration_manager_v1_interface, 1);
     } else if (strcmp(interface, wp_viewporter_interface.name) == 0) {
-        nack__wl.viewporter = wl_registry_bind(registry, name,
+        nack__wl.viewporter = (struct wp_viewporter *)wl_registry_bind(registry, name,
                                                &wp_viewporter_interface, 1);
     } else if (strcmp(interface, wl_data_device_manager_interface.name) == 0) {
         nack__wl.data_device_manager =
-            wl_registry_bind(registry, name, &wl_data_device_manager_interface,
+            (struct wl_data_device_manager *)wl_registry_bind(registry, name, &wl_data_device_manager_interface,
                              nack__min_u32(version, 3));
         nack__wl_data_device_bind();
     } else if (strcmp(interface,
                       zwp_primary_selection_device_manager_v1_interface.name) == 0) {
         nack__wl.primary_manager =
-            wl_registry_bind(registry, name,
+            (struct zwp_primary_selection_device_manager_v1 *)wl_registry_bind(registry, name,
                              &zwp_primary_selection_device_manager_v1_interface, 1);
         nack__wl_data_device_bind();
     } else if (strcmp(interface, zwp_pointer_constraints_v1_interface.name) == 0) {
         nack__wl.pointer_constraints =
-            wl_registry_bind(registry, name, &zwp_pointer_constraints_v1_interface, 1);
+            (struct zwp_pointer_constraints_v1 *)wl_registry_bind(registry, name, &zwp_pointer_constraints_v1_interface, 1);
     } else if (strcmp(interface, zwp_relative_pointer_manager_v1_interface.name) == 0) {
         nack__wl.relative_pointer_manager =
-            wl_registry_bind(registry, name,
+            (struct zwp_relative_pointer_manager_v1 *)wl_registry_bind(registry, name,
                              &zwp_relative_pointer_manager_v1_interface, 1);
 #if defined(NACK_HAS_FRACTIONAL_SCALE)
     } else if (strcmp(interface, wp_fractional_scale_manager_v1_interface.name) == 0) {
         nack__wl.fractional_scale_manager =
-            wl_registry_bind(registry, name, &wp_fractional_scale_manager_v1_interface, 1);
+            (struct wp_fractional_scale_manager_v1 *)wl_registry_bind(
+                registry, name, &wp_fractional_scale_manager_v1_interface, 1);
 #endif
     }
 }

@@ -17,12 +17,13 @@
  *     rather than a bare uint32_t.
  *   - print() takes a {fmt} format string rather than C varargs.
  *
- * Two things it has to do for you, which is half the reason it exists:
- * <nack/nack.h> carries no extern "C" guards, because the C library does not
- * pretend to be C++; this header supplies them. And the NACK_RGB family are
- * compound literals, which are a GCC and Clang extension in C++ and rejected
- * outright by MSVC - so the colours below are constexpr functions and
- * constants instead. Do not reach for the C macros from C++.
+ * One thing it still has to do for you: the NACK_RGB family are compound
+ * literals, which are a GCC and Clang extension in C++ and rejected outright
+ * by MSVC - so the colours below are constexpr functions and constants
+ * instead. Do not reach for the C macros from C++.
+ *
+ * <nack/nack.h> carries its own extern "C" guards now that the library behind
+ * it is C++, so this header no longer has to supply them.
  *
  * Exceptions are used only where construction fails. If you build with them
  * off, every constructor has a try_create counterpart returning
@@ -44,9 +45,7 @@
 
 #include <fmt/format.h>
 
-extern "C" {
 #include <nack/nack.h>
-}
 
 #if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
 #  define NACK_HPP_EXCEPTIONS 1

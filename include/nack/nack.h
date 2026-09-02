@@ -35,6 +35,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/*
+ * libnack is C++ now, but its API is C and its tests and examples are C, so
+ * these declarations keep C linkage. This is what lets a C program - and
+ * anything binding through a C ABI - keep using the library unchanged.
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if defined(NACK_SHARED) && defined(_WIN32)
 #  if defined(NACK_BUILD)
 #    define NACK_API __declspec(dllexport)
@@ -486,4 +495,8 @@ NACK_API void nack_set_vsync(bool vsync);
 NACK_API bool nack_clipboard_set(const char *utf8);
 NACK_API const char *nack_clipboard_get(void);
 
+
+#ifdef __cplusplus
+}   /* extern "C" */
+#endif
 #endif /* NACK_H_INCLUDED */

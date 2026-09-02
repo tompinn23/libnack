@@ -1,12 +1,19 @@
 cmake_minimum_required(VERSION 3.21)
 
+#
+# C is still here for two reasons: the vendored stb_image and the code
+# wayland-scanner generates are C, and the tests and examples are C on purpose
+# - they are what proves the C API still works now that the library behind it
+# is C++.
+#
 project(libnack
     VERSION 0.2.0
     DESCRIPTION "A cell console for roguelikes"
-    LANGUAGES C)
+    LANGUAGES C CXX)
 
+# The Cocoa and Metal sources are .mm now, which is Objective-C++.
 if(APPLE)
-    enable_language(OBJC)
+    enable_language(OBJCXX)
 endif()
 
 # --------------------------------------------------------------------------
@@ -37,23 +44,23 @@ cmake_dependent_option(NACK_XCB_XLIB_FALLBACK
 # --------------------------------------------------------------------------
 
 set(NACK_SOURCES
-    src/nack.c
-    src/nack_keys.c
-    src/common/nack_proc_cache.c
-    src/console/nack_api.c
-    src/console/nack_console.c
-    src/console/nack_image.c
-    src/console/nack_render.c
-    src/console/nack_tileset.c
-    src/console/nack_gfx.c
-    src/console/nack_gfx_gl.c
-    src/console/nack_gl.c)
+    src/nack.cpp
+    src/nack_keys.cpp
+    src/common/nack_proc_cache.cpp
+    src/console/nack_api.cpp
+    src/console/nack_console.cpp
+    src/console/nack_image.cpp
+    src/console/nack_render.cpp
+    src/console/nack_tileset.cpp
+    src/console/nack_gfx.cpp
+    src/console/nack_gfx_gl.cpp
+    src/console/nack_gl.cpp)
 
 # macOS gets both renderers and picks between them at run time: Metal first,
 # because Apple deprecated OpenGL and capped it at 4.1, but OpenGL still there
 # to fall back on. Everywhere else there is only OpenGL.
 if(APPLE AND NOT NACK_MACOS_OPENGL_ONLY)
-    list(APPEND NACK_SOURCES src/console/nack_gfx_metal.m)
+    list(APPEND NACK_SOURCES src/console/nack_gfx_metal.mm)
 endif()
 
 #
@@ -82,15 +89,15 @@ if(UNIX AND NOT APPLE)
     find_package(PkgConfig REQUIRED)
 
     pkg_check_modules(EGL REQUIRED IMPORTED_TARGET egl)
-    list(APPEND NACK_SOURCES src/common/nack_egl.c src/common/nack_xkb_keys.c)
+    list(APPEND NACK_SOURCES src/common/nack_egl.cpp src/common/nack_xkb_keys.cpp)
     list(APPEND NACK_LIBRARIES PkgConfig::EGL ${CMAKE_DL_LIBS})
 
     if(NACK_ENABLE_XCB)
         pkg_check_modules(XCB REQUIRED IMPORTED_TARGET
             xcb xcb-xkb xcb-cursor xkbcommon xkbcommon-x11)
         list(APPEND NACK_SOURCES
-            src/xcb/nack_xcb.c
-            src/xcb/nack_xcb_clipboard.c)
+            src/xcb/nack_xcb.cpp
+            src/xcb/nack_xcb_clipboard.cpp)
         list(APPEND NACK_LIBRARIES PkgConfig::XCB)
         list(APPEND NACK_DEFINITIONS NACK_HAS_X11=1)
 
@@ -142,10 +149,10 @@ if(UNIX AND NOT APPLE)
         endif()
 
         list(APPEND NACK_SOURCES
-            src/wayland/nack_wayland.c
-            src/wayland/nack_wayland_input.c
-            src/wayland/nack_wayland_clipboard.c
-            src/wayland/nack_wayland_decor.c
+            src/wayland/nack_wayland.cpp
+            src/wayland/nack_wayland_input.cpp
+            src/wayland/nack_wayland_clipboard.cpp
+            src/wayland/nack_wayland_decor.cpp
             ${NACK_WAYLAND_GENERATED})
         list(APPEND NACK_LIBRARIES PkgConfig::WAYLAND)
         list(APPEND NACK_DEFINITIONS NACK_HAS_WAYLAND=1)
@@ -157,8 +164,8 @@ if(UNIX AND NOT APPLE)
 
 elseif(WIN32)
     list(APPEND NACK_SOURCES
-        src/win32/nack_win32.c
-        src/win32/nack_wgl.c)
+        src/win32/nack_win32.cpp
+        src/win32/nack_wgl.cpp)
     list(APPEND NACK_LIBRARIES user32 gdi32 shell32 opengl32)
     if(NACK_WIN32_USE_SDK_HEADERS)
         list(APPEND NACK_DEFINITIONS NACK_WIN32_USE_SDK_HEADERS=1)
@@ -166,8 +173,8 @@ elseif(WIN32)
 
 elseif(APPLE)
     list(APPEND NACK_SOURCES
-        src/cocoa/nack_cocoa.m
-        src/cocoa/nack_nsgl.m)
+        src/cocoa/nack_cocoa.mm
+        src/cocoa/nack_nsgl.mm)
     find_library(COCOA_FRAMEWORK Cocoa REQUIRED)
     find_library(QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
     find_library(OPENGL_FRAMEWORK OpenGL REQUIRED)
@@ -204,19 +211,32 @@ target_link_libraries(nack_objects PRIVATE ${NACK_LIBRARIES})
 target_compile_definitions(nack_objects PRIVATE ${NACK_DEFINITIONS})
 
 set_target_properties(nack_objects PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS ON        # POSIX interfaces (poll, pipe) need the GNU dialect
+    # The wayland-scanner output in this target is still C.
     C_STANDARD 99
     C_STANDARD_REQUIRED ON
-    C_EXTENSIONS ON          # POSIX interfaces (poll, pipe) need the GNU dialect
+    C_EXTENSIONS ON
     POSITION_INDEPENDENT_CODE ON)
 
 if(APPLE)
-    set_target_properties(nack_objects PROPERTIES OBJC_STANDARD 11)
+    set_target_properties(nack_objects PROPERTIES OBJCXX_STANDARD 20)
 endif()
 
-if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # -Wstrict-prototypes and -Wmissing-prototypes are C-only and would warn
+    # on every C++ file, so they are gone with the C.
+    #
+    # -Wno-missing-field-initializers: the backend vtables and some Wayland
+    # listeners deliberately leave members out - a backend that cannot focus a
+    # window has no window_focus, and wl_surface_listener grows members with
+    # every protocol release. C++ warns where C did not; C++20 designated
+    # initialisers value-initialise the rest, which is exactly what is wanted.
+    #
     target_compile_options(nack_objects PRIVATE
-        -Wall -Wextra -Wshadow -Wstrict-prototypes -Wmissing-prototypes
-        -Wno-unused-parameter)
+        -Wall -Wextra -Wshadow -Wno-unused-parameter
+        -Wno-missing-field-initializers)
 elseif(MSVC)
     target_compile_options(nack_objects PRIVATE /W4 /wd4100)
     target_compile_definitions(nack_objects PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -284,60 +304,54 @@ if(PROJECT_IS_TOP_LEVEL)
         SKIP_RETURN_CODE 77)
 
     #
-    # The C++ header is a wrapper over the C library, so it is only worth
-    # anything if it compiles and runs. A C++ compiler is not required to
-    # build libnack, so the test appears only when there is one.
+    # The C++ header is a wrapper over the C API, so it is only worth anything
+    # if it compiles and runs. libnack is C++ itself now, so a C++ compiler is
+    # no longer optional and there is nothing to check for.
     #
-    include(CheckLanguage)
-    check_language(CXX)
-    if(CMAKE_CXX_COMPILER)
-        enable_language(CXX)
-        add_executable(nack_cpp_smoke tests/cpp_smoke.cpp
-            $<TARGET_OBJECTS:nack_objects> ${NACK_VENDORED_OBJECTS})
-        target_link_libraries(nack_cpp_smoke PRIVATE ${NACK_LIBRARIES} nack_fmt)
-        target_include_directories(nack_cpp_smoke PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/src
-            ${CMAKE_CURRENT_BINARY_DIR})
-        set_target_properties(nack_cpp_smoke PROPERTIES
-            CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
-        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-            target_compile_options(nack_cpp_smoke PRIVATE
-                -Wall -Wextra -Wpedantic)
-        elseif(MSVC)
-            target_compile_options(nack_cpp_smoke PRIVATE /W4)
-        endif()
-        add_test(NAME cpp COMMAND nack_cpp_smoke)
-        set_tests_properties(cpp PROPERTIES SKIP_RETURN_CODE 77)
-
-        #
-        # A format string that does not match its arguments must be rejected
-        # where it is written. That cannot be asserted from inside a program
-        # that has to compile, so the bad call lives in its own target which
-        # is left out of the default build, and the test is that building it
-        # fails. WILL_FAIL inverts the result.
-        #
-        # An OBJECT library rather than an executable, deliberately: an
-        # executable with no main() fails to *link* whatever the format string
-        # says, which would make this test pass for a reason that has nothing
-        # to do with {fmt}. Only the compile is allowed to decide.
-        #
-        add_library(nack_cpp_bad_format OBJECT EXCLUDE_FROM_ALL
-            tests/cpp_bad_format.cpp)
-        target_link_libraries(nack_cpp_bad_format PRIVATE nack_fmt)
-        target_include_directories(nack_cpp_bad_format PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/include)
-        set_target_properties(nack_cpp_bad_format PROPERTIES
-            CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
-        add_test(NAME cpp_format_rejected
-            COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
-                    --target nack_cpp_bad_format --config $<CONFIG>)
-        set_tests_properties(cpp_format_rejected PROPERTIES WILL_FAIL TRUE)
-    else()
-        message(STATUS "No C++ compiler: the C++ header test will be skipped")
+    add_executable(nack_cpp_smoke tests/cpp_smoke.cpp
+        $<TARGET_OBJECTS:nack_objects> ${NACK_VENDORED_OBJECTS})
+    target_link_libraries(nack_cpp_smoke PRIVATE ${NACK_LIBRARIES} nack_fmt)
+    target_include_directories(nack_cpp_smoke PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_BINARY_DIR})
+    set_target_properties(nack_cpp_smoke PROPERTIES
+        CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(nack_cpp_smoke PRIVATE
+            -Wall -Wextra -Wpedantic)
+    elseif(MSVC)
+        target_compile_options(nack_cpp_smoke PRIVATE /W4)
     endif()
 
-    add_executable(nack_image_test tests/image_test.c src/console/nack_image.c
+    add_test(NAME cpp COMMAND nack_cpp_smoke)
+    set_tests_properties(cpp PROPERTIES SKIP_RETURN_CODE 77)
+
+    #
+    # A format string that does not match its arguments must be rejected
+    # where it is written. That cannot be asserted from inside a program
+    # that has to compile, so the bad call lives in its own target which
+    # is left out of the default build, and the test is that building it
+    # fails. WILL_FAIL inverts the result.
+    #
+    # An OBJECT library rather than an executable, deliberately: an
+    # executable with no main() fails to *link* whatever the format string
+    # says, which would make this test pass for a reason that has nothing
+    # to do with {fmt}. Only the compile is allowed to decide.
+    #
+    add_library(nack_cpp_bad_format OBJECT EXCLUDE_FROM_ALL
+        tests/cpp_bad_format.cpp)
+    target_link_libraries(nack_cpp_bad_format PRIVATE nack_fmt)
+    target_include_directories(nack_cpp_bad_format PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    set_target_properties(nack_cpp_bad_format PROPERTIES
+        CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+    add_test(NAME cpp_format_rejected
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+                --target nack_cpp_bad_format --config $<CONFIG>)
+    set_tests_properties(cpp_format_rejected PROPERTIES WILL_FAIL TRUE)
+
+    add_executable(nack_image_test tests/image_test.c src/console/nack_image.cpp
         ${NACK_VENDORED_OBJECTS})
     target_include_directories(nack_image_test PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src ${NACK_VENDORED_INCLUDES})

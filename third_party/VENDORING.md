@@ -73,7 +73,9 @@ Unmodified, and only the three headers a header-only build needs — not
 `chrono.h`, `os.h`, `ranges.h`, `std.h` or the rest, which nothing here
 formats. `CMakeLists.txt` in that directory is libnack's: it is an INTERFACE
 target carrying the include path and `FMT_HEADER_ONLY`, so nothing is compiled
-into libnack itself and a C program still links no C++ runtime.
+into libnack itself — only into whoever includes `<nack/nack.hpp>`. libnack is
+C++ these days, so linking it does bring the C++ runtime along regardless;
+what this avoids is {fmt} specifically.
 
 Only `<nack/nack.hpp>` uses it. `print` takes a {fmt} format string there
 rather than C varargs.

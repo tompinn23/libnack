@@ -6,6 +6,15 @@
 #include <stdint.h>
 
 /*
+ * libnack is C++ now, but its API is C and its tests and examples are C, so
+ * these declarations keep C linkage. This is what lets a C program - and
+ * anything binding through a C ABI - keep using the library unchanged.
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*
  * Decodes a PNG or a JPEG to 8-bit RGBA. The format is taken from the bytes
  * themselves rather than from a filename, so a tileset loaded from memory
  * needs no hint. Returns a buffer the caller frees, or NULL on failure with
@@ -26,4 +35,8 @@ uint8_t *nack__image_decode(const void *data, size_t size, int *width,
 /* Returns a decoded image. Not interchangeable with free(). */
 void nack__image_free(uint8_t *pixels);
 
+
+#ifdef __cplusplus
+}   /* extern "C" */
+#endif
 #endif /* NACK_IMAGE_H_INCLUDED */
