@@ -60,6 +60,32 @@ a patch to make to it.
 Replace `stb_image.h` and run the test suite. `stb_image.c` should not need
 changing unless upstream renames a configuration macro.
 
+## {fmt}
+
+| | |
+| --- | --- |
+| Version | 11.2.0 |
+| Source | `https://github.com/fmtlib/fmt` |
+| Files | `fmt/base.h`, `fmt/format.h`, `fmt/format-inl.h`, `LICENSE` |
+| Licence | MIT, with an exception for embedding the source |
+
+Unmodified, and only the three headers a header-only build needs — not
+`chrono.h`, `os.h`, `ranges.h`, `std.h` or the rest, which nothing here
+formats. `CMakeLists.txt` in that directory is libnack's: it is an INTERFACE
+target carrying the include path and `FMT_HEADER_ONLY`, so nothing is compiled
+into libnack itself and a C program still links no C++ runtime.
+
+Only `<nack/nack.hpp>` uses it. `print` takes a {fmt} format string there
+rather than C varargs.
+
+**{fmt}'s compile-time format checking needs C++20.** Its `consteval`
+constructor is what rejects a mismatched format string where the call is
+written, and under C++17 — which is all the header asks for — that is not
+available, so a mismatch becomes a `fmt::format_error` at run time instead.
+Both are a real answer, unlike varargs, and `tests/cpp_smoke.cpp` pins the
+C++17 behaviour so nobody has to take it on trust. A consumer who compiles as
+C++20 gets the compile-time check for free.
+
 ## Test fixtures are not vendored
 
 `tools/mkpng.py` and `tools/mkjpeg.py` generate the images

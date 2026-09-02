@@ -63,6 +63,13 @@ endif()
 #
 add_subdirectory(third_party/stb)
 
+#
+# {fmt}, for the C++ header's formatting. Header-only and interface-only: it
+# is compiled into whoever includes <nack/nack.hpp>, never into libnack, so a
+# C program still links no C++ runtime.
+#
+add_subdirectory(third_party/fmt)
+
 set(NACK_LIBRARIES "")
 # Its objects go straight into libnack rather than being a separate archive a
 # consumer would have to link too: from the outside, decoding images is part of
@@ -287,7 +294,7 @@ if(PROJECT_IS_TOP_LEVEL)
         enable_language(CXX)
         add_executable(nack_cpp_smoke tests/cpp_smoke.cpp
             $<TARGET_OBJECTS:nack_objects> ${NACK_VENDORED_OBJECTS})
-        target_link_libraries(nack_cpp_smoke PRIVATE ${NACK_LIBRARIES})
+        target_link_libraries(nack_cpp_smoke PRIVATE ${NACK_LIBRARIES} nack_fmt)
         target_include_directories(nack_cpp_smoke PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/include
             ${CMAKE_CURRENT_SOURCE_DIR}/src

@@ -25,24 +25,24 @@ static void check(bool ok, const char *what)
 }
 
 /*
- * The point of ConsoleView: one helper, either kind of console. If this
+ * The point of console_view: one helper, either kind of console. If this
  * stopped compiling the wrapper would have lost the property the C API has.
  */
-static void drawPanel(nack::ConsoleView console, nack::Color fg)
+static void draw_panel(nack::console_view console, nack::color fg)
 {
-    console.drawBox(0, 0, 10, 4, fg, nack::black, "panel");
-    console.print(1, 1, "hi", fg, nack::black);
+    console.draw_box(0, 0, 10, 4, fg, nack::black, "panel");
+    console.print(1, 1, fg, nack::black, "hi");
 }
 
 int main()
 {
-    nack::Config config = nack::defaultConfig();
+    nack::config config = nack::default_config();
     config.title = "nack c++ smoke";
     config.columns = 40;
     config.rows = 20;
     config.vsync = false;
 
-    auto app = nack::App::tryCreate(config);
+    auto app = nack::app::try_create(config);
     if (!app) {
         const char *why = ::nack_get_error();
         if (!why)
@@ -53,10 +53,10 @@ int main()
             std::printf("skipping: %s\n", why);
             return 77;
         }
-        std::fprintf(stderr, "nack::App failed: %s\n", why);
+        std::fprintf(stderr, "nack::app failed: %s\n", why);
         return 1;
     }
-    check(true, "App constructed");
+    check(true, "app constructed");
 
     auto [columns, rows] = app->console().size();
     check(columns == 40 && rows == 20, "size comes back as a pair");
@@ -64,44 +64,77 @@ int main()
     /* Drawing through a view, on the root. */
     app->console().clear();
     app->console().put(2, 3, 'A', nack::red, nack::blue);
-    nack::Cell cell = app->console().at(2, 3);
+    nack::cell cell = app->console().at(2, 3);
     check(cell.glyph == 'A' && cell.fg.r == nack::red.r,
           "put and at round trip");
 
-    check(app->console().print(0, 0, "hello", nack::white, nack::black) == 5,
+    check(app->console().print(0, 0, nack::white, nack::black, "hello") == 5,
           "print returns the cell count");
 
     /* A string_view that is not NUL-terminated must not read past its end. */
     {
         std::string backing = "abcdefgh";
         std::string_view slice(backing.data(), 3);
-        int written = app->console().print(0, 6, slice, nack::white,
-                                           nack::black);
+        int written = app->console().print(0, 6, nack::white, nack::black,
+                                           slice);
         check(written == 3, "an unterminated string_view prints its length");
         check(app->console().at(2, 6).glyph == 'c' &&
               app->console().at(3, 6).glyph != 'd',
               "and stops where the view stops");
     }
 
-    check(app->console().printf(0, 7, nack::cyan, nack::black, "%d-%s", 42,
-                                "x") == 4,
-          "printf forwards to the C varargs");
+    /* {fmt}: the format string is checked against the arguments at compile
+     * time, and a runtime string still prints as it stands. */
+    check(app->console().print(0, 7, nack::cyan, nack::black, "{}-{}", 42,
+                               "x") == 4,
+          "print formats with fmt");
+    check(app->console().at(0, 7).glyph == '4' &&
+          app->console().at(3, 7).glyph == 'x',
+          "and the formatted text lands in the cells");
+    {
+        std::string runtime = "{not a placeholder}";
+        int written = app->console().print(0, 8, nack::grey, nack::black,
+                                           runtime);
+        check(written == static_cast<int>(runtime.size()),
+              "a runtime string is text, not a format string");
+    }
+    check(app->console().print(0, 9, nack::white, nack::black, "{:>6.2f}|",
+                               3.14159) == 7,
+          "fmt's own formatting reaches the console");
+#if NACK_HPP_EXCEPTIONS
+    /*
+     * A format string that does not match its arguments. Under C++20 this
+     * would not compile at all; under C++17, which is what the header asks
+     * for, {fmt}'s consteval checking is unavailable and it throws instead.
+     * Either is fine. Silently printing rubbish, which is what varargs did,
+     * is not - so the behaviour is pinned here rather than assumed.
+     */
+    {
+        bool caught = false;
+        try {
+            app->console().print(0, 10, nack::white, nack::black, "{} {}", 1);
+        } catch (const fmt::format_error &) {
+            caught = true;
+        }
+        check(caught, "a format string that does not match is refused");
+    }
+#endif
 
     /* Owning consoles free themselves, and work with the same helper. */
     {
-        nack::Console panel(10, 4);
-        drawPanel(panel, nack::green);
-        drawPanel(app->console(), nack::grey);
+        nack::console panel(10, 4);
+        draw_panel(panel, nack::green);
+        draw_panel(app->console(), nack::grey);
         check(panel.at(0, 0).glyph == 0x250C,
               "a helper takes an owned console");
         check(app->console().at(0, 0).glyph == 0x250C,
               "and the root, through the same type");
 
-        panel.blitTo(app->console(), 20, 15);
+        panel.blit_to(app->console(), 20, 15);
         check(app->console().at(21, 16).glyph == 'h', "blit through the view");
 
         /* Moving must not double free when both go out of scope. */
-        nack::Console moved = std::move(panel);
+        nack::console moved = std::move(panel);
         check(!panel && moved, "move leaves the source empty");
         check(moved.at(0, 0).glyph == 0x250C, "and the target usable");
     }
@@ -109,41 +142,41 @@ int main()
 
     /* Many consoles created and destroyed: a leak here shows under ASan. */
     {
-        std::vector<nack::Console> consoles;
+        std::vector<nack::console> consoles;
         for (int i = 0; i < 32; ++i)
             consoles.emplace_back(4, 4);
         consoles.clear();
         check(true, "32 consoles created and destroyed");
     }
 
-    check(!nack::Console::tryCreate(0, 0).has_value(),
-          "tryCreate reports a bad size rather than throwing");
+    check(!nack::console::try_create(0, 0).has_value(),
+          "try_create reports a bad size rather than throwing");
 
     /* Modifiers are a real bitmask now, not a bare integer. */
     {
-        nack::Mod set = nack::Mod::Shift | nack::Mod::Ctrl;
-        check(nack::holds(set, nack::Mod::Shift), "holds finds a set modifier");
-        check(!nack::holds(set, nack::Mod::Alt), "and misses an unset one");
-        check(nack::holds(set, nack::Mod::Shift | nack::Mod::Ctrl),
+        nack::mod set = nack::mod::shift | nack::mod::ctrl;
+        check(nack::holds(set, nack::mod::shift), "holds finds a set modifier");
+        check(!nack::holds(set, nack::mod::alt), "and misses an unset one");
+        check(nack::holds(set, nack::mod::shift | nack::mod::ctrl),
               "and requires every modifier asked for");
-        check(!nack::any(nack::Mod::None), "None is empty");
+        check(!nack::any(nack::mod::none), "none is empty");
     }
 
-    check(std::strcmp(nack::keyName(nack::Key::Escape), "Escape") == 0,
+    check(std::strcmp(nack::key_name(nack::key::escape), "Escape") == 0,
           "keys keep their names");
 
     /* The event variant must carry the arm the type says it does. */
-    app->wakeup();
+    app->wake();
     {
         bool woke = false;
         for (int i = 0; i < 32 && !woke; ++i) {
-            auto ev = app->waitFor(0.3);
+            auto ev = app->wait_for(0.3);
             if (!ev)
                 break;
-            if (std::holds_alternative<nack::Wakeup>(*ev))
+            if (std::holds_alternative<nack::wakeup_event>(*ev))
                 woke = true;
         }
-        check(woke, "wakeup arrives as the Wakeup alternative");
+        check(woke, "wakeup arrives as the wakeup_event alternative");
     }
 
     {
@@ -153,44 +186,44 @@ int main()
         raw.data.key.key = NACK_KEY_ESCAPE;
         raw.data.key.mods = NACK_MOD_SHIFT | NACK_MOD_CTRL;
         raw.data.key.repeat = true;
-        auto ev = nack::detail::toEvent(raw);
-        check(ev && std::holds_alternative<nack::KeyEvent>(*ev),
-              "a key event becomes KeyEvent");
-        const auto *key = std::get_if<nack::KeyEvent>(&*ev);
-        check(key && key->key == nack::Key::Escape && key->repeat &&
-              nack::holds(key->mods, nack::Mod::Shift | nack::Mod::Ctrl),
+        auto ev = nack::detail::to_event(raw);
+        check(ev && std::holds_alternative<nack::key_event>(*ev),
+              "a key event becomes key_event");
+        const auto *key = std::get_if<nack::key_event>(&*ev);
+        check(key && key->key == nack::key::escape && key->repeat &&
+              nack::holds(key->mods, nack::mod::shift | nack::mod::ctrl),
               "with its key, mods and repeat intact");
 
         raw = ::nack_event{};
         raw.type = NACK_EVENT_TEXT;
         std::strcpy(raw.data.text.utf8, "\xE2\x94\x80");
-        ev = nack::detail::toEvent(raw);
-        const auto *text = std::get_if<nack::TextEvent>(&*ev);
+        ev = nack::detail::to_event(raw);
+        const auto *text = std::get_if<nack::text_event>(&*ev);
         check(text && text->text() == "\xE2\x94\x80",
               "text arrives as a view into the event");
 
         raw = ::nack_event{};
         raw.type = NACK_EVENT_BLUR;
-        ev = nack::detail::toEvent(raw);
-        const auto *focus = std::get_if<nack::FocusEvent>(&*ev);
+        ev = nack::detail::to_event(raw);
+        const auto *focus = std::get_if<nack::focus_event>(&*ev);
         check(focus && !focus->focused,
               "focus and blur collapse into one alternative");
 
         raw = ::nack_event{};
         raw.type = NACK_EVENT_NONE;
-        check(!nack::detail::toEvent(raw).has_value(),
+        check(!nack::detail::to_event(raw).has_value(),
               "an empty event yields nothing");
     }
 
     app->present();
-    check(app->deltaTime() >= 0.0, "delta time is sane");
-    check(!app->shouldClose(), "not asked to close");
-    app->setTitle("renamed");
+    check(app->delta_time() >= 0.0, "delta time is sane");
+    check(!app->should_close(), "not asked to close");
+    app->set_title("renamed");
     check(true, "set_title survived");
 
     /* Tilesets are handles too. The built-in font is not one we own. */
     {
-        auto size = nack::Tileset::Size{ 0, 0, 0 };
+        auto size = nack::tileset::dimensions{ 0, 0, 0 };
         ::nack_tileset_size(::nack_get_font(), &size.width, &size.height,
                             &size.count);
         check(size.width == 8 && size.count == 256,

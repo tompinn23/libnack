@@ -113,22 +113,24 @@ compiler folds it away — but it adds the parts C cannot express:
 
 int main()
 {
-    nack::Config config = nack::defaultConfig();
+    nack::config config = nack::default_config();
     config.title = "roguelike";
-    nack::App app{config};                       // nack_shutdown on scope exit
+    nack::app app{config};                       // nack_shutdown on scope exit
 
-    nack::Console panel{20, 10};                 // freed on scope exit
-    panel.drawBox(0, 0, 20, 10, nack::grey, nack::black, "inventory");
-    panel.print(2, 2, "a) rusty sword", nack::white, nack::black);
+    int purse = 120;
+    nack::console panel{20, 10};                 // freed on scope exit
+    panel.draw_box(0, 0, 20, 10, nack::grey, nack::black, "inventory");
+    panel.print(2, 2, nack::white, nack::black, "a) rusty sword");
+    panel.print(2, 3, nack::grey, nack::black, "{} gold", purse);
 
-    while (!app.shouldClose()) {
+    while (!app.should_close()) {
         app.console().clear();
-        panel.blitTo(app.console(), 30, 20);
+        panel.blit_to(app.console(), 30, 20);
         app.present();
 
         if (auto ev = app.wait()) {
-            if (auto *key = std::get_if<nack::KeyEvent>(&*ev))
-                if (key->key == nack::Key::Escape)
+            if (auto *key = std::get_if<nack::key_event>(&*ev))
+                if (key->key == nack::key::escape)
                     break;
         }
     }
@@ -141,11 +143,17 @@ than a convention in a comment. `poll()` returns `std::optional` instead of a
 bool and an out-parameter, sizes come back as structured bindings, and
 modifiers are a real bitmask type rather than a bare `uint32_t`.
 
-`ConsoleView` is the non-owning half, so one helper takes either kind:
+`console_view` is the non-owning half, so one helper takes either kind:
 
 ```cpp
-void drawPanel(nack::ConsoleView console);   // the root or an owned console
+void draw_panel(nack::console_view console);   // the root or an owned console
 ```
+
+`print` takes a {fmt} format string when you give it arguments, and plain text
+when you do not — so a runtime string prints as it stands rather than being
+mistaken for a format. {fmt}'s compile-time checking needs C++20; under C++17
+a mismatched format string is a `fmt::format_error` at run time instead. Both
+beat C varargs reading whatever was on the stack.
 
 Two things the header has to do for you, which is half the reason it exists.
 `<nack/nack.h>` carries no `extern "C"` guards, because the C library does not
@@ -155,8 +163,12 @@ MSVC — so the colours are `constexpr` there instead. Do not reach for the C
 macros from C++.
 
 Exceptions are used only where construction fails, and every constructor has a
-`tryCreate` counterpart returning `std::optional`. Built with exceptions off,
+`try_create` counterpart returning `std::optional`. Built with exceptions off,
 the throwing paths abort with the message instead.
+
+{fmt} is vendored under `third_party/fmt` and built header-only, so it is
+compiled into whoever includes `<nack/nack.hpp>` and never into libnack. A C
+program links no C++ runtime.
 
 The C library is unchanged and stays the ABI other languages bind to.
 
