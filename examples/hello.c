@@ -28,15 +28,15 @@ int main(void)
                 nack_set_should_close(true);
         }
 
-        nack_clear(NULL);
-        nack_draw_box(NULL, 0, 0, 60, 20, NACK_GREY, NACK_BLACK, "libnack");
-        nack_print(NULL, 3, 3, NACK_WHITE, NACK_BLACK, "Hello from the console.");
-        nack_print(NULL, 3, 5, NACK_YELLOW, NACK_BLACK, "@");
-        nack_print(NULL, 5, 5, NACK_GREY, NACK_BLACK, "<- that is you, probably");
-        nack_printf(NULL, 3, 8, NACK_CYAN, NACK_BLACK, "frame %d", frame++);
-        nack_printf(NULL, 3, 9, NACK_CYAN, NACK_BLACK, "%.1f ms",
+        nack_clear(nack_root());
+        nack_draw_box(nack_root(), 0, 0, 60, 20, NACK_GREY, NACK_BLACK, "libnack");
+        nack_print(nack_root(), 3, 3, NACK_WHITE, NACK_BLACK, "Hello from the console.");
+        nack_print(nack_root(), 3, 5, NACK_YELLOW, NACK_BLACK, "@");
+        nack_print(nack_root(), 5, 5, NACK_GREY, NACK_BLACK, "<- that is you, probably");
+        nack_printf(nack_root(), 3, 8, NACK_CYAN, NACK_BLACK, "frame %d", frame++);
+        nack_printf(nack_root(), 3, 9, NACK_CYAN, NACK_BLACK, "%.1f ms",
                     nack_delta_time() * 1000.0);
-        nack_print(NULL, 3, 17, NACK_DARK_GREY, NACK_BLACK, "escape to quit");
+        nack_print(nack_root(), 3, 17, NACK_DARK_GREY, NACK_BLACK, "escape to quit");
 
         nack_present();
     }

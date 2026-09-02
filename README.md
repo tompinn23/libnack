@@ -20,9 +20,9 @@ int main(void)
     nack_init(&config);
 
     while (!nack_should_close()) {
-        nack_clear(NULL);
-        nack_put(NULL, x, y, '@', NACK_WHITE, NACK_BLACK);
-        nack_print(NULL, 0, 49, NACK_GREY, NACK_BLACK, "you are in a maze");
+        nack_clear(nack_root());
+        nack_put(nack_root(), x, y, '@', NACK_WHITE, NACK_BLACK);
+        nack_print(nack_root(), 0, 49, NACK_GREY, NACK_BLACK, "you are in a maze");
         nack_present();
 
         struct nack_event event;
@@ -82,7 +82,7 @@ nack_set_font(font);
 /* Graphical tiles, drawn by index rather than by codepoint. */
 struct nack_tileset *tiles =
     nack_tileset_load("creatures.png", 32, 32, NACK_LAYOUT_ROW_MAJOR);
-nack_put_tile(NULL, x, y, tiles, ORC_TILE, NACK_WHITE, NACK_BLACK);
+nack_put_tile(nack_root(), x, y, tiles, ORC_TILE, NACK_WHITE, NACK_BLACK);
 
 /* Unicode past CP437's 256 slots. */
 nack_tileset_map_range(font, 0x4E00, 0x4E7F, 256);
@@ -104,18 +104,23 @@ did not write. See `third_party/VENDORING.md`.
 
 ## Consoles
 
-Every drawing call takes a console, and `NULL` means the root console — the one
-that gets presented. Offscreen consoles are for composing:
+Every drawing call takes a console. `nack_root()` is the one that gets
+presented; offscreen consoles are for composing:
 
 ```c
 struct nack_console *panel = nack_console_new(20, 10);
 nack_draw_box(panel, 0, 0, 20, 10, NACK_GREY, NACK_BLACK, "inventory");
 nack_print(panel, 2, 2, NACK_WHITE, NACK_BLACK, "a) rusty sword");
-nack_blit(panel, 0, 0, 20, 10, NULL, 30, 20, 1.0f, 0.9f);
+nack_blit(panel, 0, 0, 20, 10, nack_root(), 30, 20, 1.0f, 0.9f);
 ```
 
 The last two arguments are foreground and background alpha, so a translucent
 overlay is a blit with a low background alpha.
+
+Passing `NULL` as a console is an error, not a shorthand for the root. That
+matters because `nack_console_new` returns `NULL` when it fails: if `NULL`
+meant the root, an unchecked allocation failure would quietly draw over the
+screen instead of doing nothing and saying why.
 
 ## Building
 

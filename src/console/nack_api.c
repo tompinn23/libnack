@@ -285,6 +285,11 @@ bool nack__debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4])
     return nack__gfx_read_pixel(px, py, rgba);
 }
 
+struct nack_console *nack_root(void)
+{
+    return nack__c.root;
+}
+
 bool nack_should_close(void)
 {
     return nack__c.should_close ||

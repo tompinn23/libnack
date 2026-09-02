@@ -406,17 +406,17 @@ int main(void)
         if (dirty) {
             dirty = false;
 
-            nack_clear_to(NULL, NACK_WHITE, NACK_BLACK);
-            draw_map(NULL, mouse_x, mouse_y);
+            nack_clear_to(nack_root(), NACK_WHITE, NACK_BLACK);
+            draw_map(nack_root(), mouse_x, mouse_y);
 
             draw_sidebar(sidebar);
-            nack_blit(sidebar, 0, 0, SIDEBAR_W, VIEW_H, NULL, VIEW_W, 0,
+            nack_blit(sidebar, 0, 0, SIDEBAR_W, VIEW_H, nack_root(), VIEW_W, 0,
                       1.0f, 1.0f);
 
-            nack_draw_box(NULL, 0, VIEW_H, CONSOLE_W, LOG_H,
+            nack_draw_box(nack_root(), 0, VIEW_H, CONSOLE_W, LOG_H,
                           NACK_RGB(70, 70, 80), NACK_BLACK, "log");
             for (int i = 0; i < log_count; ++i)
-                nack_print(NULL, 2, VIEW_H + 1 + i, log_colours[i], NACK_BLACK,
+                nack_print(nack_root(), 2, VIEW_H + 1 + i, log_colours[i], NACK_BLACK,
                            log_lines[i]);
 
             nack_present();

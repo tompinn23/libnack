@@ -5,10 +5,21 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* NULL means the root console, so the common case needs no ceremony. */
+/*
+ * Every drawing call comes through here.
+ *
+ * NULL used to mean the root console, which made a null pointer
+ * indistinguishable from a mistake: a console that failed to allocate drew to
+ * the screen instead of failing, and the caller never found out. The root is
+ * spelled nack_root() now, so NULL can mean what it looks like.
+ */
 struct nack_console *nack__console_resolve(struct nack_console *console)
 {
-    return console ? console : nack__c.root;
+    if (!console) {
+        nack__error("no console given (the root console is nack_root())");
+        return NULL;
+    }
+    return console;
 }
 
 /* Decodes one codepoint and advances the cursor. Invalid bytes yield U+FFFD
@@ -81,7 +92,7 @@ void nack_console_free(struct nack_console *console)
 void nack_console_size(const struct nack_console *console, int *columns, int *rows)
 {
     const struct nack_console *c =
-        console ? console : nack__c.root;
+        nack__console_resolve((struct nack_console *)console);
     if (columns) *columns = c ? c->columns : 0;
     if (rows)    *rows = c ? c->rows : 0;
 }
@@ -218,7 +229,8 @@ void nack_set_bg(struct nack_console *console, int x, int y, struct nack_color b
 
 struct nack_cell nack_get(const struct nack_console *console, int x, int y)
 {
-    const struct nack_console *c = console ? console : nack__c.root;
+    const struct nack_console *c =
+        nack__console_resolve((struct nack_console *)console);
     struct nack_cell empty;
 
     memset(&empty, 0, sizeof empty);
@@ -435,7 +447,8 @@ void nack_blit(const struct nack_console *src, int src_x, int src_y, int width,
                int height, struct nack_console *dst, int dst_x, int dst_y,
                float fg_alpha, float bg_alpha)
 {
-    const struct nack_console *s = src ? src : nack__c.root;
+    const struct nack_console *s =
+        nack__console_resolve((struct nack_console *)src);
     struct nack_console *d = nack__console_resolve(dst);
     int x, y;
 

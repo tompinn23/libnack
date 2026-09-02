@@ -355,10 +355,20 @@ NACK_API const char *nack_get_error(void);
 struct nack_console;
 
 /*
- * Every drawing call takes a console, and NULL means the root console - the
- * one that gets presented. Offscreen consoles are for composing: draw a panel
- * or a menu into one, then blit it.
+ * Every drawing call takes a console. Offscreen consoles are for composing:
+ * draw a panel or a menu into one, then blit it onto the root.
  */
+/*
+ * The console the window shows. Created by nack_init and destroyed by
+ * nack_shutdown, so it is never freed by the caller and is NULL only before
+ * nack_init has succeeded.
+ *
+ * Every drawing call takes a console explicitly. Passing NULL is an error
+ * rather than a shorthand for this one, so a console that failed to allocate
+ * cannot quietly draw to the screen instead.
+ */
+NACK_API struct nack_console *nack_root(void);
+
 NACK_API struct nack_console *nack_console_new(int columns, int rows);
 NACK_API void nack_console_free(struct nack_console *console);
 NACK_API void nack_console_size(const struct nack_console *console,

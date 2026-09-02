@@ -86,45 +86,65 @@ int main(void)
     check(strcmp(nack__gfx_name(), "test-fail") != 0,
           "a working renderer is active");
 
-    nack_console_size(NULL, &columns, &rows);
+    nack_console_size(nack_root(), &columns, &rows);
     check(columns == 40 && rows == 20, "root console has the requested size");
 
     nack_tileset_size(nack_get_font(), &tw, &th, &count);
     check(tw == 8 && th == 8 && count == 256, "built-in font is 256 8x8 tiles");
 
     /* Drawing */
-    nack_clear(NULL);
-    nack_put(NULL, 2, 3, 'A', NACK_RED, NACK_BLUE);
-    cell = nack_get(NULL, 2, 3);
+    nack_clear(nack_root());
+    nack_put(nack_root(), 2, 3, 'A', NACK_RED, NACK_BLUE);
+    cell = nack_get(nack_root(), 2, 3);
     check(cell.glyph == 'A' && cell.fg.r == 200 && cell.bg.b == 220,
           "put and get round trip");
 
-    check(nack_print(NULL, 0, 0, NACK_WHITE, NACK_BLACK, "hello") == 5,
+    check(nack_print(nack_root(), 0, 0, NACK_WHITE, NACK_BLACK, "hello") == 5,
           "print returns the cell count");
-    check(nack_get(NULL, 4, 0).glyph == 'o', "print wrote the last cell");
+    check(nack_get(nack_root(), 4, 0).glyph == 'o', "print wrote the last cell");
+
+    /*
+     * A null console must not fall back to the root. This is the whole reason
+     * the root is spelled nack_root(): a console that failed to allocate used
+     * to draw to the screen, and the caller never found out.
+     */
+    nack_put(nack_root(), 30, 18, 'Z', NACK_WHITE, NACK_BLACK);
+    nack_put(NULL, 30, 18, 'Q', NACK_RED, NACK_BLUE);
+    check(nack_get(nack_root(), 30, 18).glyph == 'Z',
+          "a null console does not draw to the root");
+    check(nack_get(NULL, 30, 18).glyph == 0,
+          "reading a null console yields nothing");
+    check(nack_print(NULL, 0, 0, NACK_WHITE, NACK_BLACK, "x") == 0,
+          "printing to a null console writes nothing");
+    {
+        const char *why = nack_get_error();
+        check(why != NULL && strstr(why, "nack_root") != NULL,
+              "and says what to use instead");
+    }
+    nack_put(nack_root(), 30, 18, ' ', NACK_WHITE, NACK_BLACK);
 
     /* UTF-8 must survive as codepoints, not bytes. */
-    nack_print(NULL, 0, 1, NACK_WHITE, NACK_BLACK, "\xE2\x94\x80");   /* U+2500 */
-    check(nack_get(NULL, 0, 1).glyph == 0x2500, "UTF-8 decoded to a codepoint");
+    nack_print(nack_root(), 0, 1, NACK_WHITE, NACK_BLACK, "\xE2\x94\x80");   /* U+2500 */
+    check(nack_get(nack_root(), 0, 1).glyph == 0x2500, "UTF-8 decoded to a codepoint");
 
-    nack_printf(NULL, 0, 2, NACK_WHITE, NACK_BLACK, "%d-%s", 42, "x");
-    check(nack_get(NULL, 0, 2).glyph == '4' && nack_get(NULL, 3, 2).glyph == 'x',
+    nack_printf(nack_root(), 0, 2, NACK_WHITE, NACK_BLACK, "%d-%s", 42, "x");
+    check(nack_get(nack_root(), 0, 2).glyph == '4' && nack_get(nack_root(), 3, 2).glyph == 'x',
           "printf formats into cells");
 
     /* Clipping rather than corrupting memory. */
-    nack_put(NULL, -5, -5, 'X', NACK_WHITE, NACK_BLACK);
-    nack_put(NULL, 9999, 9999, 'X', NACK_WHITE, NACK_BLACK);
+    nack_put(nack_root(), -5, -5, 'X', NACK_WHITE, NACK_BLACK);
+    nack_put(nack_root(), 9999, 9999, 'X', NACK_WHITE, NACK_BLACK);
     check(1, "out of bounds writes are ignored");
 
-    nack_fill(NULL, 10, 10, 5, 3, '#', NACK_GREEN, NACK_BLACK);
-    check(nack_get(NULL, 12, 11).glyph == '#', "fill covers its rectangle");
+    nack_fill(nack_root(), 10, 10, 5, 3, '#', NACK_GREEN, NACK_BLACK);
+    check(nack_get(nack_root(), 12, 11).glyph == '#', "fill covers its rectangle");
 
-    nack_draw_box(NULL, 20, 5, 10, 6, NACK_GREY, NACK_BLACK, "hi");
-    check(nack_get(NULL, 20, 5).glyph == 0x250C &&
-          nack_get(NULL, 29, 10).glyph == 0x2518,
+    nack_draw_box(nack_root(), 20, 5, 10, 6, NACK_GREY, NACK_BLACK, "hi");
+    check(nack_get(nack_root(), 20, 5).glyph == 0x250C &&
+          nack_get(nack_root(), 29, 10).glyph == 0x2518,
           "draw_box uses box drawing corners");
 
-    check(nack_print_wrapped(NULL, 0, 14, 10, 0,
+    check(nack_print_wrapped(nack_root(), 0, 14, 10, 0,
                              NACK_WHITE, NACK_BLACK,
                              "the quick brown fox jumps") >= 3,
           "print_wrapped measures without drawing");
@@ -134,9 +154,9 @@ int main(void)
     check(offscreen != NULL, "offscreen console created");
     nack_clear_to(offscreen, NACK_WHITE, NACK_RED);
     nack_print(offscreen, 0, 0, NACK_YELLOW, NACK_RED, "panel");
-    nack_blit(offscreen, 0, 0, 8, 4, NULL, 1, 15, 1.0f, 1.0f);
-    check(nack_get(NULL, 1, 15).glyph == 'p', "blit copied glyphs");
-    check(nack_get(NULL, 1, 15).bg.r == 200, "blit copied backgrounds");
+    nack_blit(offscreen, 0, 0, 8, 4, nack_root(), 1, 15, 1.0f, 1.0f);
+    check(nack_get(nack_root(), 1, 15).glyph == 'p', "blit copied glyphs");
+    check(nack_get(nack_root(), 1, 15).bg.r == 200, "blit copied backgrounds");
     nack_console_free(offscreen);
 
     /* Resizing keeps what still fits. */
@@ -147,15 +167,15 @@ int main(void)
     nack_console_free(offscreen);
 
     /* Codepoints the font has no tile for must not draw garbage. */
-    nack_put(NULL, 0, 19, 0x4E2D, NACK_WHITE, NACK_BLACK);   /* CJK */
+    nack_put(nack_root(), 0, 19, 0x4E2D, NACK_WHITE, NACK_BLACK);   /* CJK */
     check(1, "unmapped codepoint accepted");
 
     /*
      * A real frame through OpenGL, verified by reading pixels back rather
      * than by present() merely returning.
      */
-    nack_clear_to(NULL, NACK_WHITE, NACK_BLACK);
-    nack_fill(NULL, 0, 0, 40, 20, ' ', NACK_WHITE, NACK_RGB(20, 40, 80));
+    nack_clear_to(nack_root(), NACK_WHITE, NACK_BLACK);
+    nack_fill(nack_root(), 0, 0, 40, 20, ' ', NACK_WHITE, NACK_RGB(20, 40, 80));
     nack_present();
     {
         uint8_t pixel[4] = { 0, 0, 0, 0 };
@@ -166,8 +186,8 @@ int main(void)
     }
 
     /* A glyph must actually put foreground pixels on screen. */
-    nack_clear_to(NULL, NACK_WHITE, NACK_BLACK);
-    nack_fill(NULL, 0, 0, 40, 20, 0x2588, NACK_RGB(0, 255, 0), NACK_BLACK);
+    nack_clear_to(nack_root(), NACK_WHITE, NACK_BLACK);
+    nack_fill(nack_root(), 0, 0, 40, 20, 0x2588, NACK_RGB(0, 255, 0), NACK_BLACK);
     nack_present();
     {
         uint8_t pixel[4] = { 0, 0, 0, 0 };
@@ -178,7 +198,7 @@ int main(void)
     }
 
     /* And a blank cell must leave the background showing. */
-    nack_clear_to(NULL, NACK_WHITE, NACK_RGB(255, 0, 0));
+    nack_clear_to(nack_root(), NACK_WHITE, NACK_RGB(255, 0, 0));
     nack_present();
     {
         uint8_t pixel[4] = { 0, 0, 0, 0 };
