@@ -207,9 +207,12 @@ void nack_shutdown(void)
 {
     size_t i;
 
-    nack__gfx_shutdown();
-
-    /* Copy first: freeing a tileset unregisters it and moves the array. */
+    /*
+     * Tilesets hold textures, so they go before the renderer that owns them:
+     * nack__gfx_texture_destroy needs a live backend to hand the texture back
+     * to, and does nothing once there is not one. Shutting the renderer down
+     * first leaked every atlas, the built-in font included.
+     */
     for (i = nack__c.tileset_count; i > 0; --i) {
         struct nack_tileset *tileset = nack__c.tilesets[i - 1];
         if (tileset == nack__c.builtin_font)
@@ -221,6 +224,8 @@ void nack_shutdown(void)
         nack__c.builtin_font = NULL;   /* let the free go through */
         nack_tileset_free(builtin);
     }
+
+    nack__gfx_shutdown();
 
     if (nack__c.root) {
         struct nack_console *root = nack__c.root;

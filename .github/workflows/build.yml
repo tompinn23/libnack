@@ -76,6 +76,37 @@ jobs:
             fi
           done
 
+  # The C++ header is a RAII wrapper, so a leak or a double free in it is a
+  # defect in the thing itself. This job is what found the built-in font's
+  # atlas leaking at shutdown.
+  linux-sanitizers:
+    name: linux (asan, ubsan, lsan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb1-dev libx11-xcb-dev libxcb-xkb-dev \
+            libxcb-cursor-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev wayland-protocols libegl-dev libgl-dev \
+            xvfb mesa-utils
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          cmake --build build -j
+      - name: Test
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+          ASAN_OPTIONS: detect_leaks=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+            ctest --test-dir build --output-on-failure
+
   windows:
     runs-on: windows-latest
     steps:

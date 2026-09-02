@@ -102,6 +102,64 @@ that has been attacked for years. Only PNG and JPEG are compiled in, so the
 other seven formats stb_image knows are not reachable from a file the program
 did not write. See `third_party/VENDORING.md`.
 
+## C++
+
+`<nack/nack.hpp>` is an optional header-only C++17 face on the same library.
+It is a wrapper and nothing else — every call forwards to the C API and the
+compiler folds it away — but it adds the parts C cannot express:
+
+```cpp
+#include <nack/nack.hpp>
+
+int main()
+{
+    nack::Config config = nack::defaultConfig();
+    config.title = "roguelike";
+    nack::App app{config};                       // nack_shutdown on scope exit
+
+    nack::Console panel{20, 10};                 // freed on scope exit
+    panel.drawBox(0, 0, 20, 10, nack::grey, nack::black, "inventory");
+    panel.print(2, 2, "a) rusty sword", nack::white, nack::black);
+
+    while (!app.shouldClose()) {
+        app.console().clear();
+        panel.blitTo(app.console(), 30, 20);
+        app.present();
+
+        if (auto ev = app.wait()) {
+            if (auto *key = std::get_if<nack::KeyEvent>(&*ev))
+                if (key->key == nack::Key::Escape)
+                    break;
+        }
+    }
+}
+```
+
+Consoles, tilesets and the library itself free themselves. Events arrive as a
+`std::variant`, so reading the wrong arm of the union is a compile error rather
+than a convention in a comment. `poll()` returns `std::optional` instead of a
+bool and an out-parameter, sizes come back as structured bindings, and
+modifiers are a real bitmask type rather than a bare `uint32_t`.
+
+`ConsoleView` is the non-owning half, so one helper takes either kind:
+
+```cpp
+void drawPanel(nack::ConsoleView console);   // the root or an owned console
+```
+
+Two things the header has to do for you, which is half the reason it exists.
+`<nack/nack.h>` carries no `extern "C"` guards, because the C library does not
+pretend to be C++; the wrapper supplies them. And the `NACK_RGB` family are
+compound literals — a GCC and Clang extension in C++, rejected outright by
+MSVC — so the colours are `constexpr` there instead. Do not reach for the C
+macros from C++.
+
+Exceptions are used only where construction fails, and every constructor has a
+`tryCreate` counterpart returning `std::optional`. Built with exceptions off,
+the throwing paths abort with the message instead.
+
+The C library is unchanged and stays the ABI other languages bind to.
+
 ## Consoles
 
 Every drawing call takes a console. `nack_root()` is the one that gets
@@ -229,6 +287,13 @@ are decoded back and checked for size, orientation, opacity and drift. The two
 implementations agree to within a few levels on every channel, which is worth
 more than either checked against itself. Corrupt and truncated input must not
 crash, and must not report a size it did not produce.
+
+`tests/cpp_smoke.cpp` covers the C++ header: that handles free themselves and
+free exactly once, that a moved-from handle does not double free, that views
+and owners are interchangeable where a helper takes one, and that the variant
+carries the arm the event type says it does. CI runs the whole suite a second
+time under AddressSanitizer, UndefinedBehaviorSanitizer and LeakSanitizer,
+which is what a RAII wrapper has to be held to.
 
 `tests/win32_abi_check` compares the hand-rolled Win32 declarations with the
 SDK.

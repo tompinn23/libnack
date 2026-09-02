@@ -276,6 +276,36 @@ if(PROJECT_IS_TOP_LEVEL)
         ENVIRONMENT "NACK_RENDERER=test-fail"
         SKIP_RETURN_CODE 77)
 
+    #
+    # The C++ header is a wrapper over the C library, so it is only worth
+    # anything if it compiles and runs. A C++ compiler is not required to
+    # build libnack, so the test appears only when there is one.
+    #
+    include(CheckLanguage)
+    check_language(CXX)
+    if(CMAKE_CXX_COMPILER)
+        enable_language(CXX)
+        add_executable(nack_cpp_smoke tests/cpp_smoke.cpp
+            $<TARGET_OBJECTS:nack_objects> ${NACK_VENDORED_OBJECTS})
+        target_link_libraries(nack_cpp_smoke PRIVATE ${NACK_LIBRARIES})
+        target_include_directories(nack_cpp_smoke PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+            ${CMAKE_CURRENT_BINARY_DIR})
+        set_target_properties(nack_cpp_smoke PROPERTIES
+            CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(nack_cpp_smoke PRIVATE
+                -Wall -Wextra -Wpedantic)
+        elseif(MSVC)
+            target_compile_options(nack_cpp_smoke PRIVATE /W4)
+        endif()
+        add_test(NAME cpp COMMAND nack_cpp_smoke)
+        set_tests_properties(cpp PROPERTIES SKIP_RETURN_CODE 77)
+    else()
+        message(STATUS "No C++ compiler: the C++ header test will be skipped")
+    endif()
+
     add_executable(nack_image_test tests/image_test.c src/console/nack_image.c
         ${NACK_VENDORED_OBJECTS})
     target_include_directories(nack_image_test PRIVATE

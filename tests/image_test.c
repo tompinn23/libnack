@@ -93,6 +93,8 @@ int main(int argc, char **argv)
         nack__image_free(rgba); free(png);
     }
 
+    free(exp);
+
     /* Malformed input must be rejected, not crash. */
     {
         const char *err;
@@ -114,10 +116,17 @@ int main(int argc, char **argv)
                 printf("truncated PNG accepted\n"); failures++;
             } else printf("%-12s ok  (rejected: %s)\n", "truncated", err);
             png[30] ^= 0xFF;   /* corrupt the compressed stream */
-            if (nack__image_decode(png, psz, &w, &h, &err) != NULL)
-                printf("%-12s ok  (corrupt data decoded to something; no crash)\n", "corrupt");
-            else
-                printf("%-12s ok  (rejected: %s)\n", "corrupt", err);
+            {
+                unsigned char *salvaged =
+                    nack__image_decode(png, psz, &w, &h, &err);
+                if (salvaged) {
+                    printf("%-12s ok  (corrupt data decoded to something; "
+                           "no crash)\n", "corrupt");
+                    nack__image_free(salvaged);
+                } else {
+                    printf("%-12s ok  (rejected: %s)\n", "corrupt", err);
+                }
+            }
             free(png);
         }
     }
