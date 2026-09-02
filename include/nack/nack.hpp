@@ -17,13 +17,11 @@
  *     rather than a bare uint32_t.
  *   - print() takes a {fmt} format string rather than C varargs.
  *
- * One thing it still has to do for you: the NACK_RGB family are compound
- * literals, which are a GCC and Clang extension in C++ and rejected outright
- * by MSVC - so the colours below are constexpr functions and constants
- * instead. Do not reach for the C macros from C++.
- *
  * <nack/nack.h> carries its own extern "C" guards now that the library behind
- * it is C++, so this header no longer has to supply them.
+ * it is C++, and NACK_RGB spells itself as a braced init there rather than a
+ * compound literal, so both are usable from C++. The constexpr colours below
+ * are still the idiomatic spelling here - they are typed, scoped and usable
+ * in constant expressions, which a macro is not.
  *
  * Exceptions are used only where construction fails. If you build with them
  * off, every constructor has a try_create counterpart returning

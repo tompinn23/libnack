@@ -68,10 +68,19 @@ struct nack_color {
     uint8_t r, g, b, a;
 };
 
-#define NACK_RGB(r, g, b)      ((struct nack_color){ (uint8_t)(r), (uint8_t)(g), \
-                                                     (uint8_t)(b), 255 })
-#define NACK_RGBA(r, g, b, a)  ((struct nack_color){ (uint8_t)(r), (uint8_t)(g), \
-                                                     (uint8_t)(b), (uint8_t)(a) })
+/*
+ * A compound literal in C; a braced init in C++, which has no compound
+ * literals - GCC and Clang allow them as an extension but MSVC rejects them
+ * outright, and the library itself is C++ now.
+ */
+#ifdef __cplusplus
+#  define NACK_RGBA(r, g, b, a)  (nack_color{ (uint8_t)(r), (uint8_t)(g), \
+                                              (uint8_t)(b), (uint8_t)(a) })
+#else
+#  define NACK_RGBA(r, g, b, a)  ((struct nack_color){ (uint8_t)(r), (uint8_t)(g), \
+                                                       (uint8_t)(b), (uint8_t)(a) })
+#endif
+#define NACK_RGB(r, g, b)      NACK_RGBA(r, g, b, 255)
 
 #define NACK_BLACK        NACK_RGB(0, 0, 0)
 #define NACK_WHITE        NACK_RGB(255, 255, 255)

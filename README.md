@@ -160,10 +160,10 @@ rejected where it is written — {fmt}'s compile-time checking, which is one of
 the reasons the header asks for C++20. `tests/cpp_bad_format.cpp` is a file
 that must fail to compile, and the test suite checks that it does.
 
-One thing the header still has to do for you: the `NACK_RGB` family are
-compound literals — a GCC and Clang extension in C++, rejected outright by
-MSVC — so the colours are `constexpr` there instead. Do not reach for the C
-macros from C++.
+Colours are `constexpr` here — `nack::white`, `nack::rgb(...)` — rather than
+the C macros. `NACK_RGB` is usable from C++ too (it spells itself as a braced
+init there, since C++ has no compound literals), but the `constexpr` forms are
+typed, scoped, and usable in constant expressions.
 
 Exceptions are used only where construction fails, and every constructor has a
 `try_create` counterpart returning `std::optional`. Built with exceptions off,

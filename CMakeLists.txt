@@ -236,9 +236,19 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     #
     target_compile_options(nack_objects PRIVATE
         -Wall -Wextra -Wshadow -Wno-unused-parameter
-        -Wno-missing-field-initializers)
+        -Wno-missing-field-initializers
+        #
+        # -Wpedantic on the C++ only. GCC and Clang accept several things in
+        # C++ that the standard does not and MSVC therefore rejects - compound
+        # literals above all, which is how NACK_RGB reached MSVC as an error
+        # nobody could see here. This turns that class of failure into a local
+        # one. Objective-C++ is left out: its own extensions are the point.
+        #
+        $<$<COMPILE_LANGUAGE:CXX>:-Wpedantic>)
 elseif(MSVC)
-    target_compile_options(nack_objects PRIVATE /W4 /wd4100)
+    # /Zc:__cplusplus so __cplusplus is the standard being compiled rather
+    # than 199711L, which is what MSVC reports without it.
+    target_compile_options(nack_objects PRIVATE /W4 /wd4100 /Zc:__cplusplus)
     target_compile_definitions(nack_objects PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 

@@ -130,9 +130,28 @@ uint64_t nack__win_time_ns(void)
 #if defined(NACK_PLATFORM_WIN32)
     static int64_t frequency;
     int64_t now;
+    /*
+     * The real SDK declares these as taking LARGE_INTEGER*, a union; the
+     * hand-rolled header declares the int64_t the union actually holds, since
+     * that is the only member anything here reads. C converted between the
+     * two silently and C++ does not, so the SDK path goes through the union.
+     */
+#  if defined(NACK_WIN32_USE_SDK_HEADERS)
+    if (frequency == 0) {
+        LARGE_INTEGER ticks;
+        QueryPerformanceFrequency(&ticks);
+        frequency = ticks.QuadPart;
+    }
+    {
+        LARGE_INTEGER ticks;
+        QueryPerformanceCounter(&ticks);
+        now = ticks.QuadPart;
+    }
+#  else
     if (frequency == 0)
         QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&now);
+#  endif
     return (uint64_t)(((double)now / (double)frequency) * 1e9);
 #else
     struct timespec ts;
