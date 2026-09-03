@@ -488,9 +488,7 @@ static bool nack__wl_window_create(struct nack_window *w,
         return nack__fail(NACK_ERROR_PLATFORM,
                           "compositor is missing wl_compositor or xdg_wm_base");
 
-    struct nack_wl_window *ww = (struct nack_wl_window *)nack__calloc(1, sizeof *ww);
-    if (!ww)
-        return false;
+    struct nack_wl_window *ww = new nack_wl_window{};
     ww->egl_surface = EGL_NO_SURFACE;
     ww->buffer_scale = 1;
     ww->decor_scale = 1;
@@ -499,7 +497,7 @@ static bool nack__wl_window_create(struct nack_window *w,
 
     ww->surface = wl_compositor_create_surface(nack__wl.compositor);
     if (!ww->surface) {
-        free(ww);
+        delete ww;
         w->native = NULL;
         return nack__fail(NACK_ERROR_PLATFORM, "wl_compositor.create_surface failed");
     }
@@ -610,7 +608,7 @@ static void nack__wl_window_destroy(struct nack_window *w)
     if (ww->xdg_surface)  xdg_surface_destroy(ww->xdg_surface);
     if (ww->surface)      wl_surface_destroy(ww->surface);
 
-    free(ww);
+    delete ww;
     w->native = NULL;
     wl_display_flush(nack__wl.display);
 }
@@ -898,7 +896,7 @@ static void nack__wl_pump_events(double timeout)
 static bool nack__wl_init(const struct nack_win_init_desc *desc)
 {
     (void)desc;
-    memset(&nack__wl, 0, sizeof nack__wl);
+    nack__wl = nack_wayland_state{};
     nack__wl.wakeup_pipe[0] = nack__wl.wakeup_pipe[1] = -1;
     nack__wl.repeat_rate = 25;
     nack__wl.repeat_delay = 400;
@@ -994,7 +992,7 @@ static void nack__wl_shutdown(void)
 
     wl_display_flush(nack__wl.display);
     wl_display_disconnect(nack__wl.display);
-    memset(&nack__wl, 0, sizeof nack__wl);
+    nack__wl = nack_wayland_state{};
 }
 
 /* ------------------------------------------------------------------ */

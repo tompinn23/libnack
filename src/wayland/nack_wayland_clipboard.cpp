@@ -11,10 +11,12 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <optional>
 #include <poll.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
+#include <string>
 #include <time.h>
 #include <unistd.h>
 
@@ -31,7 +33,7 @@
  * data in arbitrarily many chunks, and a source that never writes must not
  * hang the caller, so the read is non-blocking with a deadline.
  */
-static char *nack__wl_read_pipe(int raw_fd)
+static std::optional<std::string> nack__wl_read_pipe(int raw_fd)
 {
     nack::unique_fd fd(raw_fd);
     int flags = fcntl(fd.get(), F_GETFL, 0);
@@ -39,26 +41,14 @@ static char *nack__wl_read_pipe(int raw_fd)
     if (flags >= 0)
         fcntl(fd.get(), F_SETFL, flags | O_NONBLOCK);
 
-    size_t capacity = 4096, length = 0;
-    nack::c_ptr<char> buffer((char *)malloc(capacity));
-    if (!buffer)
-        return NULL;
-
+    std::string buffer;
+    char chunk[4096];
     double deadline = nack__win_time_seconds() + NACK_WL_READ_TIMEOUT_MS / 1000.0;
-    for (;;) {
-        if (length + 1 >= capacity) {
-            size_t grown_size = capacity * 2;
-            char *grown = (char *)realloc(buffer.get(), grown_size);
-            if (!grown)
-                return NULL;   /* buffer still owns the original */
-            buffer.release();
-            buffer.reset(grown);
-            capacity = grown_size;
-        }
 
-        ssize_t n = read(fd.get(), buffer.get() + length, capacity - length - 1);
+    for (;;) {
+        ssize_t n = read(fd.get(), chunk, sizeof chunk);
         if (n > 0) {
-            length += (size_t)n;
+            buffer.append(chunk, (size_t)n);
             continue;
         }
         if (n == 0)
@@ -75,8 +65,7 @@ static char *nack__wl_read_pipe(int raw_fd)
         poll(&pfd, 1, (int)(remaining * 1000.0));
     }
 
-    buffer.get()[length] = '\0';
-    return buffer.release();
+    return buffer;
 }
 
 /* ------------------------------------------------------------------ */
@@ -245,8 +234,7 @@ static void data_source_cancelled(void *data, struct wl_data_source *source)
     if (nack__wl.data_source == source) {
         wl_data_source_destroy(source);
         nack__wl.data_source = NULL;
-        free(nack__wl.clipboard_offered);
-        nack__wl.clipboard_offered = NULL;
+        nack__wl.clipboard_offered.reset();
     }
 }
 
@@ -337,8 +325,7 @@ static void primary_source_cancelled(void *data,
     if (nack__wl.primary_source == source) {
         zwp_primary_selection_source_v1_destroy(source);
         nack__wl.primary_source = NULL;
-        free(nack__wl.primary_offered);
-        nack__wl.primary_offered = NULL;
+        nack__wl.primary_offered.reset();
     }
 }
 
@@ -381,22 +368,18 @@ bool nack__wl_clipboard_set(const char *utf8)
     if (!nack__wl.data_device)
         return nack__fail(NACK_ERROR_PLATFORM, "no wl_data_device for the seat");
 
-    char *copy = nack__strdup(utf8);
-    if (!copy)
-        return false;
-
     if (nack__wl.data_source)
         wl_data_source_destroy(nack__wl.data_source);
-    free(nack__wl.clipboard_offered);
-    nack__wl.clipboard_offered = copy;
+    nack__wl.clipboard_offered = utf8;
 
     nack__wl.data_source = wl_data_device_manager_create_data_source(
         nack__wl.data_device_manager);
     if (!nack__wl.data_source)
         return nack__fail(NACK_ERROR_PLATFORM, "create_data_source failed");
 
-    wl_data_source_add_listener(nack__wl.data_source, &nack__wl_data_source_listener,
-                                nack__wl.clipboard_offered);
+    wl_data_source_add_listener(
+        nack__wl.data_source, &nack__wl_data_source_listener,
+        const_cast<char *>(nack__wl.clipboard_offered->c_str()));
     wl_data_source_offer(nack__wl.data_source, NACK_WL_MIME_UTF8);
     wl_data_source_offer(nack__wl.data_source, NACK_WL_MIME_PLAIN);
     wl_data_source_offer(nack__wl.data_source, "UTF8_STRING");
@@ -415,9 +398,8 @@ const char *nack__wl_clipboard_get(void)
 
     /* We own the selection: no round trip needed. */
     if (nack__wl.data_source && nack__wl.clipboard_offered) {
-        free(nack__wl.clipboard_text);
-        nack__wl.clipboard_text = nack__strdup(nack__wl.clipboard_offered);
-        return nack__wl.clipboard_text;
+        nack__wl.clipboard_text = nack__wl.clipboard_offered;
+        return nack__wl.clipboard_text->c_str();
     }
 
     if (!nack__wl.pending_offer || !nack__wl.offer_has_text)
@@ -432,9 +414,8 @@ const char *nack__wl_clipboard_get(void)
     /* The compositor only acts on the receive once it is flushed. */
     wl_display_roundtrip(nack__wl.display);
 
-    free(nack__wl.clipboard_text);
     nack__wl.clipboard_text = nack__wl_read_pipe(fds[0]);
-    return nack__wl.clipboard_text;
+    return nack__wl.clipboard_text ? nack__wl.clipboard_text->c_str() : NULL;
 }
 
 bool nack__wl_primary_set(const char *utf8)
@@ -443,14 +424,9 @@ bool nack__wl_primary_set(const char *utf8)
     if (!nack__wl.primary_manager || !nack__wl.primary_device)
         return false;
 
-    char *copy = nack__strdup(utf8);
-    if (!copy)
-        return false;
-
     if (nack__wl.primary_source)
         zwp_primary_selection_source_v1_destroy(nack__wl.primary_source);
-    free(nack__wl.primary_offered);
-    nack__wl.primary_offered = copy;
+    nack__wl.primary_offered = utf8;
 
     nack__wl.primary_source =
         zwp_primary_selection_device_manager_v1_create_source(nack__wl.primary_manager);
@@ -459,7 +435,7 @@ bool nack__wl_primary_set(const char *utf8)
 
     zwp_primary_selection_source_v1_add_listener(
         nack__wl.primary_source, &nack__wl_primary_source_listener,
-        nack__wl.primary_offered);
+        const_cast<char *>(nack__wl.primary_offered->c_str()));
     zwp_primary_selection_source_v1_offer(nack__wl.primary_source, NACK_WL_MIME_UTF8);
     zwp_primary_selection_source_v1_offer(nack__wl.primary_source, NACK_WL_MIME_PLAIN);
     zwp_primary_selection_source_v1_offer(nack__wl.primary_source, "UTF8_STRING");
@@ -475,9 +451,8 @@ bool nack__wl_primary_set(const char *utf8)
 const char *nack__wl_primary_get(void)
 {
     if (nack__wl.primary_source && nack__wl.primary_offered) {
-        free(nack__wl.primary_text);
-        nack__wl.primary_text = nack__strdup(nack__wl.primary_offered);
-        return nack__wl.primary_text;
+        nack__wl.primary_text = nack__wl.primary_offered;
+        return nack__wl.primary_text->c_str();
     }
 
     if (!nack__wl.pending_primary_offer || !nack__wl.primary_offer_has_text)
@@ -492,9 +467,8 @@ const char *nack__wl_primary_get(void)
     close(fds[1]);
     wl_display_roundtrip(nack__wl.display);
 
-    free(nack__wl.primary_text);
     nack__wl.primary_text = nack__wl_read_pipe(fds[0]);
-    return nack__wl.primary_text;
+    return nack__wl.primary_text ? nack__wl.primary_text->c_str() : NULL;
 }
 
 void nack__wl_clipboard_shutdown(void)
@@ -513,11 +487,6 @@ void nack__wl_clipboard_shutdown(void)
     if (nack__wl.primary_manager)
         zwp_primary_selection_device_manager_v1_destroy(nack__wl.primary_manager);
 
-    free(nack__wl.clipboard_text);
-    free(nack__wl.primary_text);
-    free(nack__wl.clipboard_offered);
-    free(nack__wl.primary_offered);
-
     nack__wl.data_source = NULL;
     nack__wl.primary_source = NULL;
     nack__wl.pending_offer = NULL;
@@ -526,8 +495,8 @@ void nack__wl_clipboard_shutdown(void)
     nack__wl.primary_device = NULL;
     nack__wl.data_device_manager = NULL;
     nack__wl.primary_manager = NULL;
-    nack__wl.clipboard_text = NULL;
-    nack__wl.primary_text = NULL;
-    nack__wl.clipboard_offered = NULL;
-    nack__wl.primary_offered = NULL;
+    nack__wl.clipboard_text.reset();
+    nack__wl.primary_text.reset();
+    nack__wl.clipboard_offered.reset();
+    nack__wl.primary_offered.reset();
 }

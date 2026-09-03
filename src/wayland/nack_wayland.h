@@ -2,6 +2,8 @@
 #define NACK_WAYLAND_H_INCLUDED
 
 #include "../nack_internal.h"
+#include <optional>
+#include <string>
 #include "../common/nack_egl.h"
 
 #include <wayland-client.h>
@@ -177,10 +179,10 @@ struct nack_wayland_state {
 
     int wakeup_pipe[2];
 
-    char *clipboard_text;
-    char *primary_text;
-    char *clipboard_offered;
-    char *primary_offered;
+    std::optional<std::string> clipboard_text;
+    std::optional<std::string> primary_text;
+    std::optional<std::string> clipboard_offered;
+    std::optional<std::string> primary_offered;
     struct wl_data_source *data_source;
     struct zwp_primary_selection_source_v1 *primary_source;
     struct wl_data_offer *pending_offer;
