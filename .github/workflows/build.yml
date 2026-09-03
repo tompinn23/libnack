@@ -76,6 +76,60 @@ jobs:
             fi
           done
 
+  # The Wayland backend had no test coverage at all: every job either built
+  # it without running it, or ran under Xvfb, which selects X11. A headless
+  # Weston is a real compositor, so the whole backend - surface, xdg-shell,
+  # EGL, the event loop - is exercised here rather than only compiled.
+  linux-wayland:
+    name: linux (headless wayland)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build weston libgl1-mesa-dri libegl-mesa0 \
+            libxcb1-dev libx11-xcb-dev libxcb-xkb-dev libxcb-cursor-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev wayland-protocols \
+            libegl-dev libgl-dev
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja
+          cmake --build build
+      - name: Run the smoke test against a headless compositor
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          set -u
+          XDG_RUNTIME_DIR="$(mktemp -d)"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          export XDG_RUNTIME_DIR
+          weston --backend=headless --socket=wayland-ci \
+                 --width=1280 --height=1024 >weston.log 2>&1 &
+          weston_pid=$!
+          # Wait for the socket, rather than guessing how long Weston takes.
+          for _ in $(seq 1 100); do
+            [ -S "$XDG_RUNTIME_DIR/wayland-ci" ] && break
+            sleep 0.2
+          done
+          if [ ! -S "$XDG_RUNTIME_DIR/wayland-ci" ]; then
+            echo "weston did not come up:"; cat weston.log; exit 1
+          fi
+          # No DISPLAY, so the library has to choose Wayland.
+          unset DISPLAY
+          status=0
+          WAYLAND_DISPLAY=wayland-ci ./build/nack_smoke || status=$?
+          kill "$weston_pid" 2>/dev/null || true
+          # 77 is the test's "no display" skip. Here that would mean the job
+          # ran nothing, which is the one outcome it exists to rule out.
+          if [ "$status" -eq 77 ]; then
+            echo "the smoke test skipped itself under Weston:"; cat weston.log
+            exit 1
+          fi
+          exit "$status"
+
   # The C++ header is a RAII wrapper, so a leak or a double free in it is a
   # defect in the thing itself. This job is what found the built-in font's
   # atlas leaking at shutdown.

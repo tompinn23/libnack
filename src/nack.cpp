@@ -1043,8 +1043,11 @@ void *nack__gl_get_proc_address(const char *name)
 bool nack__win_clipboard_set(const char *utf8)
 {
     NACK_REQUIRE_INIT_RET(false);
-    if (!utf8 || !nack__g.vt->clipboard_set)
-        return false;
+    if (!utf8)
+        return nack__fail(NACK_ERROR_INVALID_ARGUMENT, "no text to set");
+    if (!nack__g.vt->clipboard_set)
+        return nack__fail(NACK_ERROR_UNSUPPORTED,
+                          "this backend has no clipboard");
     return nack__g.vt->clipboard_set(utf8);
 }
 

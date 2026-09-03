@@ -10,7 +10,10 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
+#include <time.h>
 #include <unistd.h>
 
 #define NACK_WL_MIME_UTF8  "text/plain;charset=utf-8"
@@ -183,8 +186,27 @@ static void data_source_send(void *data, struct wl_data_source *source,
         return;
     }
 
-    /* Write the whole payload; a large paste will not fit one pipe buffer,
-     * and SIGPIPE must not reach the application if the reader gives up. */
+    /*
+     * Write the whole payload; a large paste will not fit one pipe buffer.
+     *
+     * The reader is free to give up half way, and writing to a pipe nobody
+     * is reading raises SIGPIPE, whose default action kills the process - so
+     * a paste the other side abandoned would take the application down with
+     * it. Blocking the signal for the length of the write turns that into an
+     * EPIPE we already handle. The mask is restored on the way out, and the
+     * signal we caused is taken off the queue so it does not fire the moment
+     * it is - unless one was already waiting when we arrived, which is
+     * somebody else's and not ours to swallow.
+     */
+    sigset_t pipe_only, previous, pending;
+    bool masked, was_pending = false;
+
+    sigemptyset(&pipe_only);
+    sigaddset(&pipe_only, SIGPIPE);
+    if (sigpending(&pending) == 0)
+        was_pending = sigismember(&pending, SIGPIPE) == 1;
+    masked = pthread_sigmask(SIG_BLOCK, &pipe_only, &previous) == 0;
+
     size_t remaining = strlen(text);
     const char *cursor = text;
     while (remaining > 0) {
@@ -203,6 +225,16 @@ static void data_source_send(void *data, struct wl_data_source *source,
             continue;
         }
         break;   /* reader closed early */
+    }
+
+    if (masked) {
+        if (!was_pending) {
+            struct timespec immediately = { 0, 0 };
+            while (sigtimedwait(&pipe_only, NULL, &immediately) == -1 &&
+                   errno == EINTR)
+                ;
+        }
+        pthread_sigmask(SIG_SETMASK, &previous, NULL);
     }
     close(fd);
 }

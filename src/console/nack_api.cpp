@@ -571,9 +571,27 @@ void nack_set_vsync(bool vsync)
     nack__gfx_set_vsync(vsync);
 }
 
+/*
+ * The window layer keeps its own error, and the two are not the same store:
+ * a backend that explains itself through nack__fail is explaining it there,
+ * where nack_get_error never looks. Anything forwarded to that layer has to
+ * carry the reason across, or the caller gets a bare false and no account of
+ * why - which is what happened to every clipboard failure until now.
+ */
+static bool nack__forward_error(const char *what)
+{
+    const char *message = NULL;
+
+    nack__win_get_error(&message);
+    return nack__error("%s: %s", what, message && *message ? message
+                                                           : "no reason given");
+}
+
 bool nack_clipboard_set(const char *utf8)
 {
-    return nack__win_clipboard_set(utf8);
+    if (!nack__win_clipboard_set(utf8))
+        return nack__forward_error("cannot set the clipboard");
+    return true;
 }
 
 const char *nack_clipboard_get(void)

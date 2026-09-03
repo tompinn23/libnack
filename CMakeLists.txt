@@ -92,6 +92,12 @@ if(UNIX AND NOT APPLE)
     list(APPEND NACK_SOURCES src/common/nack_egl.cpp src/common/nack_xkb_keys.cpp)
     list(APPEND NACK_LIBRARIES PkgConfig::EGL ${CMAKE_DL_LIBS})
 
+    # For pthread_sigmask, which the Wayland selection write uses to keep a
+    # SIGPIPE from killing the application. Current glibc has it in libc, but
+    # not every libc or glibc version does.
+    find_package(Threads REQUIRED)
+    list(APPEND NACK_LIBRARIES Threads::Threads)
+
     if(NACK_ENABLE_XCB)
         pkg_check_modules(XCB REQUIRED IMPORTED_TARGET
             xcb xcb-xkb xcb-cursor xkbcommon xkbcommon-x11)

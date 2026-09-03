@@ -24,6 +24,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/*
+ * C linkage, for the same reason the other internal headers keep it: the
+ * library is C++ but the tests are C, and a test that reaches in here to ask
+ * which backend it is running on has to find the symbol it expects.
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* -------------------------------------------------------------------------- */
 /* Enumerations                                                               */
 /* -------------------------------------------------------------------------- */
@@ -365,4 +374,7 @@ struct nack_native_window {
 void nack_window_get_native(const struct nack_window *window,
                                      struct nack_native_window *out);
 
+#ifdef __cplusplus
+}   /* extern "C" */
+#endif
 #endif /* NACK_WINDOW_H_INCLUDED */
