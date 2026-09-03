@@ -3,6 +3,8 @@
 #include "nack_image.h"
 #include "nack_font8x8.h"
 
+#include "../nack_scoped.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -118,7 +120,7 @@ bool nack_tileset_map(struct nack_tileset *tileset, uint32_t codepoint, int inde
     if (!tileset || index < 0 || index >= tileset->count)
         return nack__error("tile index %d is outside the tileset", index);
     if (codepoint < 256) {
-        tileset->direct[codepoint] = (int16_t)index;
+        tileset->direct[codepoint] = index;
         return true;
     }
     return nack__sparse_set(tileset, codepoint, index);
@@ -189,6 +191,20 @@ static void nack__normalize_font(uint8_t *rgba, int width, int height)
     }
 }
 
+/*
+ * Everything a tileset owns, released in one place. The codepoint map is the
+ * part that is easy to forget: it is allocated lazily by the seeding below,
+ * so a tileset can own one before it owns a texture.
+ */
+static void nack__tileset_destroy(struct nack_tileset *tileset)
+{
+    if (!tileset)
+        return;
+    nack__gfx_texture_destroy(tileset->texture);
+    free(tileset->sparse);
+    free(tileset);
+}
+
 struct nack_tileset *nack__tileset_from_rgba(uint8_t *rgba, int width, int height,
                                              int tile_width, int tile_height,
                                              enum nack_tileset_layout layout)
@@ -208,11 +224,13 @@ struct nack_tileset *nack__tileset_from_rgba(uint8_t *rgba, int width, int heigh
         return NULL;
     }
 
-    tileset = (struct nack_tileset *)calloc(1, sizeof *tileset);
-    if (!tileset) {
+    nack::owned<struct nack_tileset, nack__tileset_destroy> owner(
+        (struct nack_tileset *)calloc(1, sizeof(struct nack_tileset)));
+    if (!owner) {
         nack__error("out of memory");
         return NULL;
     }
+    tileset = owner.get();
 
     tileset->tile_width = tile_width;
     tileset->tile_height = tile_height;
@@ -239,7 +257,7 @@ struct nack_tileset *nack__tileset_from_rgba(uint8_t *rgba, int width, int heigh
          * thing for CP437 but keeps plain ASCII working on odd sheets. */
         for (i = 32; i < 127; ++i)
             if (tileset->direct[i] < 0 && i < tileset->count)
-                tileset->direct[i] = (int16_t)i;
+                tileset->direct[i] = i;
     } else if (layout == NACK_LAYOUT_TCOD) {
         /* libtcod sheets run down the columns rather than across the rows. */
         for (i = 0; i < 256 && i < tileset->count; ++i) {
@@ -249,17 +267,15 @@ struct nack_tileset *nack__tileset_from_rgba(uint8_t *rgba, int width, int heigh
         }
     } else {
         for (i = 0; i < 256 && i < tileset->count; ++i)
-            tileset->direct[i] = (int16_t)i;
+            tileset->direct[i] = i;
     }
 
     tileset->texture = nack__gfx_texture_create(rgba, width, height);
-    if (!tileset->texture) {
-        free(tileset);
+    if (!tileset->texture)
         return NULL;
-    }
 
     nack__tileset_register(tileset);
-    return tileset;
+    return owner.release();
 }
 
 /* ------------------------------------------------------------------ */
@@ -271,14 +287,16 @@ struct nack_tileset *nack__tileset_builtin(void)
     /* Expand the 1-bit font into a 16x16 sheet of 8x8 glyphs. */
     const int tile = 8, across = 16;
     const int width = tile * across, height = tile * across;
-    uint8_t *rgba = (uint8_t *)calloc((size_t)width * height, 4);
-    struct nack_tileset *tileset;
+    nack::c_ptr<uint8_t> owner(
+        (uint8_t *)calloc((size_t)width * height, 4));
+    uint8_t *rgba;
     int glyph;
 
-    if (!rgba) {
+    if (!owner) {
         nack__error("out of memory");
         return NULL;
     }
+    rgba = owner.get();
 
     for (glyph = 0; glyph < NACK_BUILTIN_FONT_COUNT; ++glyph) {
         int ox = (glyph % across) * tile;
@@ -298,10 +316,8 @@ struct nack_tileset *nack__tileset_builtin(void)
         }
     }
 
-    tileset = nack__tileset_from_rgba(rgba, width, height, tile, tile,
-                                      NACK_LAYOUT_CP437);
-    free(rgba);
-    return tileset;
+    return nack__tileset_from_rgba(rgba, width, height, tile, tile,
+                                   NACK_LAYOUT_CP437);
 }
 
 /* ------------------------------------------------------------------ */
@@ -314,72 +330,59 @@ struct nack_tileset *nack_tileset_load_memory(const void *data, size_t size,
 {
     const char *error = NULL;
     int width = 0, height = 0;
-    uint8_t *rgba;
-    struct nack_tileset *tileset;
 
     if (!nack__c.initialized) {
         nack__error("nack_init has not been called");
         return NULL;
     }
 
-    rgba = nack__image_decode(data, size, &width, &height, &error);
+    nack::owned<uint8_t, nack__image_free> rgba(
+        nack__image_decode(data, size, &width, &height, &error));
     if (!rgba) {
         nack__error("cannot decode tileset: %s", error ? error : "unknown");
         return NULL;
     }
 
-    tileset = nack__tileset_from_rgba(rgba, width, height, tile_width,
-                                      tile_height, layout);
-    nack__image_free(rgba);
-    return tileset;
+    return nack__tileset_from_rgba(rgba.get(), width, height, tile_width,
+                                   tile_height, layout);
 }
 
 struct nack_tileset *nack_tileset_load(const char *path, int tile_width,
                                        int tile_height,
                                        enum nack_tileset_layout layout)
 {
-    FILE *file;
     long size;
-    void *data;
-    struct nack_tileset *tileset;
 
     if (!path) {
         nack__error("no tileset path given");
         return NULL;
     }
 
-    file = fopen(path, "rb");
+    nack::file_ptr file(fopen(path, "rb"));
     if (!file) {
         nack__error("cannot open tileset '%s'", path);
         return NULL;
     }
-    fseek(file, 0, SEEK_END);
-    size = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    fseek(file.get(), 0, SEEK_END);
+    size = ftell(file.get());
+    fseek(file.get(), 0, SEEK_SET);
     if (size <= 0) {
-        fclose(file);
         nack__error("tileset '%s' is empty", path);
         return NULL;
     }
 
-    data = malloc((size_t)size);
+    nack::c_ptr<char> data((char *)malloc((size_t)size));
     if (!data) {
-        fclose(file);
         nack__error("out of memory");
         return NULL;
     }
-    if (fread(data, 1, (size_t)size, file) != (size_t)size) {
-        free(data);
-        fclose(file);
+    if (fread(data.get(), 1, (size_t)size, file.get()) != (size_t)size) {
         nack__error("cannot read tileset '%s'", path);
         return NULL;
     }
-    fclose(file);
 
-    tileset = nack_tileset_load_memory(data, (size_t)size, tile_width,
-                                       tile_height, layout);
-    free(data);
-    return tileset;
+    return nack_tileset_load_memory(data.get(), (size_t)size, tile_width,
+                                    tile_height, layout);
 }
 
 void nack_tileset_free(struct nack_tileset *tileset)
@@ -387,9 +390,7 @@ void nack_tileset_free(struct nack_tileset *tileset)
     if (!tileset || tileset == nack__c.builtin_font)
         return;
     nack__tileset_unregister(tileset);
-    nack__gfx_texture_destroy(tileset->texture);
-    free(tileset->sparse);
-    free(tileset);
+    nack__tileset_destroy(tileset);
 }
 
 void nack_tileset_size(const struct nack_tileset *tileset, int *tile_width,

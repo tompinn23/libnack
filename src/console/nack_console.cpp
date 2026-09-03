@@ -1,6 +1,9 @@
 /* Console buffers and the drawing operations on them. */
 #include "nack_console_internal.h"
 
+#include "../nack_scoped.h"
+
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,16 +57,34 @@ uint32_t nack__utf8_next(const char **cursor)
 /* Lifetime                                                           */
 /* ------------------------------------------------------------------ */
 
+/*
+ * A console's cell array is columns * rows * sizeof(cell) bytes, and both
+ * dimensions come from the caller. On a 64-bit build calloc catches the
+ * overflow itself, but where size_t is 32 bits a 65536x65536 console wraps to
+ * a zero-element request that succeeds - and then every write runs off the
+ * end of it. Refuse the size instead of trusting the multiply.
+ */
+static bool nack__cells_fit(int columns, int rows)
+{
+    const size_t limit = SIZE_MAX / sizeof(struct nack_cell);
+
+    if ((size_t)columns > limit / (size_t)rows)
+        return nack__error("console size %dx%d needs more memory than this "
+                           "machine can address", columns, rows);
+    return true;
+}
+
 struct nack_console *nack_console_new(int columns, int rows)
 {
-    struct nack_console *console;
-
     if (columns < 1 || rows < 1) {
         nack__error("console size %dx%d is not positive", columns, rows);
         return NULL;
     }
+    if (!nack__cells_fit(columns, rows))
+        return NULL;
 
-    console = (struct nack_console *)calloc(1, sizeof *console);
+    nack::c_ptr<struct nack_console> console(
+        (struct nack_console *)calloc(1, sizeof(struct nack_console)));
     if (!console) {
         nack__error("out of memory");
         return NULL;
@@ -71,14 +92,13 @@ struct nack_console *nack_console_new(int columns, int rows)
     console->cells = (struct nack_cell *)calloc((size_t)columns * (size_t)rows,
                                                 sizeof *console->cells);
     if (!console->cells) {
-        free(console);
         nack__error("out of memory");
         return NULL;
     }
     console->columns = columns;
     console->rows = rows;
-    nack_clear(console);
-    return console;
+    nack_clear(console.get());
+    return console.release();
 }
 
 void nack_console_free(struct nack_console *console)
@@ -107,6 +127,8 @@ bool nack_console_resize(struct nack_console *console, int columns, int rows)
         return false;
     if (columns < 1 || rows < 1)
         return nack__error("console size %dx%d is not positive", columns, rows);
+    if (!nack__cells_fit(columns, rows))
+        return false;
     if (c->columns == columns && c->rows == rows)
         return true;
 
@@ -269,24 +291,32 @@ int nack_vprintf(struct nack_console *console, int x, int y,
 {
     char stack_buffer[512];
     char *buffer = stack_buffer;
-    int needed, result;
+    int needed;
     va_list copy;
 
     va_copy(copy, args);
     needed = vsnprintf(stack_buffer, sizeof stack_buffer, fmt, copy);
     va_end(copy);
 
+    /*
+     * A negative return means the conversion failed part way through. What is
+     * in the buffer then is whatever was formatted before the failure - glibc
+     * terminates that, the standard does not promise even so much - so using
+     * it would draw a truncated line and report the count as a success.
+     */
+    if (needed < 0)
+        return 0;
+
+    nack::c_ptr<char> heap;
     if (needed >= (int)sizeof stack_buffer) {
-        buffer = (char *)malloc((size_t)needed + 1);
-        if (!buffer)
+        heap.reset((char *)malloc((size_t)needed + 1));
+        if (!heap)
             return 0;
+        buffer = heap.get();
         vsnprintf(buffer, (size_t)needed + 1, fmt, args);
     }
 
-    result = nack_print(console, x, y, fg, bg, buffer);
-    if (buffer != stack_buffer)
-        free(buffer);
-    return result;
+    return nack_print(console, x, y, fg, bg, buffer);
 }
 
 int nack_printf(struct nack_console *console, int x, int y, struct nack_color fg,

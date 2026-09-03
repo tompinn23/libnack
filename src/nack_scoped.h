@@ -14,6 +14,7 @@
 #ifndef NACK_SCOPED_H_INCLUDED
 #define NACK_SCOPED_H_INCLUDED
 
+#include <cstdio>
 #include <cstdlib>
 #include <memory>
 
@@ -33,6 +34,26 @@ struct c_free {
 
 template <class T>
 using c_ptr = std::unique_ptr<T, c_free>;
+
+/*
+ * A pointer released by a named teardown function, for the structs that own
+ * more than the one block: freeing those with free() alone loses whatever
+ * they point at, which is the shape of leak this exists to make impossible.
+ */
+template <class T, void (*Destroy)(T *)>
+struct call_destroy {
+    void operator()(T *pointer) const noexcept { Destroy(pointer); }
+};
+
+template <class T, void (*Destroy)(T *)>
+using owned = std::unique_ptr<T, call_destroy<T, Destroy>>;
+
+/* A stdio stream closed on the way out. */
+struct close_file {
+    void operator()(std::FILE *file) const noexcept { std::fclose(file); }
+};
+
+using file_ptr = std::unique_ptr<std::FILE, close_file>;
 
 #if !defined(_WIN32)
 

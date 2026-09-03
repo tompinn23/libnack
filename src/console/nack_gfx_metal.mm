@@ -17,6 +17,8 @@
 #include "nack_gfx.h"
 #include "nack_console_internal.h"
 
+#include "../nack_scoped.h"
+
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
@@ -249,10 +251,11 @@ static struct nack_texture *nack__mtl_texture_create(const uint8_t *rgba,
                                                      int width, int height)
 {
     @autoreleasepool {
-        struct nack__mtl_texture *texture;
         MTLTextureDescriptor *descriptor;
 
-        texture = (struct nack__mtl_texture *)calloc(1, sizeof *texture);
+        nack::c_ptr<struct nack__mtl_texture> texture(
+            (struct nack__mtl_texture *)calloc(
+                1, sizeof(struct nack__mtl_texture)));
         if (!texture) {
             nack__error("out of memory");
             return NULL;
@@ -267,7 +270,6 @@ static struct nack_texture *nack__mtl_texture_create(const uint8_t *rgba,
 
         texture->texture = [nack__mtl.device newTextureWithDescriptor:descriptor];
         if (!texture->texture) {
-            free(texture);
             nack__error("cannot create a Metal texture");
             return NULL;
         }
@@ -277,7 +279,7 @@ static struct nack_texture *nack__mtl_texture_create(const uint8_t *rgba,
                             mipmapLevel:0
                               withBytes:rgba
                             bytesPerRow:(NSUInteger)width * 4];
-        return (struct nack_texture *)texture;
+        return (struct nack_texture *)texture.release();
     }
 }
 

@@ -8,10 +8,12 @@
 #include "console/nack_gfx.h"
 #include "nack_window.h"
 
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 
 #if defined(NACK_X11_SELECTION_PEER)
 #  include <poll.h>
@@ -200,6 +202,45 @@ int main(void)
     check(nack_get(nack_root(), 0, 2).glyph == '4' && nack_get(nack_root(), 3, 2).glyph == 'x',
           "printf formats into cells");
 
+    /*
+     * vsnprintf can fail part way through - "%ls" with an unconvertible wide
+     * string does it on glibc - returning a negative count after writing the
+     * text that came before the failing conversion. Printing that buffer
+     * anyway puts a truncated line on screen and reports it as a success, so
+     * the caller never learns the text it asked for is not the text there.
+     */
+    {
+        char probe[16];
+        wchar_t unconvertible[2];
+        unconvertible[0] = (wchar_t)0xDFFF;   /* a lone surrogate */
+        unconvertible[1] = 0;
+
+        if (snprintf(probe, sizeof probe, "ab%ls", unconvertible) >= 0) {
+            printf("%-52s skipped (vsnprintf accepts it here)\n",
+                   "a failed vsnprintf prints nothing");
+        } else {
+            int printed;
+            nack_clear(nack_root());
+            printed = nack_printf(nack_root(), 0, 3, NACK_WHITE, NACK_BLACK,
+                                  "ab%ls", unconvertible);
+            check(printed == 0, "a failed vsnprintf prints nothing");
+            check(nack_get(nack_root(), 0, 3).glyph == ' ',
+                  "and leaves the cells alone");
+        }
+    }
+
+    /*
+     * A console whose cell count cannot be addressed has to be refused. Where
+     * size_t is 64 bits calloc catches this itself, so this only pins the
+     * behaviour; the check in nack_console_new is for 32-bit builds, where
+     * the multiply wraps and calloc is handed a plausible small number.
+     */
+    {
+        struct nack_console *huge = nack_console_new(INT_MAX, INT_MAX);
+        check(huge == NULL, "an unaddressable console size is refused");
+        nack_console_free(huge);
+    }
+
     /* Clipping rather than corrupting memory. */
     nack_put(nack_root(), -5, -5, 'X', NACK_WHITE, NACK_BLACK);
     nack_put(nack_root(), 9999, 9999, 'X', NACK_WHITE, NACK_BLACK);
@@ -234,6 +275,52 @@ int main(void)
     nack_console_resize(offscreen, 8, 8);
     check(nack_get(offscreen, 1, 1).glyph == 'Z', "resize preserves contents");
     nack_console_free(offscreen);
+
+    /*
+     * A tileset seeds its codepoint map before it creates its atlas texture,
+     * so a texture that cannot be made leaves a tileset owning a map and
+     * nothing else. Releasing only the struct loses that map. Nothing is
+     * asserted here beyond the failure being reported - the leak itself is
+     * what LSan sees, in the sanitiser job.
+     */
+    {
+        uint8_t sheet[16 * 16 * 4];
+        struct nack_tileset *doomed;
+
+        memset(sheet, 0, sizeof sheet);
+        nack__debug_fail_next_textures(1);
+        doomed = nack__tileset_from_rgba(sheet, 16, 16, 8, 8,
+                                         NACK_LAYOUT_CP437);
+        check(doomed == NULL, "a tileset with no texture is not handed out");
+        nack_tileset_free(doomed);
+    }
+
+    /*
+     * A big sheet has more tiles than a 16-bit index can hold: 2048x2048 of
+     * 8x8 tiles is 65536 of them. Mapping a codepoint to a high tile has to
+     * survive the round trip rather than wrap into a negative slot and
+     * silently map to nothing.
+     */
+    {
+        uint8_t *big = (uint8_t *)calloc(2048u * 2048u, 4);
+        struct nack_tileset *wide;
+
+        if (!big) {
+            check(0, "out of memory building the wide tileset");
+        } else {
+            wide = nack__tileset_from_rgba(big, 2048, 2048, 8, 8,
+                                           NACK_LAYOUT_ROW_MAJOR);
+            check(wide != NULL, "a 65536 tile sheet loads");
+            if (wide) {
+                check(nack_tileset_map(wide, 'Q', 40000),
+                      "a codepoint maps to a tile past 32767");
+                check(nack__tileset_index_for(wide, 'Q') == 40000,
+                      "and reads back as the tile it was given");
+            }
+            nack_tileset_free(wide);
+            free(big);
+        }
+    }
 
     /* Codepoints the font has no tile for must not draw garbage. */
     nack_put(nack_root(), 0, 19, 0x4E2D, NACK_WHITE, NACK_BLACK);   /* CJK */

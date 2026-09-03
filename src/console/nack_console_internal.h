@@ -41,9 +41,11 @@ struct nack_tileset {
      * Codepoint to tile index. Codepoints below 0x100 are the common case and
      * get a direct table; anything above goes in a sorted array, so a sheet
      * with a few hundred CJK glyphs costs a binary search rather than a 1M
-     * entry table.
+     * entry table. Both hold the index as a full int: a 2048x2048 sheet of
+     * 8x8 tiles has 65536 of them, so a narrower slot would wrap and map the
+     * codepoint to nothing.
      */
-    int16_t direct[256];
+    int32_t direct[256];
     struct nack_codepoint_map *sparse;
     size_t sparse_count, sparse_capacity;
 };
@@ -125,6 +127,15 @@ void nack__render_update_viewport(void);
  */
 void nack__debug_capture_frames(bool capture);
 bool nack__debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4]);
+
+/*
+ * Makes the next `count` texture creations fail. The cleanup that runs when a
+ * texture cannot be made is unreachable otherwise - every renderer this
+ * library has creates textures that always succeed - and it is exactly the
+ * path where a half-built tileset has to be released. Test-only, like
+ * NACK_RENDERER=test-fail.
+ */
+void nack__debug_fail_next_textures(int count);
 
 /* nack_console.c */
 struct nack_console *nack__console_resolve(struct nack_console *console);

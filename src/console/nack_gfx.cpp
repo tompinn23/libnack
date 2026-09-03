@@ -127,9 +127,21 @@ const char *nack__gfx_name(void)
     return nack__gfx ? nack__gfx->name : "none";
 }
 
+static int nack__gfx_failed_textures;
+
+void nack__debug_fail_next_textures(int count)
+{
+    nack__gfx_failed_textures = count;
+}
+
 struct nack_texture *nack__gfx_texture_create(const uint8_t *rgba, int width,
                                               int height)
 {
+    if (nack__gfx_failed_textures > 0) {
+        --nack__gfx_failed_textures;
+        nack__error("texture creation failed on purpose");
+        return NULL;
+    }
     if (!nack__gfx) {
         nack__error("no renderer is active");
         return NULL;

@@ -1,6 +1,8 @@
 /* libnack - Win32 backend. */
 #include "nack_win32.h"
 
+#include "../nack_scoped.h"
+
 #include <stdio.h>
 
 struct nack_win32_state nack__win32;
@@ -18,14 +20,12 @@ WCHAR *nack__win32_utf8_to_wide(const char *utf8)
     int count = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, NULL, 0);
     if (count <= 0)
         return NULL;
-    WCHAR *wide = (WCHAR *)malloc((size_t)count * sizeof(WCHAR));
+    nack::c_ptr<WCHAR> wide((WCHAR *)malloc((size_t)count * sizeof(WCHAR)));
     if (!wide)
         return NULL;
-    if (!MultiByteToWideChar(CP_UTF8, 0, utf8, -1, wide, count)) {
-        free(wide);
+    if (!MultiByteToWideChar(CP_UTF8, 0, utf8, -1, wide.get(), count))
         return NULL;
-    }
-    return wide;
+    return wide.release();
 }
 
 char *nack__win32_wide_to_utf8(const WCHAR *wide)
@@ -35,14 +35,12 @@ char *nack__win32_wide_to_utf8(const WCHAR *wide)
     int count = WideCharToMultiByte(CP_UTF8, 0, wide, -1, NULL, 0, NULL, NULL);
     if (count <= 0)
         return NULL;
-    char *utf8 = (char *)malloc((size_t)count);
+    nack::c_ptr<char> utf8((char *)malloc((size_t)count));
     if (!utf8)
         return NULL;
-    if (!WideCharToMultiByte(CP_UTF8, 0, wide, -1, utf8, count, NULL, NULL)) {
-        free(utf8);
+    if (!WideCharToMultiByte(CP_UTF8, 0, wide, -1, utf8.get(), count, NULL, NULL))
         return NULL;
-    }
-    return utf8;
+    return utf8.release();
 }
 
 /* ------------------------------------------------------------------ */

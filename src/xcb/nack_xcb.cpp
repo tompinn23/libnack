@@ -1,6 +1,7 @@
 /* libnack - XCB backend. */
 #include "nack_xcb.h"
 #include "../common/nack_xkb_keys.h"
+#include "../nack_scoped.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -1033,14 +1034,13 @@ static bool nack__xcb_window_create(struct nack_window *w,
     {
         size_t len = strlen(nack__g.app_id);
         size_t total = (len + 1) * 2;
-        char *wm_class = (char *)malloc(total);
+        nack::c_ptr<char> wm_class((char *)malloc(total));
         if (wm_class) {
-            memcpy(wm_class, nack__g.app_id, len + 1);
-            memcpy(wm_class + len + 1, nack__g.app_id, len + 1);
+            memcpy(wm_class.get(), nack__g.app_id, len + 1);
+            memcpy(wm_class.get() + len + 1, nack__g.app_id, len + 1);
             xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
                                 XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8,
-                                (uint32_t)total, wm_class);
-            free(wm_class);
+                                (uint32_t)total, wm_class.get());
         }
     }
 
