@@ -13,7 +13,7 @@
  * is not the decoder under test and shares no code with it, which is what
  * makes the comparison mean anything.
  */
-#include "console/nack_image.h"
+#include "nack_test_hooks.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

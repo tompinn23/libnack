@@ -1,8 +1,11 @@
 /* Console buffers and the drawing operations on them. */
 #include "nack_console_internal.h"
 
-#include "../nack_scoped.h"
+#include "nack_guard.h"
 
+#include <algorithm>
+#include <memory>
+#include <string>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,56 +60,27 @@ uint32_t nack__utf8_next(const char **cursor)
 /* Lifetime                                                           */
 /* ------------------------------------------------------------------ */
 
-/*
- * A console's cell array is columns * rows * sizeof(cell) bytes, and both
- * dimensions come from the caller. On a 64-bit build calloc catches the
- * overflow itself, but where size_t is 32 bits a 65536x65536 console wraps to
- * a zero-element request that succeeds - and then every write runs off the
- * end of it. Refuse the size instead of trusting the multiply.
- */
-static bool nack__cells_fit(int columns, int rows)
-{
-    const size_t limit = SIZE_MAX / sizeof(struct nack_cell);
-
-    if ((size_t)columns > limit / (size_t)rows)
-        return nack__error("console size %dx%d needs more memory than this "
-                           "machine can address", columns, rows);
-    return true;
-}
-
 struct nack_console *nack_console_new(int columns, int rows)
 {
     if (columns < 1 || rows < 1) {
         nack__error("console size %dx%d is not positive", columns, rows);
         return NULL;
     }
-    if (!nack__cells_fit(columns, rows))
-        return NULL;
-
-    nack::c_ptr<struct nack_console> console(
-        (struct nack_console *)calloc(1, sizeof(struct nack_console)));
-    if (!console) {
-        nack__error("out of memory");
-        return NULL;
-    }
-    console->cells = (struct nack_cell *)calloc((size_t)columns * (size_t)rows,
-                                                sizeof *console->cells);
-    if (!console->cells) {
-        nack__error("out of memory");
-        return NULL;
-    }
-    console->columns = columns;
-    console->rows = rows;
-    nack_clear(console.get());
-    return console.release();
+    return nack::guarded("cannot create a console", [&] {
+        auto console = std::make_unique<struct nack_console>();
+        console->cells.resize((size_t)columns * (size_t)rows);
+        console->columns = columns;
+        console->rows = rows;
+        nack_clear(console.get());
+        return console.release();
+    }, (struct nack_console *)NULL);
 }
 
 void nack_console_free(struct nack_console *console)
 {
     if (!console || console == nack__c.root)
         return;
-    free(console->cells);
-    free(console);
+    delete console;
 }
 
 void nack_console_size(const struct nack_console *console, int *columns, int *rows)
@@ -120,35 +94,29 @@ void nack_console_size(const struct nack_console *console, int *columns, int *ro
 bool nack_console_resize(struct nack_console *console, int columns, int rows)
 {
     struct nack_console *c = nack__console_resolve(console);
-    struct nack_cell *cells;
-    int y, copy_w, copy_h;
 
     if (!c)
         return false;
     if (columns < 1 || rows < 1)
         return nack__error("console size %dx%d is not positive", columns, rows);
-    if (!nack__cells_fit(columns, rows))
-        return false;
     if (c->columns == columns && c->rows == rows)
         return true;
 
-    cells = (struct nack_cell *)calloc((size_t)columns * (size_t)rows,
-                                       sizeof *cells);
-    if (!cells)
-        return nack__error("out of memory");
+    return nack::guarded("cannot resize the console", [&] {
+        std::vector<struct nack_cell> cells((size_t)columns * (size_t)rows);
+        /* Keep whatever still fits, so a resize does not blank the screen. */
+        int copy_w = columns < c->columns ? columns : c->columns;
+        int copy_h = rows < c->rows ? rows : c->rows;
 
-    /* Keep whatever still fits, so a resize does not blank the screen. */
-    copy_w = columns < c->columns ? columns : c->columns;
-    copy_h = rows < c->rows ? rows : c->rows;
-    for (y = 0; y < copy_h; ++y)
-        memcpy(cells + (size_t)y * columns, c->cells + (size_t)y * c->columns,
-               (size_t)copy_w * sizeof *cells);
+        for (int y = 0; y < copy_h; ++y)
+            std::copy_n(c->cells.begin() + (size_t)y * c->columns, copy_w,
+                        cells.begin() + (size_t)y * columns);
 
-    free(c->cells);
-    c->cells = cells;
-    c->columns = columns;
-    c->rows = rows;
-    return true;
+        c->cells = std::move(cells);
+        c->columns = columns;
+        c->rows = rows;
+        return true;
+    }, false);
 }
 
 /* ------------------------------------------------------------------ */
@@ -290,9 +258,8 @@ int nack_vprintf(struct nack_console *console, int x, int y,
                  va_list args)
 {
     char stack_buffer[512];
-    char *buffer = stack_buffer;
-    int needed;
     va_list copy;
+    int needed;
 
     va_copy(copy, args);
     needed = vsnprintf(stack_buffer, sizeof stack_buffer, fmt, copy);
@@ -306,17 +273,15 @@ int nack_vprintf(struct nack_console *console, int x, int y,
      */
     if (needed < 0)
         return 0;
+    if (needed < (int)sizeof stack_buffer)
+        return nack_print(console, x, y, fg, bg, stack_buffer);
 
-    nack::c_ptr<char> heap;
-    if (needed >= (int)sizeof stack_buffer) {
-        heap.reset((char *)malloc((size_t)needed + 1));
-        if (!heap)
-            return 0;
-        buffer = heap.get();
-        vsnprintf(buffer, (size_t)needed + 1, fmt, args);
-    }
-
-    return nack_print(console, x, y, fg, bg, buffer);
+    return nack::guarded("cannot format the text", [&] {
+        std::string buffer((size_t)needed + 1, '\0');
+        vsnprintf(buffer.data(), buffer.size(), fmt, args);
+        buffer.resize((size_t)needed);
+        return nack_print(console, x, y, fg, bg, buffer.c_str());
+    }, 0);
 }
 
 int nack_printf(struct nack_console *console, int x, int y, struct nack_color fg,

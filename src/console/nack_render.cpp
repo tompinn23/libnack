@@ -8,22 +8,20 @@
 #include "nack_console_internal.h"
 #include "nack_gfx.h"
 
+#include "nack_guard.h"
+
 #include <stdlib.h>
 #include <string.h>
 
 static bool nack__reserve_vertices(size_t cells)
 {
     size_t needed = cells * NACK_VERTICES_PER_CELL * NACK_FLOATS_PER_VERTEX;
-    float *grown;
 
-    if (needed <= nack__c.vertex_capacity)
+    if (needed <= nack__c.vertices.size())
         return true;
-    grown = (float *)realloc(nack__c.vertices, needed * sizeof *grown);
-    if (!grown)
-        return nack__error("out of memory building the console vertex buffer");
-    nack__c.vertices = grown;
-    nack__c.vertex_capacity = needed;
-    return true;
+    return nack::guarded("cannot size the console vertex buffer",
+                         [&] { nack__c.vertices.resize(needed); return true; },
+                         false);
 }
 
 static void nack__emit_quad(float **cursor, float x0, float y0, float x1,
@@ -129,7 +127,7 @@ void nack__render_console(const struct nack_console *console)
 
     /* Pass one: every cell's background, in a single draw. */
     {
-        float *cursor = nack__c.vertices;
+        float *cursor = nack__c.vertices.data();
         for (y = 0; y < console->rows; ++y) {
             for (x = 0; x < console->columns; ++x) {
                 const struct nack_cell *cell =
@@ -141,16 +139,16 @@ void nack__render_console(const struct nack_console *console)
                                 0.0f, 0.0f, 0.0f, 0.0f, cell->fg, cell->bg);
             }
         }
-        nack__gfx_draw(nack__c.vertices,
-                       (size_t)(cursor - nack__c.vertices) /
+        nack__gfx_draw(nack__c.vertices.data(),
+                       (size_t)(cursor - nack__c.vertices.data()) /
                            NACK_FLOATS_PER_VERTEX,
                        0, NULL);
     }
 
     /* Then one pass per atlas, so mixed glyph and tile consoles stay cheap. */
-    for (pass = 0; pass < nack__c.tileset_count; ++pass) {
+    for (pass = 0; pass < nack__c.tilesets.size(); ++pass) {
         struct nack_tileset *atlas = nack__c.tilesets[pass];
-        float *cursor = nack__c.vertices;
+        float *cursor = nack__c.vertices.data();
         float du, dv;
 
         if (!atlas || atlas->count <= 0 || !atlas->texture)
@@ -193,8 +191,8 @@ void nack__render_console(const struct nack_console *console)
             }
         }
 
-        nack__gfx_draw(nack__c.vertices,
-                       (size_t)(cursor - nack__c.vertices) /
+        nack__gfx_draw(nack__c.vertices.data(),
+                       (size_t)(cursor - nack__c.vertices.data()) /
                            NACK_FLOATS_PER_VERTEX,
                        1, atlas->texture);
     }

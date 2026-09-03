@@ -303,6 +303,7 @@ if(PROJECT_IS_TOP_LEVEL)
     target_include_directories(nack_smoke PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
         ${CMAKE_CURRENT_BINARY_DIR})
     set_target_properties(nack_smoke PROPERTIES
         C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
@@ -389,7 +390,10 @@ if(PROJECT_IS_TOP_LEVEL)
     add_executable(nack_image_test tests/image_test.c src/console/nack_image.cpp
         ${NACK_VENDORED_OBJECTS})
     target_include_directories(nack_image_test PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src ${NACK_VENDORED_INCLUDES})
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        ${NACK_VENDORED_INCLUDES})
     set_target_properties(nack_image_test PROPERTIES
         C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
 

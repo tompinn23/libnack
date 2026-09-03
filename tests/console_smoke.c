@@ -4,9 +4,7 @@
  * frame presented through OpenGL with the result read back.
  */
 #include "nack/nack.h"
-#include "console/nack_console_internal.h"
-#include "console/nack_gfx.h"
-#include "nack_window.h"
+#include "nack_test_hooks.h"
 
 #include <limits.h>
 #include <stdint.h>
@@ -230,14 +228,15 @@ int main(void)
     }
 
     /*
-     * A console whose cell count cannot be addressed has to be refused. Where
-     * size_t is 64 bits calloc catches this itself, so this only pins the
-     * behaviour; the check in nack_console_new is for 32-bit builds, where
-     * the multiply wraps and calloc is handed a plausible small number.
+     * A console size no allocator can serve has to come back as an error. The
+     * containers refuse it by throwing, so this also checks that the C API
+     * boundary turns that back into a NULL and a message rather than letting
+     * it unwind into a C caller and end the process.
      */
     {
         struct nack_console *huge = nack_console_new(INT_MAX, INT_MAX);
-        check(huge == NULL, "an unaddressable console size is refused");
+        check(huge == NULL, "an impossible console size is refused");
+        check(nack_get_error() != NULL, "and says why rather than terminating");
         nack_console_free(huge);
     }
 
@@ -361,6 +360,49 @@ int main(void)
         nack__debug_read_pixel(20, 10, pixel);
         checkpx(pixel[0] > 200 && pixel[1] < 60,
                 "blank cell shows its background", pixel, "r > 200, g < 60");
+    }
+
+    /*
+     * Tilesets used to live in a fixed array of 16. The seventeenth was
+     * created and handed back like any other, but silently left out of the
+     * registry present() walks to batch by atlas - so every cell drawn with
+     * it came out empty, with no error anywhere to say why.
+     */
+    {
+        uint8_t plain[16 * 16 * 4];
+        uint8_t red[16 * 16 * 4];
+        struct nack_tileset *many[20];
+        uint8_t pixel[4] = { 0, 0, 0, 0 };
+        int i, made = 0;
+
+        memset(plain, 0, sizeof plain);
+        for (i = 0; i < 16 * 16; ++i) {
+            red[i * 4 + 0] = 255;   /* a real hue, so it loads as artwork */
+            red[i * 4 + 1] = 0;
+            red[i * 4 + 2] = 0;
+            red[i * 4 + 3] = 255;
+        }
+
+        for (i = 0; i < 20; ++i) {
+            many[i] = nack__tileset_from_rgba(i == 19 ? red : plain, 16, 16,
+                                              8, 8, NACK_LAYOUT_ROW_MAJOR);
+            if (many[i])
+                made++;
+        }
+        check(made == 20, "twenty tilesets all load");
+
+        nack_clear_to(nack_root(), NACK_WHITE, NACK_BLACK);
+        if (many[19])
+            nack_put_tile(nack_root(), 20, 10, many[19], 0, NACK_WHITE,
+                          NACK_BLACK);
+        nack_present();
+        nack__debug_read_pixel(20, 10, pixel);
+        checkpx(pixel[0] > 200 && pixel[1] < 60,
+                "and the twentieth one actually draws", pixel,
+                "r > 200, g < 60");
+
+        for (i = 0; i < 20; ++i)
+            nack_tileset_free(many[i]);
     }
 
     check(1, "frames presented");

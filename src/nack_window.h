@@ -19,6 +19,7 @@
 #define NACK_WINDOW_H_INCLUDED
 
 #include "nack/nack.h"   /* keys, mods, mouse buttons, colours */
+#include "nack_backend_id.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -36,14 +37,6 @@ extern "C" {
 /* -------------------------------------------------------------------------- */
 /* Enumerations                                                               */
 /* -------------------------------------------------------------------------- */
-
-enum nack_backend {
-    NACK_BACKEND_NONE = 0,
-    NACK_BACKEND_WIN32,
-    NACK_BACKEND_COCOA,
-    NACK_BACKEND_WAYLAND,
-    NACK_BACKEND_X11
-};
 
 enum nack_result {
     NACK_OK = 0,

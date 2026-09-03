@@ -5,15 +5,20 @@
 #include "nack_gfx.h"
 
 /*
- * libnack is C++ now, but its API is C and its tests and examples are C, so
- * these declarations keep C linkage. This is what lets a C program - and
- * anything binding through a C ABI - keep using the library unchanged.
+ * C++ only: the structs below hold std::vector and std::string. The tests and
+ * examples are still C and still link against this library - that is what the
+ * extern "C" below is for - but they reach the internals through
+ * tests/nack_test_hooks.h, which declares the functions without the layouts.
  */
-#ifdef __cplusplus
-extern "C" {
+#ifndef __cplusplus
+#  error "nack_console_internal.h is C++; C callers want tests/nack_test_hooks.h"
 #endif
 
-#define NACK_MAX_TILESETS 16
+#include <array>
+#include <string>
+#include <vector>
+
+extern "C" {
 
 /*
  * A tileset is one atlas texture plus the mapping from codepoints to the tiles
@@ -21,9 +26,7 @@ extern "C" {
  * them, which is decided at load time from the image's contents.
  */
 /*
- * One codepoint's tile. Declared here rather than inside nack_tileset because
- * C++ scopes a nested type to its enclosing class where C does not, and this
- * header is compiled as both.
+ * One codepoint's tile.
  */
 struct nack_codepoint_map {
     uint32_t codepoint;
@@ -45,14 +48,13 @@ struct nack_tileset {
      * 8x8 tiles has 65536 of them, so a narrower slot would wrap and map the
      * codepoint to nothing.
      */
-    int32_t direct[256];
-    struct nack_codepoint_map *sparse;
-    size_t sparse_count, sparse_capacity;
+    std::array<int, 256> direct;
+    std::vector<struct nack_codepoint_map> sparse;   /* sorted by codepoint */
 };
 
 struct nack_console {
     int columns, rows;
-    struct nack_cell *cells;
+    std::vector<struct nack_cell> cells;
 };
 
 struct nack_console_state {
@@ -65,8 +67,7 @@ struct nack_console_state {
     struct nack_tileset *builtin_font;
 
     /* Every tileset ever handed out, so present() can batch by atlas. */
-    struct nack_tileset *tilesets[NACK_MAX_TILESETS];
-    size_t tileset_count;
+    std::vector<struct nack_tileset *> tilesets;
 
     enum nack_scaling scaling;
     struct nack_color letterbox;
@@ -79,8 +80,7 @@ struct nack_console_state {
     float dpi_scale;
 
     /* Quad scratch space, reused between frames. */
-    float *vertices;
-    size_t vertex_capacity;
+    std::vector<float> vertices;
 
     double start_time;
     double last_frame_time;
@@ -89,7 +89,7 @@ struct nack_console_state {
     int mouse_cell_x, mouse_cell_y;
     bool should_close;
 
-    char error[512];
+    std::string error;
     bool has_error;
 };
 
@@ -142,7 +142,6 @@ struct nack_console *nack__console_resolve(struct nack_console *console);
 uint32_t nack__utf8_next(const char **cursor);
 
 
-#ifdef __cplusplus
 }   /* extern "C" */
-#endif
+
 #endif /* NACK_CONSOLE_INTERNAL_H_INCLUDED */

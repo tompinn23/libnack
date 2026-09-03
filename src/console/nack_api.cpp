@@ -4,6 +4,7 @@
  */
 #include "nack_console_internal.h"
 #include "nack_gfx.h"
+#include "nack_guard.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -20,10 +21,23 @@ static void nack__log_to_stderr(const char *message, void *user_data)
 
 bool nack__error(const char *fmt, ...)
 {
+    char message[512];
     va_list args;
+
     va_start(args, fmt);
-    vsnprintf(nack__c.error, sizeof nack__c.error, fmt, args);
+    vsnprintf(message, sizeof message, fmt, args);
     va_end(args);
+
+    /*
+     * Recording the reason must not fail, or a report of a failed allocation
+     * would be the thing that throws. The string keeps whatever it already
+     * holds in that case, which is worse than the new reason but better than
+     * losing the error entirely.
+     */
+    try {
+        nack__c.error = message;
+    } catch (const std::exception &) {
+    }
     nack__c.has_error = true;
     return false;
 }
@@ -31,12 +45,12 @@ bool nack__error(const char *fmt, ...)
 void nack__clear_error(void)
 {
     nack__c.has_error = false;
-    nack__c.error[0] = '\0';
+    nack__c.error.clear();
 }
 
 const char *nack_get_error(void)
 {
-    return nack__c.has_error ? nack__c.error : NULL;
+    return nack__c.has_error ? nack__c.error.c_str() : NULL;
 }
 
 /* ------------------------------------------------------------------ */
@@ -83,7 +97,7 @@ bool nack_init(const struct nack_config *config)
     if (cfg.rows < 1) cfg.rows = 50;
     if (!cfg.title) cfg.title = "libnack";
 
-    memset(&nack__c, 0, sizeof nack__c);
+    nack__c = nack_console_state{};
     nack__c.scaling = cfg.scaling;
     nack__c.letterbox = cfg.letterbox;
     nack__c.auto_resize = cfg.auto_resize;
@@ -213,7 +227,7 @@ void nack_shutdown(void)
      * to, and does nothing once there is not one. Shutting the renderer down
      * first leaked every atlas, the built-in font included.
      */
-    for (i = nack__c.tileset_count; i > 0; --i) {
+    for (i = nack__c.tilesets.size(); i > 0; --i) {
         struct nack_tileset *tileset = nack__c.tilesets[i - 1];
         if (tileset == nack__c.builtin_font)
             continue;
@@ -233,14 +247,17 @@ void nack_shutdown(void)
         nack_console_free(root);
     }
 
-    free(nack__c.vertices);
-
     if (nack__c.window) {
         nack_window_destroy(nack__c.window);
         nack__win_shutdown();
     }
 
-    memset(&nack__c, 0, sizeof nack__c);
+    /*
+     * Assignment, not memset: the state holds a std::string and two vectors
+     * now, and zeroing their bytes would drop what they point at rather than
+     * release it.
+     */
+    nack__c = nack_console_state{};
 }
 
 /* ------------------------------------------------------------------ */

@@ -4,6 +4,9 @@
 #include "nack_font8x8.h"
 
 #include "../nack_scoped.h"
+#include "nack_guard.h"
+
+#include <algorithm>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,65 +56,38 @@ static const uint16_t nack__cp437[256] = {
 /* Codepoint mapping                                                  */
 /* ------------------------------------------------------------------ */
 
+static bool nack__codepoint_before(const struct nack_codepoint_map &entry,
+                                   uint32_t codepoint)
+{
+    return entry.codepoint < codepoint;
+}
+
 static bool nack__sparse_set(struct nack_tileset *tileset, uint32_t codepoint,
                              int index)
 {
-    size_t low = 0, high = tileset->sparse_count;
+    auto at = std::lower_bound(tileset->sparse.begin(), tileset->sparse.end(),
+                               codepoint, nack__codepoint_before);
 
-    while (low < high) {
-        size_t mid = (low + high) / 2;
-        if (tileset->sparse[mid].codepoint < codepoint)
-            low = mid + 1;
-        else
-            high = mid;
-    }
-
-    if (low < tileset->sparse_count &&
-        tileset->sparse[low].codepoint == codepoint) {
-        tileset->sparse[low].index = index;
+    if (at != tileset->sparse.end() && at->codepoint == codepoint) {
+        at->index = index;
         return true;
     }
-
-    if (tileset->sparse_count == tileset->sparse_capacity) {
-        size_t capacity = tileset->sparse_capacity ? tileset->sparse_capacity * 2 : 64;
-        struct nack_codepoint_map *grown =
-            (struct nack_codepoint_map *)realloc(tileset->sparse,
-                                                 capacity * sizeof *grown);
-        if (!grown)
-            return false;
-        tileset->sparse = grown;
-        tileset->sparse_capacity = capacity;
-    }
-
-    memmove(tileset->sparse + low + 1, tileset->sparse + low,
-            (tileset->sparse_count - low) * sizeof *tileset->sparse);
-    tileset->sparse[low].codepoint = codepoint;
-    tileset->sparse[low].index = index;
-    tileset->sparse_count++;
+    tileset->sparse.insert(at, { codepoint, index });
     return true;
 }
 
 int nack__tileset_index_for(const struct nack_tileset *tileset,
                             uint32_t codepoint)
 {
-    size_t low, high;
-
     if (codepoint < 256) {
         int index = tileset->direct[codepoint];
         return index >= 0 ? index : -1;
     }
 
-    low = 0;
-    high = tileset->sparse_count;
-    while (low < high) {
-        size_t mid = (low + high) / 2;
-        if (tileset->sparse[mid].codepoint < codepoint)
-            low = mid + 1;
-        else
-            high = mid;
-    }
-    if (low < tileset->sparse_count && tileset->sparse[low].codepoint == codepoint)
-        return tileset->sparse[low].index;
+    auto at = std::lower_bound(tileset->sparse.begin(), tileset->sparse.end(),
+                               codepoint, nack__codepoint_before);
+    if (at != tileset->sparse.end() && at->codepoint == codepoint)
+        return at->index;
     return -1;
 }
 
@@ -123,7 +99,9 @@ bool nack_tileset_map(struct nack_tileset *tileset, uint32_t codepoint, int inde
         tileset->direct[codepoint] = index;
         return true;
     }
-    return nack__sparse_set(tileset, codepoint, index);
+    return nack::guarded("cannot map a codepoint",
+                         [&] { return nack__sparse_set(tileset, codepoint, index); },
+                         false);
 }
 
 bool nack_tileset_map_range(struct nack_tileset *tileset, uint32_t first,
@@ -201,8 +179,7 @@ static void nack__tileset_destroy(struct nack_tileset *tileset)
     if (!tileset)
         return;
     nack__gfx_texture_destroy(tileset->texture);
-    free(tileset->sparse);
-    free(tileset);
+    delete tileset;
 }
 
 struct nack_tileset *nack__tileset_from_rgba(uint8_t *rgba, int width, int height,
@@ -225,11 +202,7 @@ struct nack_tileset *nack__tileset_from_rgba(uint8_t *rgba, int width, int heigh
     }
 
     nack::owned<struct nack_tileset, nack__tileset_destroy> owner(
-        (struct nack_tileset *)calloc(1, sizeof(struct nack_tileset)));
-    if (!owner) {
-        nack__error("out of memory");
-        return NULL;
-    }
+        new nack_tileset{});
     tileset = owner.get();
 
     tileset->tile_width = tile_width;
@@ -242,8 +215,7 @@ struct nack_tileset *nack__tileset_from_rgba(uint8_t *rgba, int width, int heigh
     if (tileset->is_font)
         nack__normalize_font(rgba, width, height);
 
-    for (i = 0; i < 256; ++i)
-        tileset->direct[i] = -1;
+    tileset->direct.fill(-1);
 
     /* Seed the codepoint map from the sheet's declared ordering. */
     if (layout == NACK_LAYOUT_CP437) {
@@ -414,18 +386,13 @@ struct nack_tileset *nack_get_font(void)
 
 void nack__tileset_register(struct nack_tileset *tileset)
 {
-    if (nack__c.tileset_count < NACK_MAX_TILESETS)
-        nack__c.tilesets[nack__c.tileset_count++] = tileset;
+    nack__c.tilesets.push_back(tileset);
 }
 
 void nack__tileset_unregister(struct nack_tileset *tileset)
 {
-    size_t i;
-    for (i = 0; i < nack__c.tileset_count; ++i) {
-        if (nack__c.tilesets[i] == tileset) {
-            nack__c.tilesets[i] = nack__c.tilesets[--nack__c.tileset_count];
-            nack__c.tilesets[nack__c.tileset_count] = NULL;
-            return;
-        }
-    }
+    auto at = std::find(nack__c.tilesets.begin(), nack__c.tilesets.end(),
+                        tileset);
+    if (at != nack__c.tilesets.end())
+        nack__c.tilesets.erase(at);
 }
