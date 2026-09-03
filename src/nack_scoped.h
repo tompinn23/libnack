@@ -17,6 +17,10 @@
 #include <cstdlib>
 #include <memory>
 
+#if !defined(_WIN32)
+#  include <unistd.h>
+#endif
+
 namespace nack {
 
 /*
@@ -29,6 +33,35 @@ struct c_free {
 
 template <class T>
 using c_ptr = std::unique_ptr<T, c_free>;
+
+#if !defined(_WIN32)
+
+/*
+ * A descriptor closed on the way out. Wayland hands selection data over a
+ * pipe whose read end is ours to close however the read turns out.
+ */
+class unique_fd {
+public:
+    explicit unique_fd(int fd = -1) noexcept : descriptor(fd) {}
+    ~unique_fd() { if (descriptor >= 0) ::close(descriptor); }
+
+    unique_fd(unique_fd &&other) noexcept : descriptor(other.descriptor)
+    {
+        other.descriptor = -1;
+    }
+
+    unique_fd(const unique_fd &) = delete;
+    unique_fd &operator=(const unique_fd &) = delete;
+    unique_fd &operator=(unique_fd &&) = delete;
+
+    int get() const noexcept { return descriptor; }
+    explicit operator bool() const noexcept { return descriptor >= 0; }
+
+private:
+    int descriptor;
+};
+
+#endif /* !_WIN32 */
 
 }   /* namespace nack */
 

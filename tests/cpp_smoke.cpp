@@ -108,17 +108,10 @@ int main()
      * cpp_format_rejected test builds it and expects the build to fail.
      */
     /*
-     * _MSVC_LANG rather than __cplusplus where it exists: MSVC pins
-     * __cplusplus at 199711L unless /Zc:__cplusplus is passed, so testing it
-     * alone would fail on a perfectly good C++20 build.
+     * The C++20 check lives in <nack/nack.hpp> itself now, so it fires for
+     * anyone who includes it rather than only here. Asserting it again would
+     * be an assertion that cannot fail: this file could not have compiled.
      */
-#if defined(_MSVC_LANG)
-    static_assert(_MSVC_LANG >= 202002L,
-#else
-    static_assert(__cplusplus >= 202002L,
-#endif
-                  "the C++ header wants C++20 so {fmt} checks format strings "
-                  "at compile time");
 
     /* Owning consoles free themselves, and work with the same helper. */
     {

@@ -80,13 +80,20 @@ what this avoids is {fmt} specifically.
 Only `<nack/nack.hpp>` uses it. `print` takes a {fmt} format string there
 rather than C varargs.
 
-**{fmt}'s compile-time format checking needs C++20.** Its `consteval`
-constructor is what rejects a mismatched format string where the call is
-written, and under C++17 — which is all the header asks for — that is not
-available, so a mismatch becomes a `fmt::format_error` at run time instead.
-Both are a real answer, unlike varargs, and `tests/cpp_smoke.cpp` pins the
-C++17 behaviour so nobody has to take it on trust. A consumer who compiles as
-C++20 gets the compile-time check for free.
+**{fmt}'s compile-time format checking needs C++20**, which is what libnack
+builds as. Its `consteval` constructor rejects a mismatched format string
+where the call is written, rather than at run time — so a bad `print` is a
+build error, which varargs could never manage. `tests/cpp_bad_format.cpp`
+holds one such call and is built by the `cpp_format_rejected` test, which
+expects the build to fail; it is an OBJECT library rather than a program so
+that only the compile can decide the outcome.
+
+On MSVC that check hangs on two flags, both set on the `nack_fmt` target:
+`/utf-8`, which {fmt} refuses to build without, and `/Zc:__cplusplus`, which
+{fmt} needs in order to see that this is C++20 at all — MSVC otherwise
+reports `__cplusplus` as 199711L and {fmt} quietly falls back to run-time
+checking. Without the second, `cpp_format_rejected` would pass while proving
+nothing.
 
 ## Test fixtures are not vendored
 

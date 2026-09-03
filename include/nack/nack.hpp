@@ -1,5 +1,5 @@
 /*
- * A C++17 face for libnack. Header-only, inline, and nothing but a wrapper:
+ * A C++20 face for libnack. Header-only, inline, and nothing but a wrapper:
  * every function here forwards to the C API and the compiler folds it away.
  *
  * This file is optional. libnack is a C library and stays one; including
@@ -29,6 +29,22 @@
  */
 #ifndef NACK_HPP_INCLUDED
 #define NACK_HPP_INCLUDED
+
+
+/*
+ * C++20, and checked rather than assumed: below it {fmt} drops from rejecting
+ * a bad format string at compile time to raising at run time, quietly, which
+ * is the one thing this header is here for. MSVC reports __cplusplus as
+ * 199711L unless it is passed /Zc:__cplusplus, so ask _MSVC_LANG where it
+ * exists - otherwise a perfectly good C++20 build would fail this.
+ */
+#if defined(_MSVC_LANG)
+static_assert(_MSVC_LANG >= 202002L,
+              "<nack/nack.hpp> requires C++20 (MSVC also needs "
+              "/Zc:__cplusplus)");
+#else
+static_assert(__cplusplus >= 202002L, "<nack/nack.hpp> requires C++20");
+#endif
 
 #include <cstddef>
 #include <cstdint>
@@ -439,11 +455,12 @@ public:
     /*
      * The same, formatted with {fmt}.
      *
-     * When the format string and the arguments disagree, {fmt} says so:
-     * compiled as C++20 it is a compile error, and as C++17 - which is all
-     * this header requires - a fmt::format_error at run time, because the
-     * consteval checking {fmt} uses needs C++20. Either way the mismatch is
-     * caught, where C varargs would have read whatever was on the stack.
+     * When the format string and the arguments disagree, {fmt} says so
+     * where the call is written: its checking constructor is consteval, so
+     * the mismatch is a compile error rather than something read off the
+     * stack at run time, which is what C varargs would have done. This is
+     * the reason the header asks for C++20 - below C++20 {fmt} silently
+     * drops to checking at run time instead.
      *
      * This overload takes at least one argument, which is what keeps
      * print(x, y, fg, bg, some_runtime_string) unambiguous and working: a

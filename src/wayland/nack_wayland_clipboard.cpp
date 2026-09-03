@@ -7,6 +7,8 @@
  */
 #include "nack_wayland.h"
 
+#include "../nack_scoped.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -29,33 +31,32 @@
  * data in arbitrarily many chunks, and a source that never writes must not
  * hang the caller, so the read is non-blocking with a deadline.
  */
-static char *nack__wl_read_pipe(int fd)
+static char *nack__wl_read_pipe(int raw_fd)
 {
-    int flags = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    nack::unique_fd fd(raw_fd);
+    int flags = fcntl(fd.get(), F_GETFL, 0);
+
+    if (flags >= 0)
+        fcntl(fd.get(), F_SETFL, flags | O_NONBLOCK);
 
     size_t capacity = 4096, length = 0;
-    char *buffer = (char *)malloc(capacity);
-    if (!buffer) {
-        close(fd);
+    nack::c_ptr<char> buffer((char *)malloc(capacity));
+    if (!buffer)
         return NULL;
-    }
 
     double deadline = nack__win_time_seconds() + NACK_WL_READ_TIMEOUT_MS / 1000.0;
     for (;;) {
         if (length + 1 >= capacity) {
             size_t grown_size = capacity * 2;
-            char *grown = (char *)realloc(buffer, grown_size);
-            if (!grown) {
-                free(buffer);
-                close(fd);
-                return NULL;
-            }
-            buffer = grown;
+            char *grown = (char *)realloc(buffer.get(), grown_size);
+            if (!grown)
+                return NULL;   /* buffer still owns the original */
+            buffer.release();
+            buffer.reset(grown);
             capacity = grown_size;
         }
 
-        ssize_t n = read(fd, buffer + length, capacity - length - 1);
+        ssize_t n = read(fd.get(), buffer.get() + length, capacity - length - 1);
         if (n > 0) {
             length += (size_t)n;
             continue;
@@ -70,13 +71,12 @@ static char *nack__wl_read_pipe(int fd)
         double remaining = deadline - nack__win_time_seconds();
         if (remaining <= 0.0)
             break;
-        struct pollfd pfd = { fd, POLLIN, 0 };
+        struct pollfd pfd = { fd.get(), POLLIN, 0 };
         poll(&pfd, 1, (int)(remaining * 1000.0));
     }
 
-    close(fd);
-    buffer[length] = '\0';
-    return buffer;
+    buffer.get()[length] = '\0';
+    return buffer.release();
 }
 
 /* ------------------------------------------------------------------ */

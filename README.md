@@ -108,7 +108,7 @@ did not write. See `third_party/VENDORING.md`.
 
 ## C++
 
-`<nack/nack.hpp>` is an optional header-only C++17 face on the same library.
+`<nack/nack.hpp>` is an optional header-only C++20 face on the same library.
 It is a wrapper and nothing else — every call forwards to the C API and the
 compiler folds it away — but it adds the parts C cannot express:
 
