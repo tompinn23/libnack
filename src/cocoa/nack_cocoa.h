@@ -2,6 +2,8 @@
 #define NACK_COCOA_H_INCLUDED
 
 #include "../nack_internal.h"
+#include <optional>
+#include <string>
 
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
@@ -24,7 +26,7 @@ struct nack_cocoa_window {
 struct nack_cocoa_state {
     id app_delegate;
     bool finished_launching;
-    char *clipboard_text;
+    std::optional<std::string> clipboard_text;
     NSInteger clipboard_change_count;
     enum nack_key keycodes[256];
     /* Modifier state has to be tracked by hand: macOS reports modifiers as a

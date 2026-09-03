@@ -19,6 +19,7 @@
 #import <OpenGL/gl.h>
 
 #include <dlfcn.h>
+#include <memory>
 #include <stdio.h>
 
 struct nack_nsgl_context {
@@ -128,24 +129,16 @@ struct nack_gl_context *nack__nsgl_create_context(struct nack_window *w, const s
 
         [context setView:cw->view];
 
-        struct nack_gl_context *ctx = (struct nack_gl_context *)nack__calloc(1, sizeof *ctx);
-        struct nack_nsgl_context *native =
-            (struct nack_nsgl_context *)nack__calloc(1, sizeof *native);
-        if (!ctx || !native) {
-            [context release];
-            [pixel_format release];
-            free(ctx);
-            free(native);
-            return NULL;
-        }
+        auto ctx = std::make_unique<struct nack_gl_context>();
+        auto native = std::make_unique<struct nack_nsgl_context>();
 
         native->context = context;
         native->pixel_format = pixel_format;
-        ctx->native = native;
+        ctx->native = native.release();
         ctx->vt = vt;
         ctx->owner = w;
         cw->gl_context = context;
-        return ctx;
+        return ctx.release();
     }
 }
 
@@ -165,9 +158,9 @@ void nack__nsgl_destroy_context(struct nack_gl_context *ctx)
                 [NSOpenGLContext clearCurrentContext];
             [native->context release];
             [native->pixel_format release];
-            free(native);
+            delete native;
         }
-        free(ctx);
+        delete ctx;
     }
 }
 

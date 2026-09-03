@@ -638,9 +638,7 @@ static bool nack__cocoa_window_create(struct nack_window *w,
                                       const struct nack_window_desc *desc)
 {
     (void)desc;
-    struct nack_cocoa_window *cw = (struct nack_cocoa_window *)nack__calloc(1, sizeof *cw);
-    if (!cw)
-        return false;
+    struct nack_cocoa_window *cw = new nack_cocoa_window{};
     w->native = cw;
 
     NSWindowStyleMask style = 0;
@@ -661,7 +659,7 @@ static bool nack__cocoa_window_create(struct nack_window *w,
                                               backing:NSBackingStoreBuffered
                                                 defer:NO];
     if (!cw->window) {
-        free(cw);
+        delete cw;
         w->native = NULL;
         return nack__fail(NACK_ERROR_PLATFORM, "failed to create NSWindow");
     }
@@ -735,7 +733,7 @@ static void nack__cocoa_window_destroy(struct nack_window *w)
     [cw->delegate release];
     [cw->view release];
 
-    free(cw);
+    delete cw;
     w->native = NULL;
 }
 
@@ -1005,9 +1003,8 @@ static const char *nack__cocoa_clipboard_get(void)
         if (!utf8)
             return NULL;
 
-        free(nack__cocoa.clipboard_text);
-        nack__cocoa.clipboard_text = nack__strdup(utf8);
-        return nack__cocoa.clipboard_text;
+        nack__cocoa.clipboard_text = utf8;
+        return nack__cocoa.clipboard_text->c_str();
     }
 }
 
@@ -1058,7 +1055,7 @@ static void nack__cocoa_create_menu_bar(void)
 static bool nack__cocoa_init(const struct nack_win_init_desc *desc)
 {
     (void)desc;
-    memset(&nack__cocoa, 0, sizeof nack__cocoa);
+    nack__cocoa = nack_cocoa_state{};
 
     @autoreleasepool {
         [NSApplication sharedApplication];
@@ -1092,8 +1089,7 @@ static void nack__cocoa_shutdown(void)
         nack__nsgl_terminate();
         [NSApp setDelegate:nil];
         [nack__cocoa.app_delegate release];
-        free(nack__cocoa.clipboard_text);
-        memset(&nack__cocoa, 0, sizeof nack__cocoa);
+        nack__cocoa = nack_cocoa_state{};
     }
 }
 

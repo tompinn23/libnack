@@ -13,34 +13,32 @@ struct nack_win32_state nack__win32;
 /* String conversion                                                  */
 /* ------------------------------------------------------------------ */
 
-WCHAR *nack__win32_utf8_to_wide(const char *utf8)
+std::optional<std::wstring> nack__win32_utf8_to_wide(const char *utf8)
 {
     if (!utf8)
-        return NULL;
+        return std::nullopt;
     int count = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, NULL, 0);
     if (count <= 0)
-        return NULL;
-    nack::c_ptr<WCHAR> wide((WCHAR *)malloc((size_t)count * sizeof(WCHAR)));
-    if (!wide)
-        return NULL;
-    if (!MultiByteToWideChar(CP_UTF8, 0, utf8, -1, wide.get(), count))
-        return NULL;
-    return wide.release();
+        return std::nullopt;
+    std::wstring wide((size_t)count, L'\0');
+    if (!MultiByteToWideChar(CP_UTF8, 0, utf8, -1, wide.data(), count))
+        return std::nullopt;
+    wide.resize((size_t)count - 1);   /* drop the NUL the API wrote in */
+    return wide;
 }
 
-char *nack__win32_wide_to_utf8(const WCHAR *wide)
+std::optional<std::string> nack__win32_wide_to_utf8(const WCHAR *wide)
 {
     if (!wide)
-        return NULL;
+        return std::nullopt;
     int count = WideCharToMultiByte(CP_UTF8, 0, wide, -1, NULL, 0, NULL, NULL);
     if (count <= 0)
-        return NULL;
-    nack::c_ptr<char> utf8((char *)malloc((size_t)count));
-    if (!utf8)
-        return NULL;
-    if (!WideCharToMultiByte(CP_UTF8, 0, wide, -1, utf8.get(), count, NULL, NULL))
-        return NULL;
-    return utf8.release();
+        return std::nullopt;
+    std::string utf8((size_t)count, '\0');
+    if (!WideCharToMultiByte(CP_UTF8, 0, wide, -1, utf8.data(), count, NULL, NULL))
+        return std::nullopt;
+    utf8.resize((size_t)count - 1);   /* drop the NUL the API wrote in */
+    return utf8;
 }
 
 /* ------------------------------------------------------------------ */
@@ -767,9 +765,7 @@ static bool nack__win32_window_create(struct nack_window *w,
                                       const struct nack_window_desc *desc)
 {
     (void)desc;
-    struct nack_win32_window *ww = (struct nack_win32_window *)nack__calloc(1, sizeof *ww);
-    if (!ww)
-        return false;
+    struct nack_win32_window *ww = new nack_win32_window{};
     ww->dpi = NACK_DEFAULT_DPI;
     w->native = ww;
 
@@ -779,17 +775,16 @@ static bool nack__win32_window_create(struct nack_window *w,
     RECT rect = { 0, 0, w->width, w->height };
     nack__win32_adjust_rect(w, &rect, style, ex_style, NACK_DEFAULT_DPI);
 
-    WCHAR *title = nack__win32_utf8_to_wide(w->title.c_str());
+    std::optional<std::wstring> title = nack__win32_utf8_to_wide(w->title.c_str());
 
     ww->hwnd = CreateWindowExW(ex_style, NACK_WIN32_CLASS_NAME,
-                               title ? title : L"libnack", style,
+                               title ? title->c_str() : L"libnack", style,
                                CW_USEDEFAULT, CW_USEDEFAULT,
                                rect.right - rect.left, rect.bottom - rect.top,
                                NULL, NULL, nack__win32.instance, NULL);
-    free(title);
 
     if (!ww->hwnd) {
-        free(ww);
+        delete ww;
         w->native = NULL;
         return nack__fail(NACK_ERROR_PLATFORM, "CreateWindowEx failed (error %lu)",
                           GetLastError());
@@ -800,7 +795,7 @@ static bool nack__win32_window_create(struct nack_window *w,
     ww->hdc = GetDC(ww->hwnd);
     if (!ww->hdc) {
         DestroyWindow(ww->hwnd);
-        free(ww);
+        delete ww;
         w->native = NULL;
         return nack__fail(NACK_ERROR_PLATFORM, "GetDC failed");
     }
@@ -858,7 +853,7 @@ static void nack__win32_window_destroy(struct nack_window *w)
         SetWindowLongPtrW(ww->hwnd, GWLP_USERDATA, 0);
         DestroyWindow(ww->hwnd);
     }
-    free(ww);
+    delete ww;
     w->native = NULL;
 }
 
@@ -877,11 +872,9 @@ static void nack__win32_window_focus(struct nack_window *w)
 
 static void nack__win32_window_set_title(struct nack_window *w, const char *title)
 {
-    WCHAR *wide = nack__win32_utf8_to_wide(title);
-    if (wide) {
-        SetWindowTextW(nack__win32_win(w)->hwnd, wide);
-        free(wide);
-    }
+    std::optional<std::wstring> wide = nack__win32_utf8_to_wide(title);
+    if (wide)
+        SetWindowTextW(nack__win32_win(w)->hwnd, wide->c_str());
 }
 
 static void nack__win32_window_set_size(struct nack_window *w, int width, int height)
@@ -1066,26 +1059,22 @@ static HWND nack__win32_any_window(void)
 
 static bool nack__win32_clipboard_set(const char *utf8)
 {
-    WCHAR *wide = nack__win32_utf8_to_wide(utf8);
+    std::optional<std::wstring> wide = nack__win32_utf8_to_wide(utf8);
     if (!wide)
         return nack__fail(NACK_ERROR_INVALID_ARGUMENT, "clipboard text is not UTF-8");
 
-    size_t count = wcslen(wide) + 1;
+    size_t count = wide->size() + 1;
     HGLOBAL handle = GlobalAlloc(GMEM_MOVEABLE, count * sizeof(WCHAR));
-    if (!handle) {
-        free(wide);
+    if (!handle)
         return nack__fail(NACK_ERROR_OUT_OF_MEMORY, "GlobalAlloc failed");
-    }
 
     void *locked = GlobalLock(handle);
     if (!locked) {
         GlobalFree(handle);
-        free(wide);
         return nack__fail(NACK_ERROR_PLATFORM, "GlobalLock failed");
     }
-    memcpy(locked, wide, count * sizeof(WCHAR));
+    memcpy(locked, wide->c_str(), count * sizeof(WCHAR));
     GlobalUnlock(handle);
-    free(wide);
 
     if (!OpenClipboard(nack__win32_any_window())) {
         GlobalFree(handle);
@@ -1122,12 +1111,11 @@ static const char *nack__win32_clipboard_get(void)
         return NULL;
     }
 
-    free(nack__win32.clipboard_text);
     nack__win32.clipboard_text = nack__win32_wide_to_utf8(wide);
 
     GlobalUnlock((HGLOBAL)handle);
     CloseClipboard();
-    return nack__win32.clipboard_text;
+    return nack__win32.clipboard_text ? nack__win32.clipboard_text->c_str() : NULL;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1169,7 +1157,7 @@ static void nack__win32_load_dpi_functions(void)
 static bool nack__win32_init(const struct nack_win_init_desc *desc)
 {
     (void)desc;
-    memset(&nack__win32, 0, sizeof nack__win32);
+    nack__win32 = nack_win32_state{};
 
     nack__win32.instance = GetModuleHandleW(NULL);
     nack__win32.main_thread = GetCurrentThreadId();
@@ -1208,12 +1196,10 @@ static void nack__win32_shutdown(void)
     if (nack__win32.class_registered)
         UnregisterClassW(NACK_WIN32_CLASS_NAME, nack__win32.instance);
 
-    free(nack__win32.clipboard_text);
-
     if (nack__win32.user32) FreeLibrary(nack__win32.user32);
     if (nack__win32.shcore) FreeLibrary(nack__win32.shcore);
 
-    memset(&nack__win32, 0, sizeof nack__win32);
+    nack__win32 = nack_win32_state{};
 }
 
 /* ------------------------------------------------------------------ */

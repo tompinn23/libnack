@@ -25,6 +25,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <memory>
 
 /*
  * A texture is opaque to everything above, and both backends are linked
@@ -253,13 +254,8 @@ static struct nack_texture *nack__mtl_texture_create(const uint8_t *rgba,
     @autoreleasepool {
         MTLTextureDescriptor *descriptor;
 
-        nack::c_ptr<struct nack__mtl_texture> texture(
-            (struct nack__mtl_texture *)calloc(
-                1, sizeof(struct nack__mtl_texture)));
-        if (!texture) {
-            nack__error("out of memory");
-            return NULL;
-        }
+        std::unique_ptr<struct nack__mtl_texture> texture(
+            new nack__mtl_texture{});
 
         descriptor = [MTLTextureDescriptor
             texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
@@ -290,7 +286,7 @@ static void nack__mtl_texture_destroy(struct nack_texture *handle)
     if (!texture)
         return;
     [texture->texture release];
-    free(texture);
+    delete texture;
 }
 
 static void nack__mtl_begin_frame(struct nack_color clear, int fb_width,

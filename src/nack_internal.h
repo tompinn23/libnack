@@ -276,9 +276,6 @@ void nack__unregister_window(struct nack_window *w);
 void *nack__proc_cache_get(const char *name, void *(*resolve)(const char *));
 void  nack__proc_cache_clear(void);
 
-/* Helpers */
-char *nack__strdup(const char *s);
-void *nack__calloc(size_t count, size_t size);
 /* out must have room for 4 bytes plus a terminator. Spelled [5] rather
  * than the C99 [static 5], which MSVC does not implement. */
 uint32_t nack__utf8_encode(uint32_t codepoint, char out[5]);

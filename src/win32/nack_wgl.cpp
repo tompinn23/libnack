@@ -8,6 +8,7 @@
  */
 #include "nack_win32.h"
 
+#include <memory>
 #include <stdio.h>
 
 /* WGL_ARB_pixel_format */
@@ -405,20 +406,14 @@ struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const st
         return NULL;
     }
 
-    struct nack_gl_context *ctx = (struct nack_gl_context *)nack__calloc(1, sizeof *ctx);
-    struct nack_wgl_context *native = (struct nack_wgl_context *)nack__calloc(1, sizeof *native);
-    if (!ctx || !native) {
-        nack__wgl.DeleteContext(glrc);
-        free(ctx);
-        free(native);
-        return NULL;
-    }
+    auto ctx = std::make_unique<struct nack_gl_context>();
+    auto native = std::make_unique<struct nack_wgl_context>();
 
     native->glrc = glrc;
-    ctx->native = native;
+    ctx->native = native.release();
     ctx->vt = vt;
     ctx->owner = w;
-    return ctx;
+    return ctx.release();
 }
 
 void nack__wgl_destroy_context(struct nack_gl_context *ctx)
@@ -432,9 +427,9 @@ void nack__wgl_destroy_context(struct nack_gl_context *ctx)
                 nack__wgl.MakeCurrent(NULL, NULL);
             nack__wgl.DeleteContext(native->glrc);
         }
-        free(native);
+        delete native;
     }
-    free(ctx);
+    delete ctx;
 }
 
 bool nack__wgl_make_current(struct nack_window *w, struct nack_gl_context *ctx)

@@ -63,29 +63,6 @@ enum nack_result nack__win_get_error(const char **message)
     return nack__g.error_code;
 }
 
-/* ------------------------------------------------------------------ */
-/* Small helpers                                                      */
-/* ------------------------------------------------------------------ */
-
-char *nack__strdup(const char *s)
-{
-    if (!s)
-        return NULL;
-    size_t n = strlen(s) + 1;
-    char *p = (char *)malloc(n);
-    if (p)
-        memcpy(p, s, n);
-    return p;
-}
-
-void *nack__calloc(size_t count, size_t size)
-{
-    void *p = calloc(count ? count : 1, size ? size : 1);
-    if (!p)
-        nack__fail(NACK_ERROR_OUT_OF_MEMORY, "out of memory");
-    return p;
-}
-
 uint32_t nack__utf8_encode(uint32_t cp, char out[5])
 {
     if (cp < 0x80) {

@@ -2,6 +2,8 @@
 #define NACK_WIN32_H_INCLUDED
 
 #include "../nack_internal.h"
+#include <optional>
+#include <string>
 
 #if defined(NACK_WIN32_USE_SDK_HEADERS)
 #  ifndef WIN32_LEAN_AND_MEAN
@@ -46,7 +48,7 @@ struct nack_win32_state {
     DWORD main_thread;
     HCURSOR cursors[NACK_CURSOR_SHAPE_COUNT];
     bool cursors_loaded[NACK_CURSOR_SHAPE_COUNT];
-    char *clipboard_text;
+    std::optional<std::string> clipboard_text;
     bool class_registered;
 
     /* Per-monitor DPI entry points, resolved at run time so the library still
@@ -80,7 +82,7 @@ void  nack__wgl_set_swap_interval(int interval);
 void *nack__wgl_get_proc_address(const char *name);
 
 /* Shared helpers */
-WCHAR *nack__win32_utf8_to_wide(const char *utf8);
-char  *nack__win32_wide_to_utf8(const WCHAR *wide);
+std::optional<std::wstring> nack__win32_utf8_to_wide(const char *utf8);
+std::optional<std::string> nack__win32_wide_to_utf8(const WCHAR *wide);
 
 #endif /* NACK_WIN32_H_INCLUDED */
