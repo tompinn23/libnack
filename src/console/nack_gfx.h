@@ -17,13 +17,16 @@
 #include "../nack_internal.h"
 
 /*
- * libnack is C++ now, but its API is C and its tests and examples are C, so
- * these declarations keep C linkage. This is what lets a C program - and
- * anything binding through a C ABI - keep using the library unchanged.
+ * C++ only. The dispatch below is a class, not a table of function pointers:
+ * see the comment on nack_gfx_backend. The console layer's own entry points
+ * further down keep C linkage, as they always did.
  */
-#ifdef __cplusplus
-extern "C" {
+#ifndef __cplusplus
+#  error "nack_gfx.h is C++"
 #endif
+
+#include <cstddef>
+#include <cstdint>
 
 /* position.xy, uv.xy, fg.rgba, bg.rgba */
 #define NACK_FLOATS_PER_VERTEX 12
@@ -33,32 +36,63 @@ extern "C" {
 struct nack_texture;
 
 /*
- * One renderer. Mirrors how the window layer selects its platform backend, for
- * the same reason: the choice cannot always be made at build time.
+ * One renderer.
+ *
+ * Still chosen at run time - that is not an implementation detail but the
+ * point: on macOS a failing Metal has to fall back to OpenGL, and
+ * NACK_RENDERER picks between them, so the choice cannot be made at build
+ * time and a template cannot express it.
+ *
+ * What it is not any more is a struct of function pointers filled in
+ * positionally. Every operation a renderer must provide is pure virtual, so a
+ * backend that forgets one does not compile, and reordering them cannot
+ * silently rewire an existing backend. The two that are genuinely optional
+ * say so by having a default here, which is the distinction the table could
+ * not draw: a NULL slot meant either "not supported" or "forgotten", and
+ * callers checked some of them and not others.
  */
-struct nack_gfx_backend {
-    const char *name;
-    bool (*init)(struct nack_window *window);
-    void (*shutdown)(void);
-    struct nack_texture *(*texture_create)(const uint8_t *rgba, int width,
-                                           int height);
-    void (*texture_destroy)(struct nack_texture *texture);
-    void (*begin_frame)(struct nack_color clear, int fb_width, int fb_height,
-                        int viewport_x, int viewport_y, int viewport_w,
-                        int viewport_h);
-    void (*draw)(const float *vertices, size_t vertex_count, int mode,
-                 struct nack_texture *texture);
-    void (*end_frame)(void);
-    void (*resize)(int fb_width, int fb_height);
-    void (*set_vsync)(bool vsync);
-    void (*set_capture)(bool capture);
-    bool (*read_pixel)(int x, int y, uint8_t rgba[4]);
+class nack_gfx_backend {
+public:
+    virtual ~nack_gfx_backend() = default;
+
+    virtual const char *name() const = 0;
+
+    virtual bool init(struct nack_window *window) = 0;
+    virtual void shutdown() = 0;
+
+    virtual struct nack_texture *texture_create(const uint8_t *rgba, int width,
+                                                int height) = 0;
+    virtual void texture_destroy(struct nack_texture *texture) = 0;
+
+    virtual void begin_frame(struct nack_color clear, int fb_width,
+                             int fb_height, int viewport_x, int viewport_y,
+                             int viewport_w, int viewport_h) = 0;
+    virtual void draw(const float *vertices, size_t vertex_count, int mode,
+                      struct nack_texture *texture) = 0;
+    virtual void end_frame() = 0;
+
+    virtual void resize(int fb_width, int fb_height) = 0;
+    virtual void set_vsync(bool vsync) = 0;
+
+    /*
+     * Keeping a copy of each frame so the tests can read pixels back. A
+     * renderer that cannot do it declines by not overriding, and read_pixel
+     * then reports failure rather than being a null call nobody guarded.
+     */
+    virtual void set_capture(bool capture) { (void)capture; }
+    virtual bool read_pixel(int x, int y, uint8_t rgba[4])
+    {
+        (void)x; (void)y; (void)rgba;
+        return false;
+    }
 };
 
-const struct nack_gfx_backend *nack__gfx_backend_gl(void);
+nack_gfx_backend *nack__gfx_backend_gl(void);
 #if defined(__APPLE__)
-const struct nack_gfx_backend *nack__gfx_backend_metal(void);
+nack_gfx_backend *nack__gfx_backend_metal(void);
 #endif
+
+extern "C" {
 
 /*
  * Brings up the device, swap chain and pipeline for the window. The window
@@ -118,7 +152,5 @@ bool nack__gfx_read_pixel(int x, int y, uint8_t rgba[4]);
 const char *nack__gfx_name(void);
 
 
-#ifdef __cplusplus
 }   /* extern "C" */
-#endif
 #endif /* NACK_GFX_H_INCLUDED */

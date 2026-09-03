@@ -507,22 +507,65 @@ static bool nack__mtl_read_pixel(int x, int y, uint8_t rgba[4])
     }
 }
 
-static const struct nack_gfx_backend nack__mtl_backend = {
-    "metal",
-    nack__mtl_init,
-    nack__mtl_shutdown,
-    nack__mtl_texture_create,
-    nack__mtl_texture_destroy,
-    nack__mtl_begin_frame,
-    nack__mtl_draw,
-    nack__mtl_end_frame,
-    nack__mtl_resize,
-    nack__mtl_set_vsync,
-    nack__mtl_set_capture,
-    nack__mtl_read_pixel
+/*
+ * As with the OpenGL backend, the overrides forward to the functions above and
+ * the Metal code itself is untouched. Everything Objective-C stays in those
+ * functions; this is plain C++.
+ */
+namespace {
+
+class metal_backend final : public nack_gfx_backend {
+public:
+    const char *name() const override { return "metal"; }
+
+    bool init(struct nack_window *window) override
+    {
+        return nack__mtl_init(window);
+    }
+    void shutdown() override { nack__mtl_shutdown(); }
+
+    struct nack_texture *texture_create(const uint8_t *rgba, int width,
+                                        int height) override
+    {
+        return nack__mtl_texture_create(rgba, width, height);
+    }
+    void texture_destroy(struct nack_texture *texture) override
+    {
+        nack__mtl_texture_destroy(texture);
+    }
+
+    void begin_frame(struct nack_color clear, int fb_width, int fb_height,
+                     int viewport_x, int viewport_y, int viewport_w,
+                     int viewport_h) override
+    {
+        nack__mtl_begin_frame(clear, fb_width, fb_height, viewport_x,
+                              viewport_y, viewport_w, viewport_h);
+    }
+    void draw(const float *vertices, size_t vertex_count, int mode,
+              struct nack_texture *texture) override
+    {
+        nack__mtl_draw(vertices, vertex_count, mode, texture);
+    }
+    void end_frame() override { nack__mtl_end_frame(); }
+
+    void resize(int fb_width, int fb_height) override
+    {
+        nack__mtl_resize(fb_width, fb_height);
+    }
+    void set_vsync(bool vsync) override { nack__mtl_set_vsync(vsync); }
+
+    void set_capture(bool capture) override { nack__mtl_set_capture(capture); }
+    bool read_pixel(int x, int y, uint8_t rgba[4]) override
+    {
+        return nack__mtl_read_pixel(x, y, rgba);
+    }
 };
 
-const struct nack_gfx_backend *nack__gfx_backend_metal(void)
+metal_backend nack__mtl_backend_instance;
+
+}   /* namespace */
+
+nack_gfx_backend *nack__gfx_backend_metal(void)
 {
-    return &nack__mtl_backend;
+    return &nack__mtl_backend_instance;
 }

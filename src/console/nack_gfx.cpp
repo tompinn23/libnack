@@ -16,34 +16,52 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const struct nack_gfx_backend *nack__gfx;
+static nack_gfx_backend *nack__gfx;
 
 /*
  * A backend that always fails to start, so the fallback below is covered by
  * the test suite on machines that only have one real renderer - which is every
  * machine this library is developed on. It is only ever reachable through
  * NACK_RENDERER=test-fail.
+ *
+ * As a table this was nine trailing NULLs, and safe only because it never
+ * starts: had it ever been selected, the first draw would have called through
+ * a null pointer. It has to answer every operation now, so that cannot happen
+ * however it comes to be chosen.
  */
-static bool nack__gfx_fail_init(struct nack_window *window)
-{
-    (void)window;
-    return nack__error("this renderer fails on purpose");
-}
+namespace {
 
-static void nack__gfx_fail_shutdown(void)
-{
-}
+class failing_backend final : public nack_gfx_backend {
+public:
+    const char *name() const override { return "test-fail"; }
 
-static const struct nack_gfx_backend nack__gfx_fail_backend = {
-    "test-fail",
-    nack__gfx_fail_init,
-    nack__gfx_fail_shutdown,
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+    bool init(struct nack_window *window) override
+    {
+        (void)window;
+        return nack__error("this renderer fails on purpose");
+    }
+    void shutdown() override {}
+
+    struct nack_texture *texture_create(const uint8_t *, int, int) override
+    {
+        nack__error("the test-fail renderer draws nothing");
+        return NULL;
+    }
+    void texture_destroy(struct nack_texture *) override {}
+    void begin_frame(struct nack_color, int, int, int, int, int, int) override {}
+    void draw(const float *, size_t, int, struct nack_texture *) override {}
+    void end_frame() override {}
+    void resize(int, int) override {}
+    void set_vsync(bool) override {}
 };
+
+failing_backend nack__gfx_fail_backend;
+
+}   /* namespace */
 
 bool nack__gfx_init(struct nack_window *window)
 {
-    const struct nack_gfx_backend *candidates[3];
+    nack_gfx_backend *candidates[3];
     const char *preferred = getenv("NACK_RENDERER");
     char reason[256];
     size_t count = 0, i, j;
@@ -63,9 +81,9 @@ bool nack__gfx_init(struct nack_window *window)
     /* A named renderer goes first; the rest stay as fallbacks behind it. */
     if (preferred) {
         for (i = 0; i < count; ++i) {
-            const struct nack_gfx_backend *chosen = candidates[i];
+            nack_gfx_backend *chosen = candidates[i];
 
-            if (!chosen || strcmp(chosen->name, preferred) != 0)
+            if (!chosen || strcmp(chosen->name(), preferred) != 0)
                 continue;
             for (j = i; j > 0; --j)
                 candidates[j] = candidates[j - 1];
@@ -89,19 +107,19 @@ bool nack__gfx_init(struct nack_window *window)
              * the caller only cares that one of them worked.
              */
             nack__clear_error();
-            nack__log("nack: rendering with %s", nack__gfx->name);
+            nack__log("nack: rendering with %s", nack__gfx->name());
             return true;
         }
 
         why = nack_get_error();
-        nack__log("nack: the %s renderer is unavailable: %s", nack__gfx->name,
+        nack__log("nack: the %s renderer is unavailable: %s", nack__gfx->name(),
                   why ? why : "no reason given");
         /*
          * Keep the last renderer's complaint. If every candidate fails, that
          * is the only account of why anywhere, and "no renderer could be
          * started" on its own tells a user nothing they can act on.
          */
-        snprintf(reason, sizeof reason, "%s: %s", nack__gfx->name,
+        snprintf(reason, sizeof reason, "%s: %s", nack__gfx->name(),
                  why ? why : "no reason given");
         /*
          * Every backend's shutdown copes with a half-built state, and has to
@@ -124,7 +142,7 @@ void nack__gfx_shutdown(void)
 
 const char *nack__gfx_name(void)
 {
-    return nack__gfx ? nack__gfx->name : "none";
+    return nack__gfx ? nack__gfx->name() : "none";
 }
 
 static int nack__gfx_failed_textures;
@@ -191,7 +209,7 @@ void nack__gfx_set_vsync(bool vsync)
 
 void nack__gfx_set_capture(bool capture)
 {
-    if (nack__gfx && nack__gfx->set_capture)
+    if (nack__gfx)
         nack__gfx->set_capture(capture);
 }
 

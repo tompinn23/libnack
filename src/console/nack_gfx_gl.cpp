@@ -353,22 +353,65 @@ static bool nack__glr_read_pixel(int x, int y, uint8_t rgba[4])
     return true;
 }
 
-static const struct nack_gfx_backend nack__glr_backend = {
-    "opengl",
-    nack__glr_init,
-    nack__glr_shutdown,
-    nack__glr_texture_create,
-    nack__glr_texture_destroy,
-    nack__glr_begin_frame,
-    nack__glr_draw,
-    nack__glr_end_frame,
-    nack__glr_resize,
-    nack__glr_set_vsync,
-    nack__glr_set_capture,
-    nack__glr_read_pixel
+/*
+ * The overrides are one line each and forward to the functions above, which
+ * keep their own file-static state. Nothing about the OpenGL code changes;
+ * what changes is that leaving one of them out is now a compile error.
+ */
+namespace {
+
+class gl_backend final : public nack_gfx_backend {
+public:
+    const char *name() const override { return "opengl"; }
+
+    bool init(struct nack_window *window) override
+    {
+        return nack__glr_init(window);
+    }
+    void shutdown() override { nack__glr_shutdown(); }
+
+    struct nack_texture *texture_create(const uint8_t *rgba, int width,
+                                        int height) override
+    {
+        return nack__glr_texture_create(rgba, width, height);
+    }
+    void texture_destroy(struct nack_texture *texture) override
+    {
+        nack__glr_texture_destroy(texture);
+    }
+
+    void begin_frame(struct nack_color clear, int fb_width, int fb_height,
+                     int viewport_x, int viewport_y, int viewport_w,
+                     int viewport_h) override
+    {
+        nack__glr_begin_frame(clear, fb_width, fb_height, viewport_x,
+                              viewport_y, viewport_w, viewport_h);
+    }
+    void draw(const float *vertices, size_t vertex_count, int mode,
+              struct nack_texture *texture) override
+    {
+        nack__glr_draw(vertices, vertex_count, mode, texture);
+    }
+    void end_frame() override { nack__glr_end_frame(); }
+
+    void resize(int fb_width, int fb_height) override
+    {
+        nack__glr_resize(fb_width, fb_height);
+    }
+    void set_vsync(bool vsync) override { nack__glr_set_vsync(vsync); }
+
+    void set_capture(bool capture) override { nack__glr_set_capture(capture); }
+    bool read_pixel(int x, int y, uint8_t rgba[4]) override
+    {
+        return nack__glr_read_pixel(x, y, rgba);
+    }
 };
 
-const struct nack_gfx_backend *nack__gfx_backend_gl(void)
+gl_backend nack__gl_backend_instance;
+
+}   /* namespace */
+
+nack_gfx_backend *nack__gfx_backend_gl(void)
 {
-    return &nack__glr_backend;
+    return &nack__gl_backend_instance;
 }
