@@ -467,9 +467,15 @@ int main()
                       "another client owns the clipboard");
 
                 back = app->clipboard();
-                check(back.size() == payload.size() - 1,
-                      "an INCR selection arrives at its full length");
-                check(std::memcmp(back.data(), payload.data(), payload.size() - 1) == 0,
+                bool full_length = back.size() == payload.size() - 1;
+                check(full_length, "an INCR selection arrives at its full length");
+                /*
+                 * Bounded by back's own size, not payload's: a short read
+                 * (the length check above already reports it) must not turn
+                 * into a memcmp past the end of whatever back actually holds.
+                 */
+                check(full_length &&
+                      std::memcmp(back.data(), payload.data(), back.size()) == 0,
                       "and every chunk landed in the right place");
                 pclose(peer);
             }
