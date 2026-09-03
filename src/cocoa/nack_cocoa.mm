@@ -1230,16 +1230,7 @@ cocoa_backend nack__cocoa_backend_instance;
 }   /* namespace */
 
 
-static struct nack_gl_context *nack__cocoa_gl_create(struct nack_window *w,
-                                              const struct nack__gl_desc *desc);
-
 nack_backend_vt *nack__backend_cocoa(void)
 {
     return &nack__cocoa_backend_instance;
-}
-
-static struct nack_gl_context *nack__cocoa_gl_create(struct nack_window *w,
-                                              const struct nack__gl_desc *desc)
-{
-    return nack__nsgl_create_context(w, desc, nack__backend_cocoa());
 }

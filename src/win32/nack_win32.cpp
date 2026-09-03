@@ -1349,12 +1349,6 @@ win32_backend nack__win32_backend_instance;
 }   /* namespace */
 
 
-static struct nack_gl_context *nack__win32_gl_create(struct nack_window *w,
-                                              const struct nack__gl_desc *desc)
-{
-    return nack__wgl_create_context(w, desc, &nack__win32_vt);
-}
-
 nack_backend_vt *nack__backend_win32(void)
 {
     return &nack__win32_backend_instance;
