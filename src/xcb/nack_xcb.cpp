@@ -227,7 +227,7 @@ static bool nack__xcb_wm_supports(xcb_atom_t atom)
 
 static struct nack_window *nack__xcb_lookup(xcb_window_t handle)
 {
-    for (size_t i = 0; i < nack__g.window_count; ++i) {
+    for (size_t i = 0; i < nack__g.windows.size(); ++i) {
         struct nack_window *w = nack__g.windows[i];
         struct nack_xcb_window *xw = (struct nack_xcb_window *)w->native;
         if (xw && xw->handle == handle)
@@ -1032,19 +1032,16 @@ static bool nack__xcb_window_create(struct nack_window *w,
 
     /* WM_CLASS is instance\0class\0, both taken from the app id. */
     {
-        size_t len = strlen(nack__g.app_id);
-        size_t total = (len + 1) * 2;
-        nack::c_ptr<char> wm_class((char *)malloc(total));
-        if (wm_class) {
-            memcpy(wm_class.get(), nack__g.app_id, len + 1);
-            memcpy(wm_class.get() + len + 1, nack__g.app_id, len + 1);
-            xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
-                                XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8,
-                                (uint32_t)total, wm_class.get());
-        }
+        std::string wm_class = nack__g.app_id;
+        wm_class.push_back('\0');
+        wm_class += nack__g.app_id;
+        wm_class.push_back('\0');
+        xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
+                            XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8,
+                            (uint32_t)wm_class.size(), wm_class.data());
     }
 
-    nack__xcb_set_title(w, w->title);
+    nack__xcb_set_title(w, w->title.c_str());
     nack__xcb_set_decorated(w, w->decorated);
     nack__xcb_apply_size_hints(w);
 

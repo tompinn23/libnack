@@ -779,7 +779,7 @@ static bool nack__win32_window_create(struct nack_window *w,
     RECT rect = { 0, 0, w->width, w->height };
     nack__win32_adjust_rect(w, &rect, style, ex_style, NACK_DEFAULT_DPI);
 
-    WCHAR *title = nack__win32_utf8_to_wide(w->title);
+    WCHAR *title = nack__win32_utf8_to_wide(w->title.c_str());
 
     ww->hwnd = CreateWindowExW(ex_style, NACK_WIN32_CLASS_NAME,
                                title ? title : L"libnack", style,
@@ -1007,7 +1007,7 @@ static void nack__win32_drain(void)
         if (msg.message == WM_QUIT) {
             size_t i;
             nack__emit_simple(NULL, NACK_WIN_EVENT_QUIT);
-            for (i = 0; i < nack__g.window_count; ++i)
+            for (i = 0; i < nack__g.windows.size(); ++i)
                 nack__g.windows[i]->should_close = true;
             continue;
         }
@@ -1056,7 +1056,7 @@ static void nack__win32_wakeup(void)
 
 static HWND nack__win32_any_window(void)
 {
-    for (size_t i = 0; i < nack__g.window_count; ++i) {
+    for (size_t i = 0; i < nack__g.windows.size(); ++i) {
         struct nack_win32_window *ww = (struct nack_win32_window *)nack__g.windows[i]->native;
         if (ww && ww->hwnd)
             return ww->hwnd;

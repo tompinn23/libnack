@@ -26,13 +26,26 @@
 #include "nack/nack.h"
 #include "nack_window.h"
 
+/*
+ * C++ only, like the console's internal header and for the same reason: the
+ * state below holds std::string and std::deque. nack_window.h stays C - it
+ * only ever declares struct nack_window, never defines it - so the parts of
+ * the window layer a C caller needs are still reachable.
+ */
+#ifndef __cplusplus
+#  error "nack_internal.h is C++"
+#endif
+
+#include <array>
+#include <deque>
+#include <exception>
+#include <string>
+#include <vector>
+
 #include <limits.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define NACK_WIN_EVENT_QUEUE_CAP 512
-#define NACK_MAX_WINDOWS 64
 
 #if defined(_WIN32)
 #  define NACK_PLATFORM_WIN32 1
@@ -48,7 +61,7 @@ struct nack_window {
     const struct nack_backend_vt *vt;
     void *native;              /* backend-owned per-window state */
 
-    char *title;
+    std::string title;
     int width, height;         /* logical size                    */
     int fb_width, fb_height;   /* framebuffer (physical) size      */
     int pos_x, pos_y;
@@ -141,19 +154,23 @@ struct nack_backend_vt {
 struct nack_state {
     bool initialized;
     const struct nack_backend_vt *vt;
-    char *app_id;
+    std::string app_id;
 
     void (*log_fn)(const char *, void *);
     void *log_user_data;
 
-    struct nack_win_event queue[NACK_WIN_EVENT_QUEUE_CAP];
-    size_t queue_head, queue_tail;
+    /*
+     * Events are only ever produced inside pump_events, which the same thread
+     * that drains them calls, so the queue holds at most one pump's worth and
+     * needs no cap. The ring buffer it replaces had one, and dropped the
+     * oldest event to stay within it.
+     */
+    std::deque<struct nack_win_event> queue;
 
-    struct nack_window *windows[NACK_MAX_WINDOWS];
-    size_t window_count;
+    std::vector<struct nack_window *> windows;
 
-    bool keys[NACK_KEY_COUNT];
-    bool mouse_buttons[NACK_MOUSE_BUTTON_COUNT];
+    std::array<bool, NACK_KEY_COUNT> keys;
+    std::array<bool, NACK_MOUSE_BUTTON_COUNT> mouse_buttons;
     uint32_t mods;
 
     struct nack_gl_context *current_context;
@@ -161,7 +178,7 @@ struct nack_state {
     int swap_interval;
 
     enum nack_result error_code;
-    char error_message[512];
+    std::string error_message;
 };
 
 extern struct nack_state nack__g;
@@ -169,6 +186,27 @@ extern struct nack_state nack__g;
 /* Diagnostics */
 void nack__log(const char *fmt, ...);
 bool nack__fail(enum nack_result code, const char *fmt, ...);
+
+/*
+ * The window layer's half of the C/C++ boundary. Same job as
+ * console/nack_guard.h - turn a container's exception back into the false or
+ * NULL a C caller expects - but it reports through nack__fail, which is where
+ * this layer keeps its error.
+ */
+namespace nack {
+
+template <class Body, class Result>
+Result guarded_win(const char *what, Body &&body, Result on_error)
+{
+    try {
+        return body();
+    } catch (const std::exception &failure) {
+        nack__fail(NACK_ERROR_OUT_OF_MEMORY, "%s: %s", what, failure.what());
+        return on_error;
+    }
+}
+
+}   /* namespace nack */
 
 /* Event queue */
 void nack__push_event(const struct nack_win_event *ev);

@@ -591,7 +591,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender
 {
     (void)sender;
-    for (size_t i = 0; i < nack__g.window_count; ++i)
+    for (size_t i = 0; i < nack__g.windows.size(); ++i)
         nack__g.windows[i]->should_close = true;
     nack__emit_simple(NULL, NACK_WIN_EVENT_QUIT);
     /* Let the application shut down in its own event loop rather than having
@@ -624,7 +624,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (void)applicationDidChangeScreenParameters:(NSNotification *)notification
 {
     (void)notification;
-    for (size_t i = 0; i < nack__g.window_count; ++i)
+    for (size_t i = 0; i < nack__g.windows.size(); ++i)
         nack__cocoa_update_size(nack__g.windows[i]);
 }
 
@@ -693,7 +693,7 @@ static bool nack__cocoa_window_create(struct nack_window *w,
         [cw->window setCollectionBehavior:
             NSWindowCollectionBehaviorFullScreenPrimary];
 
-    NSString *title = [NSString stringWithUTF8String:w->title];
+    NSString *title = [NSString stringWithUTF8String:w->title.c_str()];
     [cw->window setTitle:title];
 
     if (w->min_width > 0 || w->min_height > 0)

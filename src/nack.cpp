@@ -1,6 +1,9 @@
 /* libnack - platform independent core: dispatch, event queue, window shell. */
 #include "nack_internal.h"
 
+#include <algorithm>
+#include <exception>
+#include <memory>
 #include <stdio.h>
 
 #if defined(NACK_PLATFORM_WIN32)
@@ -36,19 +39,27 @@ void nack__log(const char *fmt, ...)
 
 bool nack__fail(enum nack_result code, const char *fmt, ...)
 {
+    char message[512];
     va_list ap;
+
     va_start(ap, fmt);
-    vsnprintf(nack__g.error_message, sizeof nack__g.error_message, fmt, ap);
+    vsnprintf(message, sizeof message, fmt, ap);
     va_end(ap);
+
+    /* Recording a failure must not be the thing that fails. */
+    try {
+        nack__g.error_message = message;
+    } catch (const std::exception &) {
+    }
     nack__g.error_code = code;
-    nack__log("nack: error: %s", nack__g.error_message);
+    nack__log("nack: error: %s", message);
     return false;
 }
 
 enum nack_result nack__win_get_error(const char **message)
 {
     if (message)
-        *message = nack__g.error_message;
+        *message = nack__g.error_message.c_str();
     return nack__g.error_code;
 }
 
@@ -171,19 +182,22 @@ double nack__win_time_seconds(void)
 
 bool nack__queue_empty(void)
 {
-    return nack__g.queue_head == nack__g.queue_tail;
+    return nack__g.queue.empty();
 }
 
 void nack__push_event(const struct nack_win_event *ev)
 {
-    size_t next = (nack__g.queue_tail + 1u) % NACK_WIN_EVENT_QUEUE_CAP;
-    if (next == nack__g.queue_head) {
-        /* Queue full: drop the oldest event so input stays responsive
-         * rather than the newest, which is usually the interesting one. */
-        nack__g.queue_head = (nack__g.queue_head + 1u) % NACK_WIN_EVENT_QUEUE_CAP;
+    /*
+     * An event that cannot be queued is an event the application never sees,
+     * so a failure here is dropped rather than reported: there is no caller
+     * to report it to, and the alternative is throwing out of a backend's
+     * event handler.
+     */
+    try {
+        nack__g.queue.push_back(*ev);
+    } catch (const std::exception &) {
+        nack__log("nack: dropped an event: out of memory");
     }
-    nack__g.queue[nack__g.queue_tail] = *ev;
-    nack__g.queue_tail = next;
 }
 
 struct nack_win_event *nack__event_begin(enum nack_win_event_type type, struct nack_window *w)
@@ -198,10 +212,10 @@ struct nack_win_event *nack__event_begin(enum nack_win_event_type type, struct n
 
 static bool nack__pop(struct nack_win_event *out)
 {
-    if (nack__queue_empty())
+    if (nack__g.queue.empty())
         return false;
-    *out = nack__g.queue[nack__g.queue_head];
-    nack__g.queue_head = (nack__g.queue_head + 1u) % NACK_WIN_EVENT_QUEUE_CAP;
+    *out = nack__g.queue.front();
+    nack__g.queue.pop_front();
     return true;
 }
 
@@ -376,35 +390,23 @@ void nack__emit_scroll(struct nack_window *w, double dx, double dy, uint32_t mod
 
 void nack__register_window(struct nack_window *w)
 {
-    if (nack__g.window_count < NACK_MAX_WINDOWS)
-        nack__g.windows[nack__g.window_count++] = w;
+    nack__g.windows.push_back(w);
 }
 
 void nack__unregister_window(struct nack_window *w)
 {
-    for (size_t i = 0; i < nack__g.window_count; ++i) {
-        if (nack__g.windows[i] == w) {
-            nack__g.windows[i] = nack__g.windows[--nack__g.window_count];
-            nack__g.windows[nack__g.window_count] = NULL;
-            return;
-        }
-    }
+    auto at = std::find(nack__g.windows.begin(), nack__g.windows.end(), w);
+    if (at != nack__g.windows.end())
+        nack__g.windows.erase(at);
 }
 
 /* Drop queued events referring to a window that is going away. */
 static void nack__purge_window_events(struct nack_window *w)
 {
-    size_t read = nack__g.queue_head;
-    size_t write = nack__g.queue_head;
-    while (read != nack__g.queue_tail) {
-        if (nack__g.queue[read].window != w) {
-            if (write != read)
-                nack__g.queue[write] = nack__g.queue[read];
-            write = (write + 1u) % NACK_WIN_EVENT_QUEUE_CAP;
-        }
-        read = (read + 1u) % NACK_WIN_EVENT_QUEUE_CAP;
-    }
-    nack__g.queue_tail = write;
+    auto stale = [w](const struct nack_win_event &ev) { return ev.window == w; };
+    nack__g.queue.erase(std::remove_if(nack__g.queue.begin(),
+                                       nack__g.queue.end(), stale),
+                        nack__g.queue.end());
 }
 
 /* ------------------------------------------------------------------ */
@@ -510,21 +512,21 @@ bool nack__win_init(const struct nack_win_init_desc *desc)
     if (desc)
         local = *desc;
 
-    memset(&nack__g, 0, sizeof nack__g);
+    nack__g = nack_state{};
     nack__g.log_fn = local.log_fn;
     nack__g.log_user_data = local.log_user_data;
-    nack__g.app_id = nack__strdup(local.app_id ? local.app_id : "libnack");
     nack__g.swap_interval = 1;
 
-    if (!nack__try_init_backends(&local)) {
-        free(nack__g.app_id);
-        nack__g.app_id = NULL;
-        return false;
-    }
-
-    nack__g.initialized = true;
-    nack__log("nack: using %s backend", nack__g.vt->name);
-    return true;
+    return nack::guarded_win("cannot start the window layer", [&] {
+        nack__g.app_id = local.app_id ? local.app_id : "libnack";
+        if (!nack__try_init_backends(&local)) {
+            nack__g.app_id.clear();
+            return false;
+        }
+        nack__g.initialized = true;
+        nack__log("nack: using %s backend", nack__g.vt->name);
+        return true;
+    }, false);
 }
 
 void nack__win_shutdown(void)
@@ -532,8 +534,8 @@ void nack__win_shutdown(void)
     if (!nack__g.initialized)
         return;
 
-    while (nack__g.window_count > 0)
-        nack_window_destroy(nack__g.windows[nack__g.window_count - 1]);
+    while (!nack__g.windows.empty())
+        nack_window_destroy(nack__g.windows.back());
 
     if (nack__g.vt && nack__g.vt->shutdown)
         nack__g.vt->shutdown();
@@ -541,8 +543,8 @@ void nack__win_shutdown(void)
     /* Entry points belong to the driver we are dropping. */
     nack__proc_cache_clear();
 
-    free(nack__g.app_id);
-    memset(&nack__g, 0, sizeof nack__g);
+    /* Assignment, not memset: the state owns strings and a queue now. */
+    nack__g = nack_state{};
 }
 
 bool nack__win_is_initialized(void)
@@ -632,12 +634,15 @@ struct nack_window *nack_window_create(const struct nack_window_desc *desc)
     if (d.transparent && d.framebuffer.alpha_bits == 0)
         d.framebuffer.alpha_bits = 8;
 
-    struct nack_window *w = (struct nack_window *)nack__calloc(1, sizeof *w);
-    if (!w)
+    auto owner = nack::guarded_win("cannot create a window", [&] {
+        return std::make_unique<struct nack_window>();
+    }, std::unique_ptr<struct nack_window>());
+    if (!owner)
         return NULL;
 
+    struct nack_window *w = owner.get();
     w->vt = nack__g.vt;
-    w->title = nack__strdup(d.title);
+    w->title = d.title ? d.title : "";
     w->width = d.width;
     w->height = d.height;
     w->fb_width = d.width;
@@ -659,13 +664,16 @@ struct nack_window *nack_window_create(const struct nack_window_desc *desc)
     w->cursor_shape = NACK_CURSOR_ARROW;
     w->last_click_button = -1;
 
-    if (!nack__g.vt->window_create(w, &d)) {
-        free(w->title);
-        free(w);
+    if (!nack__g.vt->window_create(w, &d))
+        return NULL;
+
+    if (!nack::guarded_win("cannot register the window",
+                           [&] { nack__register_window(w); return true; },
+                           false)) {
+        w->vt->window_destroy(w);
         return NULL;
     }
-
-    nack__register_window(w);
+    owner.release();
 
     if (d.fullscreen)
         nack_window_set_fullscreen(w, true);
@@ -692,8 +700,7 @@ void nack_window_destroy(struct nack_window *window)
     nack__purge_window_events(window);
     nack__unregister_window(window);
     window->vt->window_destroy(window);
-    free(window->title);
-    free(window);
+    delete window;
 }
 
 void nack_window_show(struct nack_window *window)
@@ -744,11 +751,9 @@ void nack_window_set_title(struct nack_window *window, const char *title)
 {
     if (!window || !title)
         return;
-    char *copy = nack__strdup(title);
-    if (!copy)
+    if (!nack::guarded_win("cannot set the window title",
+                           [&] { window->title = title; return true; }, false))
         return;
-    free(window->title);
-    window->title = copy;
     window->vt->window_set_title(window, title);
 }
 
@@ -918,7 +923,7 @@ bool nack__win_wait_event_timeout(struct nack_win_event *event, double timeout)
         /* Block until the platform produces something we can hand back. */
         while (nack__queue_empty()) {
             nack__g.vt->pump_events(-1.0);
-            if (nack__g.window_count == 0 && nack__queue_empty())
+            if (nack__g.windows.empty() && nack__queue_empty())
                 return false;   /* nothing left that could wake us */
         }
         return nack__pop(event);

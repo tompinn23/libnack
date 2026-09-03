@@ -410,8 +410,9 @@ void nack__wl_decor_redraw(struct nack_window *w)
             int text_y = (NACK_DECOR_TITLEBAR - NACK_FONT_H) / 2;
             int button;
 
-            if (text_width > 0 && w->title)
-                nack__wl_draw_title(&decor->buf, ww->decor_scale, w->title,
+            if (text_width > 0 && !w->title.empty())
+                nack__wl_draw_title(&decor->buf, ww->decor_scale,
+                                    w->title.c_str(),
                                     NACK_DECOR_BORDER + NACK_DECOR_TEXT_PAD,
                                     text_y, text_width, text_colour);
 
@@ -597,7 +598,7 @@ bool nack__wl_decor_find(struct wl_surface *surface,
     if (!surface)
         return false;
 
-    for (i = 0; i < nack__g.window_count; ++i) {
+    for (i = 0; i < nack__g.windows.size(); ++i) {
         struct nack_window *w = nack__g.windows[i];
         struct nack_wl_window *ww = (struct nack_wl_window *)w->native;
         if (!ww || !ww->client_side_decorations)

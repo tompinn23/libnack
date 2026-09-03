@@ -203,7 +203,7 @@ static void keyboard_enter(void *data, struct wl_keyboard *keyboard, uint32_t se
 
     if (!surface)
         return;
-    for (size_t i = 0; i < nack__g.window_count; ++i) {
+    for (size_t i = 0; i < nack__g.windows.size(); ++i) {
         struct nack_window *w = nack__g.windows[i];
         struct nack_wl_window *ww = nack__wl_win(w);
         if (ww && ww->surface == surface) {
@@ -493,7 +493,7 @@ static struct nack_window *nack__wl_window_for_surface(struct wl_surface *surfac
 {
     if (!surface)
         return NULL;
-    for (size_t i = 0; i < nack__g.window_count; ++i) {
+    for (size_t i = 0; i < nack__g.windows.size(); ++i) {
         struct nack_window *w = nack__g.windows[i];
         struct nack_wl_window *ww = nack__wl_win(w);
         if (ww && ww->surface == surface)
