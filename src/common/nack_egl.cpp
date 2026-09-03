@@ -3,6 +3,8 @@
 
 #include <dlfcn.h>
 #include <stdio.h>
+#include <memory>
+#include <vector>
 
 struct nack_egl_state nack__egl;
 
@@ -153,10 +155,8 @@ bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack__
         return nack__fail(NACK_ERROR_NO_PIXEL_FORMAT,
                           "no EGL config matches the requested framebuffer");
 
-    EGLConfig *configs = (EGLConfig *)nack__calloc((size_t)count, sizeof *configs);
-    if (!configs)
-        return false;
-    eglChooseConfig(nack__egl.display, attribs, configs, count, &count);
+    std::vector<EGLConfig> configs(count);
+    eglChooseConfig(nack__egl.display, attribs, configs.data(), count, &count);
 
     /* eglChooseConfig sorts by "at least as good as requested", which can hand
      * back a config with more bits than asked for. Prefer an exact match on the
@@ -181,7 +181,6 @@ bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack__
         *out_visual_id = 0;
         eglGetConfigAttrib(nack__egl.display, chosen, EGL_NATIVE_VISUAL_ID, out_visual_id);
     }
-    free(configs);
     return true;
 }
 
@@ -246,24 +245,18 @@ struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const st
         return NULL;
     }
 
-    struct nack_gl_context *ctx = (struct nack_gl_context *)nack__calloc(1, sizeof *ctx);
-    struct nack_egl_context *native = (struct nack_egl_context *)nack__calloc(1, sizeof *native);
-    if (!ctx || !native) {
-        eglDestroyContext(nack__egl.display, egl_ctx);
-        free(ctx);
-        free(native);
-        return NULL;
-    }
+    auto ctx = std::make_unique<struct nack_gl_context>();
+    auto native = std::make_unique<struct nack_egl_context>();
 
     native->context = egl_ctx;
     native->config = config;
     eglGetConfigAttrib(nack__egl.display, config, EGL_NATIVE_VISUAL_ID,
                        &native->visual_id);
     native->is_es = (desc->profile == NACK__GL_PROFILE_ES);
-    ctx->native = native;
+    ctx->native = native.release();
     ctx->vt = vt;
     ctx->owner = w;
-    return ctx;
+    return ctx.release();
 }
 
 void nack__egl_destroy_context(struct nack_gl_context *ctx)
@@ -274,9 +267,9 @@ void nack__egl_destroy_context(struct nack_gl_context *ctx)
     if (native) {
         if (native->context != EGL_NO_CONTEXT)
             eglDestroyContext(nack__egl.display, native->context);
-        free(native);
+        delete native;
     }
-    free(ctx);
+    delete ctx;
 }
 
 EGLSurface nack__egl_create_window_surface(EGLConfig config, void *native_window,

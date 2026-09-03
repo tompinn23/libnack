@@ -2,6 +2,8 @@
 #define NACK_XCB_H_INCLUDED
 
 #include "../nack_internal.h"
+#include <optional>
+#include <string>
 #include "../common/nack_egl.h"
 
 #include <xcb/xcb.h>
@@ -94,10 +96,10 @@ struct nack_xcb_state {
     bool cursors_loaded[NACK_CURSOR_SHAPE_COUNT];
     xcb_cursor_t blank_cursor;
 
-    char *clipboard_owned;
-    char *primary_owned;
-    char *clipboard_received;
-    char *primary_received;
+    std::optional<std::string> clipboard_owned;
+    std::optional<std::string> primary_owned;
+    std::optional<std::string> clipboard_received;
+    std::optional<std::string> primary_received;
 };
 
 extern struct nack_xcb_state nack__xcb;

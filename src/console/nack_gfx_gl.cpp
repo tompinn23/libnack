@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <vector>
 
 /*
  * A texture is opaque to everything above, and on macOS both backends are
@@ -32,7 +33,7 @@ struct nack_gl_backend {
 
     /* The last frame, kept only when capture is on. See nack__glr_end_frame. */
     bool capture;
-    uint8_t *frame;
+    std::vector<uint8_t> frame;
     int frame_width, frame_height;
 };
 
@@ -101,7 +102,7 @@ static bool nack__glr_init(struct nack_window *window)
     nack_gluint vertex, fragment;
     nack_glint status = 0;
 
-    memset(&nack__gl, 0, sizeof nack__gl);
+    nack__gl = nack_gl_backend{};
     nack__gl.window = window;
 
     nack__gl_desc_defaults(&desc);
@@ -179,24 +180,17 @@ static bool nack__glr_init(struct nack_window *window)
 
 static void nack__glr_shutdown(void)
 {
-    free(nack__gl.frame);
     if (nack__gl.vbo) glDeleteBuffers(1, &nack__gl.vbo);
     if (nack__gl.vao) glDeleteVertexArrays(1, &nack__gl.vao);
     if (nack__gl.program) glDeleteProgram(nack__gl.program);
     if (nack__gl.context) nack__gl_context_destroy(nack__gl.context);
-    memset(&nack__gl, 0, sizeof nack__gl);
+    nack__gl = nack_gl_backend{};
 }
 
 static struct nack_texture *nack__glr_texture_create(const uint8_t *rgba,
                                                      int width, int height)
 {
-    struct nack__gl_texture *texture =
-        (struct nack__gl_texture *)calloc(1, sizeof *texture);
-
-    if (!texture) {
-        nack__error("out of memory");
-        return NULL;
-    }
+    struct nack__gl_texture *texture = new nack__gl_texture{};
 
     glGenTextures(1, &texture->id);
     glBindTexture(GL_TEXTURE_2D, texture->id);
@@ -219,7 +213,7 @@ static void nack__glr_texture_destroy(struct nack_texture *handle)
         return;
     if (texture->id)
         glDeleteTextures(1, &texture->id);
-    free(texture);
+    delete texture;
 }
 
 static void nack__glr_begin_frame(struct nack_color clear, int fb_width,
@@ -284,23 +278,24 @@ static void nack__glr_capture_frame(void)
 
     if (nack__gl.frame_width != nack__gl.fb_width ||
         nack__gl.frame_height != nack__gl.fb_height) {
-        free(nack__gl.frame);
-        nack__gl.frame = NULL;
+        nack__gl.frame.clear();
         nack__gl.frame_width = 0;
         nack__gl.frame_height = 0;
     }
-    if (!nack__gl.frame) {
+    if (nack__gl.frame.empty()) {
         bytes = (size_t)nack__gl.fb_width * (size_t)nack__gl.fb_height * 4;
-        nack__gl.frame = (uint8_t *)malloc(bytes);
-        if (!nack__gl.frame)
+        try {
+            nack__gl.frame.resize(bytes);
+        } catch (const std::exception &) {
             return;
+        }
         nack__gl.frame_width = nack__gl.fb_width;
         nack__gl.frame_height = nack__gl.fb_height;
     }
 
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(0, 0, nack__gl.frame_width, nack__gl.frame_height, GL_RGBA,
-                 GL_UNSIGNED_BYTE, nack__gl.frame);
+                 GL_UNSIGNED_BYTE, nack__gl.frame.data());
 }
 
 static void nack__glr_end_frame(void)
@@ -325,8 +320,7 @@ static void nack__glr_set_capture(bool capture)
 {
     nack__gl.capture = capture;
     if (!capture) {
-        free(nack__gl.frame);
-        nack__gl.frame = NULL;
+        nack__gl.frame.clear();
         nack__gl.frame_width = 0;
         nack__gl.frame_height = 0;
     }
@@ -337,7 +331,7 @@ static bool nack__glr_read_pixel(int x, int y, uint8_t rgba[4])
     const uint8_t *pixel;
     int row;
 
-    if (!nack__gl.frame)
+    if (nack__gl.frame.empty())
         return false;
     if (x < 0 || y < 0 || x >= nack__gl.frame_width ||
         y >= nack__gl.frame_height)
@@ -345,7 +339,7 @@ static bool nack__glr_read_pixel(int x, int y, uint8_t rgba[4])
 
     /* The capture is in GL's bottom-left order; callers count from the top. */
     row = nack__gl.frame_height - 1 - y;
-    pixel = nack__gl.frame + ((size_t)row * nack__gl.frame_width + x) * 4;
+    pixel = nack__gl.frame.data() + ((size_t)row * nack__gl.frame_width + x) * 4;
     rgba[0] = pixel[0];
     rgba[1] = pixel[1];
     rgba[2] = pixel[2];

@@ -15,8 +15,10 @@
 
 #include "../nack_scoped.h"
 
+#include <optional>
 #include <poll.h>
 #include <stdio.h>
+#include <string>
 
 #define NACK_SELECTION_TIMEOUT 2.0
 /* Chunk size for outgoing INCR transfers, kept well under the server's
@@ -40,7 +42,7 @@
  */
 #define NACK_INCR_SEND_TIMEOUT 10.0
 
-static char **nack__xcb_owned_slot(xcb_atom_t selection)
+static std::optional<std::string> *nack__xcb_owned_slot(xcb_atom_t selection)
 {
     if (selection == nack__xcb.atom.CLIPBOARD)
         return &nack__xcb.clipboard_owned;
@@ -75,8 +77,7 @@ struct nack_incr_send {
     xcb_window_t requestor;
     xcb_atom_t property;
     xcb_atom_t type;
-    char *data;
-    size_t length;
+    std::string data;
     size_t sent;
     double deadline;
     bool active;
@@ -98,8 +99,7 @@ static void nack__xcb_incr_end(struct nack_incr_send *send)
     const uint32_t none = XCB_EVENT_MASK_NO_EVENT;
     xcb_change_window_attributes(nack__xcb.connection, send->requestor,
                                  XCB_CW_EVENT_MASK, &none);
-    free(send->data);
-    send->data = NULL;
+    send->data.clear();
     send->active = false;
 }
 
@@ -136,13 +136,13 @@ bool nack__xcb_handle_property_notify(xcb_property_notify_event_t *event)
             send->property != event->atom)
             continue;
 
-        chunk = send->length - send->sent;
+        chunk = send->data.size() - send->sent;
         if (chunk > NACK_INCR_CHUNK)
             chunk = NACK_INCR_CHUNK;
 
         xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_APPEND,
                             send->requestor, send->property, send->type, 8,
-                            (uint32_t)chunk, send->data + send->sent);
+                            (uint32_t)chunk, send->data.data() + send->sent);
         xcb_flush(nack__xcb.connection);
         send->sent += chunk;
         send->deadline = nack__win_time_seconds() + NACK_INCR_SEND_TIMEOUT;
@@ -159,8 +159,8 @@ bool nack__xcb_handle_property_notify(xcb_property_notify_event_t *event)
 static xcb_atom_t nack__xcb_write_target(xcb_selection_request_event_t *request,
                                          xcb_atom_t target, xcb_atom_t property)
 {
-    char **owned = nack__xcb_owned_slot(request->selection);
-    if (!owned || !*owned || property == XCB_ATOM_NONE)
+    std::optional<std::string> *owned = nack__xcb_owned_slot(request->selection);
+    if (!owned || !owned->has_value() || property == XCB_ATOM_NONE)
         return XCB_ATOM_NONE;
 
     if (target == nack__xcb.atom.TARGETS) {
@@ -179,18 +179,14 @@ static xcb_atom_t nack__xcb_write_target(xcb_selection_request_event_t *request,
     if (target == nack__xcb.atom.UTF8_STRING ||
         target == nack__xcb.atom.TEXT_PLAIN_UTF8 ||
         target == XCB_ATOM_STRING) {
-        size_t len = strlen(*owned);
+        size_t len = owned->value().size();
 
         if (len > NACK_INCR_THRESHOLD) {
             struct nack_incr_send *send = nack__xcb_incr_slot();
             uint32_t total = (uint32_t)len;
-            char *copy;
 
             if (!send)
                 return XCB_ATOM_NONE;   /* too many at once; ICCCM says refuse */
-            copy = nack__strdup(*owned);
-            if (!copy)
-                return XCB_ATOM_NONE;
 
             /* Selecting on the requestor is what makes its deletes visible. */
             const uint32_t mask = XCB_EVENT_MASK_PROPERTY_CHANGE;
@@ -203,8 +199,7 @@ static xcb_atom_t nack__xcb_write_target(xcb_selection_request_event_t *request,
             send->requestor = request->requestor;
             send->property = property;
             send->type = target;
-            send->data = copy;
-            send->length = len;
+            send->data = owned->value();
             send->sent = 0;
             send->deadline = nack__win_time_seconds() + NACK_INCR_SEND_TIMEOUT;
             send->active = true;
@@ -213,7 +208,7 @@ static xcb_atom_t nack__xcb_write_target(xcb_selection_request_event_t *request,
 
         xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE,
                             request->requestor, property, target, 8,
-                            (uint32_t)len, *owned);
+                            (uint32_t)len, owned->value().data());
         return property;
     }
 
@@ -265,24 +260,18 @@ bool nack__xcb_handle_selection_request(xcb_selection_request_event_t *request)
 
 void nack__xcb_handle_selection_clear(xcb_selection_clear_event_t *event)
 {
-    char **owned = nack__xcb_owned_slot(event->selection);
-    if (owned) {
-        free(*owned);
-        *owned = NULL;
-    }
+    std::optional<std::string> *owned = nack__xcb_owned_slot(event->selection);
+    if (owned)
+        owned->reset();
 }
 
 static bool nack__xcb_own_selection(xcb_atom_t selection, const char *utf8)
 {
-    char **slot = nack__xcb_owned_slot(selection);
+    std::optional<std::string> *slot = nack__xcb_owned_slot(selection);
     if (!slot)
         return false;
 
-    nack::c_ptr<char> copy(nack__strdup(utf8));
-    if (!copy)
-        return false;
-    free(*slot);
-    *slot = copy.release();
+    *slot = utf8;
 
     xcb_set_selection_owner(nack__xcb.connection, nack__xcb.helper, selection,
                             XCB_CURRENT_TIME);
@@ -336,12 +325,9 @@ static xcb_generic_event_t *nack__xcb_wait_for(uint8_t wanted, double deadline)
     }
 }
 
-static char *nack__xcb_read_incr(void)
+static std::optional<std::string> nack__xcb_read_incr(void)
 {
-    size_t capacity = 8192, length = 0;
-    nack::c_ptr<char> buffer((char *)malloc(capacity));
-    if (!buffer)
-        return NULL;
+    std::string buffer;
 
     /* Deleting the property signals the owner to post the next chunk. */
     xcb_delete_property(nack__xcb.connection, nack__xcb.helper,
@@ -353,7 +339,7 @@ static char *nack__xcb_read_incr(void)
         nack::c_ptr<xcb_generic_event_t> event(
             nack__xcb_wait_for(XCB_PROPERTY_NOTIFY, deadline));
         if (!event)
-            return NULL;
+            return std::nullopt;
 
         xcb_property_notify_event_t *notify =
             (xcb_property_notify_event_t *)event.get();
@@ -377,7 +363,7 @@ static char *nack__xcb_read_incr(void)
         nack::c_ptr<xcb_get_property_reply_t> reply(
             xcb_get_property_reply(nack__xcb.connection, cookie, NULL));
         if (!reply)
-            return NULL;
+            return std::nullopt;
 
         int chunk_len = xcb_get_property_value_length(reply.get());
         if (chunk_len == 0) {          /* zero-length chunk ends the transfer */
@@ -387,29 +373,18 @@ static char *nack__xcb_read_incr(void)
             break;
         }
 
-        if (length + (size_t)chunk_len + 1 > capacity) {
-            while (length + (size_t)chunk_len + 1 > capacity)
-                capacity *= 2;
-            char *grown = (char *)realloc(buffer.get(), capacity);
-            if (!grown)
-                return NULL;   /* buffer still owns the original */
-            buffer.release();
-            buffer.reset(grown);
-        }
-        memcpy(buffer.get() + length, xcb_get_property_value(reply.get()),
-               (size_t)chunk_len);
-        length += (size_t)chunk_len;
+        buffer.append((const char *)xcb_get_property_value(reply.get()),
+                      (size_t)chunk_len);
 
         xcb_delete_property(nack__xcb.connection, nack__xcb.helper,
                             nack__xcb.atom.NACK_SELECTION);
         xcb_flush(nack__xcb.connection);
     }
 
-    buffer.get()[length] = '\0';
-    return buffer.release();
+    return buffer;
 }
 
-static char *nack__xcb_read_selection(xcb_atom_t selection)
+static std::optional<std::string> nack__xcb_read_selection(xcb_atom_t selection)
 {
     /* Serving ourselves avoids a pointless round trip through the server. */
     xcb_get_selection_owner_cookie_t owner_cookie =
@@ -418,11 +393,11 @@ static char *nack__xcb_read_selection(xcb_atom_t selection)
         xcb_get_selection_owner_reply(nack__xcb.connection, owner_cookie, NULL));
 
     if (owner && owner->owner == nack__xcb.helper) {
-        char **owned = nack__xcb_owned_slot(selection);
-        return (owned && *owned) ? nack__strdup(*owned) : NULL;
+        std::optional<std::string> *owned = nack__xcb_owned_slot(selection);
+        return owned ? *owned : std::nullopt;
     }
     if (owner && owner->owner == XCB_WINDOW_NONE)
-        return NULL;
+        return std::nullopt;
 
     xcb_atom_t targets[2] = { nack__xcb.atom.UTF8_STRING, XCB_ATOM_STRING };
     for (int t = 0; t < 2; ++t) {
@@ -459,29 +434,24 @@ static char *nack__xcb_read_selection(xcb_atom_t selection)
          */
         if (reply->type == nack__xcb.atom.INCR) {
             reply.reset();
-            char *result = nack__xcb_read_incr();
+            std::optional<std::string> result = nack__xcb_read_incr();
             if (result)
                 return result;
             continue;
         }
 
         int len = xcb_get_property_value_length(reply.get());
-        nack::c_ptr<char> result;
-        if (len > 0) {
-            result.reset((char *)malloc((size_t)len + 1));
-            if (result) {
-                memcpy(result.get(), xcb_get_property_value(reply.get()),
-                       (size_t)len);
-                result.get()[len] = '\0';
-            }
-        }
+        std::optional<std::string> result;
+        if (len > 0)
+            result.emplace((const char *)xcb_get_property_value(reply.get()),
+                          (size_t)len);
         reply.reset();
         xcb_delete_property(nack__xcb.connection, nack__xcb.helper,
                             nack__xcb.atom.NACK_SELECTION);
         if (result)
-            return result.release();
+            return result;
     }
-    return NULL;
+    return std::nullopt;
 }
 
 /* ------------------------------------------------------------------ */
@@ -495,9 +465,8 @@ bool nack__xcb_clipboard_set(const char *utf8)
 
 const char *nack__xcb_clipboard_get(void)
 {
-    free(nack__xcb.clipboard_received);
     nack__xcb.clipboard_received = nack__xcb_read_selection(nack__xcb.atom.CLIPBOARD);
-    return nack__xcb.clipboard_received;
+    return nack__xcb.clipboard_received ? nack__xcb.clipboard_received->c_str() : NULL;
 }
 
 bool nack__xcb_primary_set(const char *utf8)
@@ -507,9 +476,8 @@ bool nack__xcb_primary_set(const char *utf8)
 
 const char *nack__xcb_primary_get(void)
 {
-    free(nack__xcb.primary_received);
     nack__xcb.primary_received = nack__xcb_read_selection(XCB_ATOM_PRIMARY);
-    return nack__xcb.primary_received;
+    return nack__xcb.primary_received ? nack__xcb.primary_received->c_str() : NULL;
 }
 
 void nack__xcb_clipboard_shutdown(void)
@@ -517,12 +485,8 @@ void nack__xcb_clipboard_shutdown(void)
     for (int i = 0; i < NACK_INCR_SENDS; ++i)
         nack__xcb_incr_end(&nack__incr_sends[i]);
 
-    free(nack__xcb.clipboard_owned);
-    free(nack__xcb.primary_owned);
-    free(nack__xcb.clipboard_received);
-    free(nack__xcb.primary_received);
-    nack__xcb.clipboard_owned = NULL;
-    nack__xcb.primary_owned = NULL;
-    nack__xcb.clipboard_received = NULL;
-    nack__xcb.primary_received = NULL;
+    nack__xcb.clipboard_owned.reset();
+    nack__xcb.primary_owned.reset();
+    nack__xcb.clipboard_received.reset();
+    nack__xcb.primary_received.reset();
 }

@@ -957,9 +957,7 @@ static bool nack__xcb_find_visual(xcb_visualid_t visual_id, uint8_t *out_depth)
 static bool nack__xcb_window_create(struct nack_window *w,
                                     const struct nack_window_desc *desc)
 {
-    struct nack_xcb_window *xw = (struct nack_xcb_window *)nack__calloc(1, sizeof *xw);
-    if (!xw)
-        return false;
+    struct nack_xcb_window *xw = new nack_xcb_window{};
     xw->surface = EGL_NO_SURFACE;
     w->native = xw;
 
@@ -1009,11 +1007,11 @@ static bool nack__xcb_window_create(struct nack_window *w,
         0, 0, (uint16_t)w->width, (uint16_t)w->height, 0,
         XCB_WINDOW_CLASS_INPUT_OUTPUT, visual_id, mask, values);
 
-    xcb_generic_error_t *error = xcb_request_check(nack__xcb.connection, cookie);
+    nack::c_ptr<xcb_generic_error_t> error(
+        xcb_request_check(nack__xcb.connection, cookie));
     if (error) {
         uint8_t code = error->error_code;
-        free(error);
-        free(xw);
+        delete xw;
         w->native = NULL;
         return nack__fail(NACK_ERROR_PLATFORM, "xcb_create_window failed (code %u)",
                           (unsigned)code);
@@ -1067,7 +1065,7 @@ static void nack__xcb_window_destroy(struct nack_window *w)
     if (xw->colormap)
         xcb_free_colormap(nack__xcb.connection, xw->colormap);
     xcb_flush(nack__xcb.connection);
-    free(xw);
+    delete xw;
     w->native = NULL;
 }
 
@@ -1343,7 +1341,7 @@ static bool nack__xcb_connect(void)
 static bool nack__xcb_init(const struct nack_win_init_desc *desc)
 {
     (void)desc;
-    memset(&nack__xcb, 0, sizeof nack__xcb);
+    nack__xcb = nack_xcb_state{};
     nack__xcb.wakeup_pipe[0] = nack__xcb.wakeup_pipe[1] = -1;
 
     setlocale(LC_CTYPE, "");
@@ -1449,7 +1447,7 @@ static void nack__xcb_shutdown(void)
     xcb_disconnect(nack__xcb.connection);
 #endif
 
-    memset(&nack__xcb, 0, sizeof nack__xcb);
+    nack__xcb = nack_xcb_state{};
 }
 
 /* ------------------------------------------------------------------ */
