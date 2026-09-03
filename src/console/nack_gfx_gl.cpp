@@ -88,7 +88,7 @@ static nack_gluint nack__compile(nack_glenum stage, const char *source)
     if (!status) {
         char log[1024];
         glGetShaderInfoLog(shader, sizeof log, NULL, log);
-        nack__error("console shader failed to compile: %s", log);
+        nack__c.set_error("console shader failed to compile: %s", log);
         glDeleteShader(shader);
         return 0;
     }
@@ -114,13 +114,13 @@ static bool nack__glr_init(struct nack_window *window)
     if (!nack__gl.context) {
         const char *message = NULL;
         nack__win_get_error(&message);
-        return nack__error("cannot create an OpenGL 3.3 context: %s",
+        return nack__c.set_error("cannot create an OpenGL 3.3 context: %s",
                            message ? message : "unknown");
     }
     nack__gl_make_current(window, nack__gl.context);
 
     if (!nack__gl_load(&missing))
-        return nack__error("this OpenGL driver is missing %s",
+        return nack__c.set_error("this OpenGL driver is missing %s",
                            missing ? missing : "required entry points");
 
     vertex = nack__compile(GL_VERTEX_SHADER, nack__vertex_source);
@@ -144,7 +144,7 @@ static bool nack__glr_init(struct nack_window *window)
         glGetProgramInfoLog(nack__gl.program, sizeof log, NULL, log);
         glDeleteProgram(nack__gl.program);
         nack__gl.program = 0;
-        return nack__error("console shader failed to link: %s", log);
+        return nack__c.set_error("console shader failed to link: %s", log);
     }
 
     nack__gl.uniform_viewport = glGetUniformLocation(nack__gl.program, "u_viewport");

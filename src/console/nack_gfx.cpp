@@ -38,13 +38,13 @@ public:
     bool init(struct nack_window *window) override
     {
         (void)window;
-        return nack__error("this renderer fails on purpose");
+        return nack__c.set_error("this renderer fails on purpose");
     }
     void shutdown() override {}
 
     struct nack_texture *texture_create(const uint8_t *, int, int) override
     {
-        nack__error("the test-fail renderer draws nothing");
+        nack__c.set_error("the test-fail renderer draws nothing");
         return NULL;
     }
     void texture_destroy(struct nack_texture *) override {}
@@ -106,12 +106,12 @@ bool nack__gfx_init(struct nack_window *window)
              * A renderer we then fell back from left its complaint behind;
              * the caller only cares that one of them worked.
              */
-            nack__clear_error();
+            nack__c.clear_error();
             nack__log("nack: rendering with %s", nack__gfx->name());
             return true;
         }
 
-        why = nack__app_get_error();
+        why = nack__c.last_error();
         nack__log("nack: the %s renderer is unavailable: %s", nack__gfx->name(),
                   why ? why : "no reason given");
         /*
@@ -129,7 +129,7 @@ bool nack__gfx_init(struct nack_window *window)
         nack__gfx = NULL;
     }
 
-    return nack__error("no renderer could be started (%s)",
+    return nack__c.set_error("no renderer could be started (%s)",
                        reason[0] ? reason : "none were compiled in");
 }
 
@@ -157,11 +157,11 @@ struct nack_texture *nack__gfx_texture_create(const uint8_t *rgba, int width,
 {
     if (nack__gfx_failed_textures > 0) {
         --nack__gfx_failed_textures;
-        nack__error("texture creation failed on purpose");
+        nack__c.set_error("texture creation failed on purpose");
         return NULL;
     }
     if (!nack__gfx) {
-        nack__error("no renderer is active");
+        nack__c.set_error("no renderer is active");
         return NULL;
     }
     return nack__gfx->texture_create(rgba, width, height);

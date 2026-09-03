@@ -145,15 +145,15 @@ static bool nack__mtl_init(struct nack_window *window)
         nack_window_get_native(window, &native);
         nack__mtl.view = (NSView *)native.view;
         if (!nack__mtl.view)
-            return nack__error("the window has no view to attach Metal to");
+            return nack__c.set_error("the window has no view to attach Metal to");
 
         nack__mtl.device = MTLCreateSystemDefaultDevice();
         if (!nack__mtl.device)
-            return nack__error("no Metal device is available");
+            return nack__c.set_error("no Metal device is available");
 
         nack__mtl.queue = [nack__mtl.device newCommandQueue];
         if (!nack__mtl.queue)
-            return nack__error("cannot create a Metal command queue");
+            return nack__c.set_error("cannot create a Metal command queue");
 
         /* +layer returns an autoreleased object; the view will retain it, but
          * hold our own reference so the struct pointer cannot dangle. */
@@ -176,7 +176,7 @@ static bool nack__mtl_init(struct nack_window *window)
                                                    error:&error];
         [options release];
         if (!library) {
-            return nack__error("console shader failed to compile: %s",
+            return nack__c.set_error("console shader failed to compile: %s",
                                error ? [[error localizedDescription] UTF8String]
                                      : "unknown");
         }
@@ -209,7 +209,7 @@ static bool nack__mtl_init(struct nack_window *window)
         [descriptor release];
         [library release];
         if (!nack__mtl.pipeline) {
-            return nack__error("console pipeline failed to build: %s",
+            return nack__c.set_error("console pipeline failed to build: %s",
                                error ? [[error localizedDescription] UTF8String]
                                      : "unknown");
         }
@@ -266,7 +266,7 @@ static struct nack_texture *nack__mtl_texture_create(const uint8_t *rgba,
 
         texture->texture = [nack__mtl.device newTextureWithDescriptor:descriptor];
         if (!texture->texture) {
-            nack__error("cannot create a Metal texture");
+            nack__c.set_error("cannot create a Metal texture");
             return NULL;
         }
 
@@ -368,7 +368,7 @@ static bool nack__reserve(size_t vertex_count)
                                       options:MTLResourceStorageModeShared];
     if (!nack__mtl.vertices) {
         nack__mtl.vertex_capacity = 0;
-        return nack__error("cannot allocate a Metal vertex buffer");
+        return nack__c.set_error("cannot allocate a Metal vertex buffer");
     }
     nack__mtl.vertex_capacity = vertex_count;
     return true;

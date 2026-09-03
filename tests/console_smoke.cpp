@@ -162,9 +162,9 @@ int main()
     check(columns == 40 && rows == 20, "root console has the requested size");
 
     {
-        int tw = 0, th = 0, count = 0;
-        nack__tileset_size(nack__app_get_font(), &tw, &th, &count);
-        check(tw == 8 && th == 8 && count == 256,
+        struct nack_tileset *font = nack__c.font;
+        check(font->tile_width == 8 && font->tile_height == 8 &&
+              font->count == 256,
               "built-in font is 256 8x8 tiles");
     }
 
@@ -219,11 +219,11 @@ int main()
      * relies on rather than an exception unwinding somewhere unexpected.
      */
     {
-        struct nack_console *huge = nack__console_new(INT_MAX, INT_MAX);
+        struct nack_console *huge = nack_console::create(INT_MAX, INT_MAX);
         check(huge == NULL, "an impossible console size is refused");
         check(!nack::last_error().empty(),
               "and says why rather than terminating");
-        nack__console_free(huge);
+        nack_console::destroy(huge);
     }
     check(!nack::console::try_create(INT_MAX, INT_MAX).has_value(),
           "and the public constructor reports it the same way");
@@ -275,10 +275,10 @@ int main()
         uint8_t sheet[16 * 16 * 4];
         std::memset(sheet, 0, sizeof sheet);
         nack__debug_fail_next_textures(1);
-        struct nack_tileset *doomed = nack__tileset_from_rgba(
+        struct nack_tileset *doomed = nack_tileset::from_rgba(
             sheet, 16, 16, 8, 8, NACK_LAYOUT_CP437);
         check(doomed == NULL, "a tileset with no texture is not handed out");
-        nack__tileset_free(doomed);
+        nack_tileset::destroy(doomed);
     }
 
     /*
@@ -289,16 +289,16 @@ int main()
      */
     {
         std::vector<uint8_t> big(2048u * 2048u * 4, 0);
-        struct nack_tileset *wide = nack__tileset_from_rgba(
+        struct nack_tileset *wide = nack_tileset::from_rgba(
             big.data(), 2048, 2048, 8, 8, NACK_LAYOUT_ROW_MAJOR);
         check(wide != NULL, "a 65536 tile sheet loads");
         if (wide) {
-            check(nack__tileset_map(wide, 'Q', 40000),
+            check(wide->map('Q', 40000),
                   "a codepoint maps to a tile past 32767");
-            check(nack__tileset_index_for(wide, 'Q') == 40000,
+            check(wide->index_for('Q') == 40000,
                   "and reads back as the tile it was given");
         }
-        nack__tileset_free(wide);
+        nack_tileset::destroy(wide);
     }
 
     /* Codepoints the font has no tile for must not draw garbage. */
@@ -364,7 +364,7 @@ int main()
         }
 
         for (int i = 0; i < 20; ++i) {
-            many[i] = nack__tileset_from_rgba(i == 19 ? red : plain, 16, 16,
+            many[i] = nack_tileset::from_rgba(i == 19 ? red : plain, 16, 16,
                                               8, 8, NACK_LAYOUT_ROW_MAJOR);
             if (many[i])
                 made++;
@@ -373,9 +373,9 @@ int main()
 
         app->console().clear();
         if (many[19])
-            nack__console_put_tile(app->console().get(), 20, 10, many[19], 0,
-                                   nack_color{ 255, 255, 255, 255 },
-                                   nack_color{ 0, 0, 0, 255 });
+            app->console().get()->put_tile(20, 10, many[19], 0,
+                                           nack_color{ 255, 255, 255, 255 },
+                                           nack_color{ 0, 0, 0, 255 });
         app->present();
         nack__debug_read_pixel(20, 10, pixel);
         checkpx(pixel[0] > 200 && pixel[1] < 60,
@@ -383,7 +383,7 @@ int main()
                 "r > 200, g < 60");
 
         for (int i = 0; i < 20; ++i)
-            nack__tileset_free(many[i]);
+            nack_tileset::destroy(many[i]);
     }
 
     check(true, "frames presented");

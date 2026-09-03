@@ -173,9 +173,9 @@ void nack__render_console(const struct nack_console *console)
                 } else {
                     if (cell->glyph == ' ' || cell->glyph == 0)
                         continue;
-                    index = nack__tileset_index_for(atlas, cell->glyph);
+                    index = atlas->index_for(cell->glyph);
                     if (index < 0)
-                        index = nack__tileset_index_for(atlas, '?');
+                        index = atlas->index_for('?');
                     if (index < 0)
                         continue;
                 }

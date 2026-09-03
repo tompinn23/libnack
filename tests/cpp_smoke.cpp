@@ -219,9 +219,10 @@ int main()
 
     /* Tilesets are handles too. The built-in font is not one we own. */
     {
-        auto size = nack::tileset::dimensions{ 0, 0, 0 };
-        nack__tileset_size(nack__app_get_font(), &size.width, &size.height,
-                          &size.count);
+        struct nack_tileset *font = nack__c.font;
+        auto size = nack::tileset::dimensions{ font->tile_width,
+                                               font->tile_height,
+                                               font->count };
         check(size.width == 8 && size.count == 256,
               "the built-in font is 256 8x8 tiles");
     }

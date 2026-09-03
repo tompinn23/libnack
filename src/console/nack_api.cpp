@@ -19,7 +19,7 @@ static void nack__log_to_stderr(const char *message, void *user_data)
     fprintf(stderr, "%s\n", message);
 }
 
-bool nack__error(const char *fmt, ...)
+bool nack_console_state::set_error(const char *fmt, ...)
 {
     char message[512];
     va_list args;
@@ -35,43 +35,27 @@ bool nack__error(const char *fmt, ...)
      * losing the error entirely.
      */
     try {
-        nack__c.error = message;
+        error = message;
     } catch (const std::exception &) {
     }
-    nack__c.has_error = true;
+    has_error = true;
     return false;
 }
 
-void nack__clear_error(void)
+void nack_console_state::clear_error()
 {
-    nack__c.has_error = false;
-    nack__c.error.clear();
+    has_error = false;
+    error.clear();
 }
 
-const char *nack__app_get_error(void)
+const char *nack_console_state::last_error() const
 {
-    return nack__c.has_error ? nack__c.error.c_str() : NULL;
+    return has_error ? error.c_str() : NULL;
 }
 
 /* ------------------------------------------------------------------ */
 /* Lifetime                                                           */
 /* ------------------------------------------------------------------ */
-
-void nack__app_config_defaults(struct nack_config *config)
-{
-    if (!config)
-        return;
-    memset(config, 0, sizeof *config);
-    config->title = "libnack";
-    config->columns = 80;
-    config->rows = 50;
-    config->tileset_layout = NACK_LAYOUT_CP437;
-    config->scaling = NACK_SCALE_INTEGER;
-    config->letterbox = NACK_BLACK;
-    config->vsync = true;
-    config->resizable = true;
-    config->window_scale = 0;
-}
 
 static void nack__sync_framebuffer(void)
 {
@@ -80,31 +64,30 @@ static void nack__sync_framebuffer(void)
     nack__render_update_viewport();
 }
 
-bool nack__app_init(const struct nack_config *config)
+bool nack_console_state::init(const struct nack_config *config)
 {
     struct nack_config cfg;
-    struct nack_win_init_desc init;
+    struct nack_win_init_desc init_desc;
     struct nack_window_desc window_desc;
     int tile_w, tile_h, pixel_w, pixel_h, scale;
 
-    if (nack__c.initialized)
+    if (initialized)
         return true;
 
-    nack__app_config_defaults(&cfg);
     if (config)
         cfg = *config;
     if (cfg.columns < 1) cfg.columns = 80;
     if (cfg.rows < 1) cfg.rows = 50;
     if (!cfg.title) cfg.title = "libnack";
 
-    nack__c = nack_console_state{};
-    nack__c.scaling = cfg.scaling;
-    nack__c.letterbox = cfg.letterbox;
-    nack__c.auto_resize = cfg.auto_resize;
-    nack__c.vsync = cfg.vsync;
+    *this = nack_console_state{};
+    scaling = cfg.scaling;
+    letterbox = cfg.letterbox;
+    auto_resize = cfg.auto_resize;
+    vsync = cfg.vsync;
 
-    memset(&init, 0, sizeof init);
-    init.app_id = cfg.title;
+    memset(&init_desc, 0, sizeof init_desc);
+    init_desc.app_id = cfg.title;
     /*
      * The public API has nowhere to hand a log callback, so the diagnostics -
      * which backend was picked, which renderer, why one of them was passed
@@ -112,12 +95,12 @@ bool nack__app_init(const struct nack_config *config)
      * user can tell us what happened on a machine we cannot reach.
      */
     if (getenv("NACK_DEBUG"))
-        init.log_fn = nack__log_to_stderr;
-    if (!nack__win_init(&init)) {
+        init_desc.log_fn = nack__log_to_stderr;
+    if (!nack__win_init(&init_desc)) {
         const char *message = NULL;
         nack__win_get_error(&message);
-        return nack__error("cannot open a window: %s",
-                           message ? message : "unknown");
+        return set_error("cannot open a window: %s",
+                         message ? message : "unknown");
     }
 
     /*
@@ -146,78 +129,76 @@ bool nack__app_init(const struct nack_config *config)
     window_desc.framebuffer.stencil_bits = 0;
     window_desc.framebuffer.double_buffer = true;
 
-    nack__c.window = nack_window_create(&window_desc);
-    if (!nack__c.window) {
+    window = nack_window_create(&window_desc);
+    if (!window) {
         const char *message = NULL;
         nack__win_get_error(&message);
         nack__win_shutdown();
-        return nack__error("cannot create a window: %s",
-                           message ? message : "unknown");
+        return set_error("cannot create a window: %s",
+                         message ? message : "unknown");
     }
 
-    if (!nack__gfx_init(nack__c.window)) {
-        nack_window_destroy(nack__c.window);
-        nack__c.window = NULL;
+    if (!nack__gfx_init(window)) {
+        nack_window_destroy(window);
+        window = NULL;
         nack__win_shutdown();
         return false;   /* the backend already described the failure */
     }
     nack__gfx_set_vsync(cfg.vsync);
 
-    nack__c.initialized = true;   /* tileset loading checks this */
+    initialized = true;   /* tileset loading checks this */
 
-    nack__c.builtin_font = nack__tileset_builtin();
-    if (!nack__c.builtin_font) {
-        nack__app_shutdown();
+    builtin_font = nack_tileset::builtin();
+    if (!builtin_font) {
+        shutdown();
         return false;
     }
-    nack__c.font = nack__c.builtin_font;
+    font = builtin_font;
 
     if (cfg.tileset) {
         struct nack_tileset *tileset =
-            nack__tileset_load(cfg.tileset, cfg.tile_width, cfg.tile_height,
-                              cfg.tileset_layout);
+            nack_tileset::load(cfg.tileset, cfg.tile_width, cfg.tile_height,
+                               cfg.tileset_layout);
         if (!tileset) {
-            nack__app_shutdown();
+            shutdown();
             return false;   /* the loader already described the failure */
         }
-        nack__c.font = tileset;
+        font = tileset;
     }
 
-    nack__c.root = nack__console_new(cfg.columns, cfg.rows);
-    if (!nack__c.root) {
-        nack__app_shutdown();
+    root = nack_console::create(cfg.columns, cfg.rows);
+    if (!root) {
+        shutdown();
         return false;
     }
 
     /* Now the real tile size is known, size the window to match. */
-    pixel_w = cfg.columns * nack__c.font->tile_width;
-    pixel_h = cfg.rows * nack__c.font->tile_height;
+    pixel_w = cfg.columns * font->tile_width;
+    pixel_h = cfg.rows * font->tile_height;
     if (cfg.window_scale > 0) {
         pixel_w *= cfg.window_scale;
         pixel_h *= cfg.window_scale;
     }
-    nack_window_set_size(nack__c.window, pixel_w, pixel_h);
+    nack_window_set_size(window, pixel_w, pixel_h);
     if (!cfg.auto_resize) {
         /* A fixed console should not be shrunk below one pixel per tile. */
-        nack_window_set_size_limits(nack__c.window,
-                                         cfg.columns * nack__c.font->tile_width,
-                                         cfg.rows * nack__c.font->tile_height,
-                                         0, 0);
+        nack_window_set_size_limits(window, cfg.columns * font->tile_width,
+                                         cfg.rows * font->tile_height, 0, 0);
     }
 
     if (cfg.fullscreen)
-        nack_window_set_fullscreen(nack__c.window, true);
+        nack_window_set_fullscreen(window, true);
 
-    nack_window_show(nack__c.window);
+    nack_window_show(window);
     nack__sync_framebuffer();
 
-    nack__c.start_time = nack__win_time_seconds();
-    nack__c.last_frame_time = nack__c.start_time;
-    nack__c.has_error = false;
+    start_time = nack__win_time_seconds();
+    last_frame_time = start_time;
+    has_error = false;
     return true;
 }
 
-void nack__app_shutdown(void)
+void nack_console_state::shutdown()
 {
     size_t i;
 
@@ -227,28 +208,28 @@ void nack__app_shutdown(void)
      * to, and does nothing once there is not one. Shutting the renderer down
      * first leaked every atlas, the built-in font included.
      */
-    for (i = nack__c.tilesets.size(); i > 0; --i) {
-        struct nack_tileset *tileset = nack__c.tilesets[i - 1];
-        if (tileset == nack__c.builtin_font)
+    for (i = tilesets.size(); i > 0; --i) {
+        struct nack_tileset *tileset = tilesets[i - 1];
+        if (tileset == builtin_font)
             continue;
-        nack__tileset_free(tileset);
+        nack_tileset::destroy(tileset);
     }
-    if (nack__c.builtin_font) {
-        struct nack_tileset *builtin = nack__c.builtin_font;
-        nack__c.builtin_font = NULL;   /* let the free go through */
-        nack__tileset_free(builtin);
+    if (builtin_font) {
+        struct nack_tileset *builtin = builtin_font;
+        builtin_font = NULL;   /* let the destroy go through */
+        nack_tileset::destroy(builtin);
     }
 
     nack__gfx_shutdown();
 
-    if (nack__c.root) {
-        struct nack_console *root = nack__c.root;
-        nack__c.root = NULL;
-        nack__console_free(root);
+    if (root) {
+        struct nack_console *old_root = root;
+        root = NULL;
+        nack_console::destroy(old_root);
     }
 
-    if (nack__c.window) {
-        nack_window_destroy(nack__c.window);
+    if (window) {
+        nack_window_destroy(window);
         nack__win_shutdown();
     }
 
@@ -257,29 +238,28 @@ void nack__app_shutdown(void)
      * now, and zeroing their bytes would drop what they point at rather than
      * release it.
      */
-    nack__c = nack_console_state{};
+    *this = nack_console_state{};
 }
 
 /* ------------------------------------------------------------------ */
 /* Frames                                                             */
 /* ------------------------------------------------------------------ */
 
-void nack__app_present(void)
+void nack_console_state::present()
 {
     double now;
 
-    if (!nack__c.initialized)
+    if (!initialized)
         return;
 
-    nack__gfx_begin_frame(nack__c.letterbox, nack__c.fb_width, nack__c.fb_height,
-                          nack__c.viewport_x, nack__c.viewport_y,
-                          nack__c.viewport_w, nack__c.viewport_h);
-    nack__render_console(nack__c.root);
+    nack__gfx_begin_frame(letterbox, fb_width, fb_height, viewport_x,
+                          viewport_y, viewport_w, viewport_h);
+    nack__render_console(root);
     nack__gfx_end_frame();
 
     now = nack__win_time_seconds();
-    nack__c.delta = now - nack__c.last_frame_time;
-    nack__c.last_frame_time = now;
+    delta = now - last_frame_time;
+    last_frame_time = now;
 }
 
 void nack__debug_capture_frames(bool capture)
@@ -307,34 +287,28 @@ bool nack__debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4])
     return nack__gfx_read_pixel(px, py, rgba);
 }
 
-struct nack_console *nack__app_root(void)
+bool nack_console_state::should_close() const
 {
-    return nack__c.root;
+    return close_requested || (window && nack_window_should_close(window));
 }
 
-bool nack__app_should_close(void)
+void nack_console_state::set_should_close(bool value)
 {
-    return nack__c.should_close ||
-           (nack__c.window && nack_window_should_close(nack__c.window));
+    close_requested = value;
+    if (window)
+        nack_window_set_should_close(window, value);
 }
 
-void nack__app_set_should_close(bool value)
+double nack_console_state::time() const
 {
-    nack__c.should_close = value;
-    if (nack__c.window)
-        nack_window_set_should_close(nack__c.window, value);
-}
-
-double nack__app_time(void)
-{
-    if (!nack__c.initialized)
+    if (!initialized)
         return 0.0;
-    return nack__win_time_seconds() - nack__c.start_time;
+    return nack__win_time_seconds() - start_time;
 }
 
-double nack__app_delta_time(void)
+double nack_console_state::delta_time() const
 {
-    return nack__c.delta;
+    return delta;
 }
 
 /* ------------------------------------------------------------------ */
@@ -464,7 +438,7 @@ static bool nack__translate(const struct nack_win_event *in,
             if (columns < 1) columns = 1;
             if (rows < 1) rows = 1;
             if (columns != nack__c.root->columns || rows != nack__c.root->rows) {
-                nack__console_resize(nack__c.root, columns, rows);
+                nack__c.root->resize(columns, rows);
                 nack__render_update_viewport();
                 out->type = NACK_EVENT_RESIZE;
                 out->data.resize.columns = columns;
@@ -481,11 +455,11 @@ static bool nack__translate(const struct nack_win_event *in,
     }
 }
 
-bool nack__app_poll_event(struct nack_event *event)
+bool nack_console_state::poll_event(struct nack_event *event)
 {
     struct nack_win_event raw;
 
-    if (!nack__c.initialized || !event)
+    if (!initialized || !event)
         return false;
     while (nack__win_poll_event(&raw)) {
         if (nack__translate(&raw, event))
@@ -494,17 +468,18 @@ bool nack__app_poll_event(struct nack_event *event)
     return false;
 }
 
-bool nack__app_wait_event(struct nack_event *event)
+bool nack_console_state::wait_event(struct nack_event *event)
 {
-    return nack__app_wait_event_timeout(event, -1.0);
+    return wait_event_timeout(event, -1.0);
 }
 
-bool nack__app_wait_event_timeout(struct nack_event *event, double seconds)
+bool nack_console_state::wait_event_timeout(struct nack_event *event,
+                                            double seconds)
 {
     struct nack_win_event raw;
     double deadline;
 
-    if (!nack__c.initialized || !event)
+    if (!initialized || !event)
         return false;
 
     if (seconds < 0.0) {
@@ -530,30 +505,30 @@ bool nack__app_wait_event_timeout(struct nack_event *event, double seconds)
     }
 }
 
-void nack__app_wakeup(void)
+void nack_console_state::wakeup()
 {
     nack__win_wakeup();
 }
 
-bool nack__app_key_down(enum nack_key key)
+bool nack_console_state::key_down(enum nack_key key) const
 {
     return nack__win_key_is_down(key);
 }
 
-uint32_t nack__app_mods(void)
+uint32_t nack_console_state::mods() const
 {
     return nack__win_get_mods();
 }
 
-bool nack__app_mouse_down(int button)
+bool nack_console_state::mouse_down(int button) const
 {
     return nack__win_mouse_button_is_down(button);
 }
 
-void nack__app_mouse_cell(int *x, int *y)
+void nack_console_state::mouse_cell(int *x, int *y) const
 {
-    if (x) *x = nack__c.mouse_cell_x;
-    if (y) *y = nack__c.mouse_cell_y;
+    if (x) *x = mouse_cell_x;
+    if (y) *y = mouse_cell_y;
 }
 
 const char *nack__key_name(enum nack_key key)
@@ -565,53 +540,61 @@ const char *nack__key_name(enum nack_key key)
 /* Window                                                             */
 /* ------------------------------------------------------------------ */
 
-void nack__app_set_title(const char *title)
+void nack_console_state::set_title(const char *title)
 {
-    if (nack__c.window && title)
-        nack_window_set_title(nack__c.window, title);
+    if (window && title)
+        nack_window_set_title(window, title);
 }
 
-void nack__app_set_fullscreen(bool fullscreen)
+void nack_console_state::set_fullscreen(bool fullscreen)
 {
-    if (nack__c.window)
-        nack_window_set_fullscreen(nack__c.window, fullscreen);
+    if (window)
+        nack_window_set_fullscreen(window, fullscreen);
 }
 
-bool nack__app_is_fullscreen(void)
+bool nack_console_state::is_fullscreen() const
 {
-    return nack__c.window && nack_window_is_fullscreen(nack__c.window);
+    return window && nack_window_is_fullscreen(window);
 }
 
-void nack__app_set_vsync(bool vsync)
+void nack_console_state::set_vsync(bool on)
 {
-    nack__c.vsync = vsync;
-    nack__gfx_set_vsync(vsync);
+    vsync = on;
+    nack__gfx_set_vsync(on);
+}
+
+void nack_console_state::set_font(struct nack_tileset *tileset)
+{
+    if (tileset)
+        font = tileset;
 }
 
 /*
  * The window layer keeps its own error, and the two are not the same store:
  * a backend that explains itself through nack__fail is explaining it there,
- * where nack__app_get_error never looks. Anything forwarded to that layer has to
- * carry the reason across, or the caller gets a bare false and no account of
- * why - which is what happened to every clipboard failure until now.
+ * where nack::app::last_error() never looks. Anything forwarded to that
+ * layer has to carry the reason across, or the caller gets a bare false and
+ * no account of why - which is what happened to every clipboard failure
+ * until now.
  */
 static bool nack__forward_error(const char *what)
 {
     const char *message = NULL;
 
     nack__win_get_error(&message);
-    return nack__error("%s: %s", what, message && *message ? message
-                                                           : "no reason given");
+    return nack__c.set_error("%s: %s", what,
+                             message && *message ? message
+                                                  : "no reason given");
 }
 
-bool nack__app_clipboard_set(const char *utf8)
+bool nack_console_state::clipboard_set(const char *utf8)
 {
     if (!nack__win_clipboard_set(utf8))
         return nack__forward_error("cannot set the clipboard");
     return true;
 }
 
-const char *nack__app_clipboard_get(void)
+const char *nack_console_state::clipboard_get() const
 {
     return nack__win_clipboard_get();
 }

@@ -33,11 +33,11 @@ struct nack_codepoint_map {
 };
 
 struct nack_tileset {
-    struct nack_texture *texture;
-    int tile_width, tile_height;
-    int columns, rows;          /* tiles across and down the atlas */
-    int count;
-    bool is_font;               /* tint by the cell's foreground colour */
+    struct nack_texture *texture = nullptr;
+    int tile_width = 0, tile_height = 0;
+    int columns = 0, rows = 0;   /* tiles across and down the atlas */
+    int count = 0;
+    bool is_font = false;       /* tint by the cell's foreground colour */
 
     /*
      * Codepoint to tile index. Codepoints below 0x100 are the common case and
@@ -47,72 +47,164 @@ struct nack_tileset {
      * 8x8 tiles has 65536 of them, so a narrower slot would wrap and map the
      * codepoint to nothing.
      */
-    std::array<int, 256> direct;
+    std::array<int, 256> direct{};
     std::vector<struct nack_codepoint_map> sparse;   /* sorted by codepoint */
+
+    ~nack_tileset();
+
+    /* Where the tile for a codepoint is, or -1 if none is mapped. */
+    int index_for(uint32_t codepoint) const;
+    bool map(uint32_t codepoint, int index);
+    bool map_range(uint32_t first, uint32_t last, int first_index);
+
+    /* Joins/leaves the set present() walks to batch draws by atlas. */
+    void track();
+    void untrack();
+
+    static struct nack_tileset *from_rgba(uint8_t *rgba, int width,
+                                          int height, int tile_width,
+                                          int tile_height,
+                                          enum nack_tileset_layout layout);
+    static struct nack_tileset *builtin();
+    static struct nack_tileset *load_memory(const void *data, size_t size,
+                                            int tile_width, int tile_height,
+                                            enum nack_tileset_layout layout);
+    static struct nack_tileset *load(const char *path, int tile_width,
+                                     int tile_height,
+                                     enum nack_tileset_layout layout);
+
+    /* Releases a tileset the way every caller needs: tolerant of NULL, and
+     * of the built-in font, which nothing but shutdown may free. */
+    static void destroy(struct nack_tileset *tileset);
 };
 
 struct nack_console {
-    int columns, rows;
+    int columns = 0, rows = 0;
     std::vector<struct nack_cell> cells;
+
+    static struct nack_console *create(int columns, int rows);
+
+    /* Releases a console the way every caller needs: tolerant of NULL, and
+     * of the root console, which only shutdown may free. */
+    static void destroy(struct nack_console *console);
+
+    bool resize(int columns, int rows);
+
+    void clear();
+    void clear_to(struct nack_color fg, struct nack_color bg);
+
+    void put(int x, int y, uint32_t codepoint, struct nack_color fg,
+            struct nack_color bg);
+    void put_tile(int x, int y, struct nack_tileset *tileset, int index,
+                 struct nack_color tint, struct nack_color bg);
+    void set_glyph(int x, int y, uint32_t codepoint);
+    void set_fg(int x, int y, struct nack_color fg);
+    void set_bg(int x, int y, struct nack_color bg);
+    struct nack_cell get(int x, int y) const;
+
+    int print(int x, int y, struct nack_color fg, struct nack_color bg,
+             const char *utf8);
+    int print_wrapped(int x, int y, int width, int height,
+                      struct nack_color fg, struct nack_color bg,
+                      const char *utf8);
+
+    void fill(int x, int y, int width, int height, uint32_t codepoint,
+             struct nack_color fg, struct nack_color bg);
+    void draw_box(int x, int y, int width, int height, struct nack_color fg,
+                 struct nack_color bg, const char *title);
+
+    /* Copies this console onto `dst`. Alphas below 1 blend. */
+    void blit_to(struct nack_console *dst, int src_x, int src_y, int width,
+                int height, int dst_x, int dst_y, float fg_alpha,
+                float bg_alpha) const;
 };
 
-struct nack_console_state {
-    bool initialized;
-    struct nack_window *window;
-    struct nack_gl_context *gl;
+/* Decodes one codepoint and advances the cursor. Invalid bytes yield U+FFFD
+ * and consume one byte, so bad input cannot stall the loop. Not a method:
+ * it walks a raw cursor, not a console. */
+uint32_t nack__utf8_next(const char **cursor);
 
-    struct nack_console *root;
-    struct nack_tileset *font;
-    struct nack_tileset *builtin_font;
+struct nack_console_state {
+    bool initialized = false;
+    struct nack_window *window = nullptr;
+    struct nack_gl_context *gl = nullptr;
+
+    struct nack_console *root = nullptr;
+    struct nack_tileset *font = nullptr;
+    struct nack_tileset *builtin_font = nullptr;
 
     /* Every tileset ever handed out, so present() can batch by atlas. */
     std::vector<struct nack_tileset *> tilesets;
 
-    enum nack_scaling scaling;
-    struct nack_color letterbox;
-    bool auto_resize;
-    bool vsync;
+    enum nack_scaling scaling = NACK_SCALE_INTEGER;
+    struct nack_color letterbox = NACK_BLACK;
+    bool auto_resize = false;
+    bool vsync = true;
 
     /* Where the console sits inside the window, in framebuffer pixels. */
-    int viewport_x, viewport_y, viewport_w, viewport_h;
-    int fb_width, fb_height;
-    float dpi_scale;
+    int viewport_x = 0, viewport_y = 0, viewport_w = 0, viewport_h = 0;
+    int fb_width = 0, fb_height = 0;
+    float dpi_scale = 0.0f;
 
     /* Quad scratch space, reused between frames. */
     std::vector<float> vertices;
 
-    double start_time;
-    double last_frame_time;
-    double delta;
+    double start_time = 0.0;
+    double last_frame_time = 0.0;
+    double delta = 0.0;
 
-    int mouse_cell_x, mouse_cell_y;
-    bool should_close;
+    int mouse_cell_x = 0, mouse_cell_y = 0;
+
+    /* Set by set_should_close(); should_close() also asks the window. */
+    bool close_requested = false;
 
     std::string error;
-    bool has_error;
+    bool has_error = false;
+
+    /* nack_api.cpp: lifetime, frames, input, window, clipboard */
+    bool init(const struct nack_config *config);
+    void shutdown();
+
+    void present();
+
+    bool should_close() const;
+    void set_should_close(bool value);
+
+    double time() const;
+    double delta_time() const;
+
+    bool poll_event(struct nack_event *event);
+    bool wait_event(struct nack_event *event);
+    bool wait_event_timeout(struct nack_event *event, double seconds);
+    void wakeup();
+
+    bool key_down(enum nack_key key) const;
+    uint32_t mods() const;
+    bool mouse_down(int button) const;
+    void mouse_cell(int *x, int *y) const;
+
+    void set_title(const char *title);
+    void set_fullscreen(bool fullscreen);
+    bool is_fullscreen() const;
+    void set_vsync(bool vsync);
+
+    void set_font(struct nack_tileset *tileset);
+
+    bool clipboard_set(const char *utf8);
+    const char *clipboard_get() const;
+
+    /* Sets the error reported by nack::app::last_error() and returns false. */
+    bool set_error(const char *fmt, ...);
+    /* Forgets it again, for a failure that was recovered from. */
+    void clear_error();
+    const char *last_error() const;
 };
 
 extern struct nack_console_state nack__c;
 
-/* Sets the error reported by nack::app::last_error() and returns false. */
-bool nack__error(const char *fmt, ...);
-
-/* Forgets it again, for a failure that was recovered from. */
-void nack__clear_error(void);
-
-/* nack_tileset.c */
-struct nack_tileset *nack__tileset_from_rgba(uint8_t *rgba, int width, int height,
-                                             int tile_width, int tile_height,
-                                             enum nack_tileset_layout layout);
-struct nack_tileset *nack__tileset_builtin(void);
-int  nack__tileset_index_for(const struct nack_tileset *tileset,
-                             uint32_t codepoint);
-void nack__tileset_register(struct nack_tileset *tileset);
-void nack__tileset_unregister(struct nack_tileset *tileset);
-
 /* nack_render.c */
 void nack__render_console(const struct nack_console *console);
-void nack__render_update_viewport(void);
+void nack__render_update_viewport();
 
 /*
  * Reads one pixel back out of the framebuffer. Exists so the tests can check
@@ -135,90 +227,5 @@ bool nack__debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4]);
  * NACK_RENDERER=test-fail.
  */
 void nack__debug_fail_next_textures(int count);
-
-/* nack_console.cpp */
-struct nack_console *nack__console_resolve(struct nack_console *console);
-uint32_t nack__utf8_next(const char **cursor);
-
-struct nack_console *nack__console_new(int columns, int rows);
-void nack__console_free(struct nack_console *console);
-void nack__console_size(const struct nack_console *console, int *columns,
-                        int *rows);
-bool nack__console_resize(struct nack_console *console, int columns, int rows);
-void nack__console_clear(struct nack_console *console);
-void nack__console_clear_to(struct nack_console *console, struct nack_color fg,
-                            struct nack_color bg);
-void nack__console_put(struct nack_console *console, int x, int y,
-                       uint32_t codepoint, struct nack_color fg,
-                       struct nack_color bg);
-void nack__console_put_tile(struct nack_console *console, int x, int y,
-                            struct nack_tileset *tileset, int index,
-                            struct nack_color tint, struct nack_color bg);
-void nack__console_set_glyph(struct nack_console *console, int x, int y,
-                             uint32_t codepoint);
-void nack__console_set_fg(struct nack_console *console, int x, int y,
-                          struct nack_color fg);
-void nack__console_set_bg(struct nack_console *console, int x, int y,
-                          struct nack_color bg);
-struct nack_cell nack__console_get(const struct nack_console *console, int x,
-                                   int y);
-int nack__console_print(struct nack_console *console, int x, int y,
-                        struct nack_color fg, struct nack_color bg,
-                        const char *utf8);
-int nack__console_print_wrapped(struct nack_console *console, int x, int y,
-                                int width, int height, struct nack_color fg,
-                                struct nack_color bg, const char *utf8);
-void nack__console_fill(struct nack_console *console, int x, int y, int width,
-                        int height, uint32_t codepoint, struct nack_color fg,
-                        struct nack_color bg);
-void nack__console_draw_box(struct nack_console *console, int x, int y,
-                            int width, int height, struct nack_color fg,
-                            struct nack_color bg, const char *title);
-void nack__console_blit(const struct nack_console *src, int src_x, int src_y,
-                        int width, int height, struct nack_console *dst,
-                        int dst_x, int dst_y, float fg_alpha, float bg_alpha);
-
-/* nack_tileset.cpp */
-struct nack_tileset *nack__tileset_load_memory(const void *data, size_t size,
-                                               int tile_width, int tile_height,
-                                               enum nack_tileset_layout layout);
-struct nack_tileset *nack__tileset_load(const char *path, int tile_width,
-                                        int tile_height,
-                                        enum nack_tileset_layout layout);
-void nack__tileset_free(struct nack_tileset *tileset);
-void nack__tileset_size(const struct nack_tileset *tileset, int *tile_width,
-                        int *tile_height, int *count);
-bool nack__tileset_map(struct nack_tileset *tileset, uint32_t codepoint,
-                       int index);
-bool nack__tileset_map_range(struct nack_tileset *tileset, uint32_t first,
-                             uint32_t last, int first_index);
-void nack__app_set_font(struct nack_tileset *tileset);
-struct nack_tileset *nack__app_get_font(void);
-
-/* nack_api.cpp: lifetime, frames, input, window, clipboard */
-void nack__app_config_defaults(struct nack_config *config);
-bool nack__app_init(const struct nack_config *config);
-void nack__app_shutdown(void);
-void nack__app_present(void);
-struct nack_console *nack__app_root(void);
-bool nack__app_should_close(void);
-void nack__app_set_should_close(bool value);
-double nack__app_time(void);
-double nack__app_delta_time(void);
-bool nack__app_poll_event(struct nack_event *event);
-bool nack__app_wait_event(struct nack_event *event);
-bool nack__app_wait_event_timeout(struct nack_event *event, double seconds);
-void nack__app_wakeup(void);
-bool nack__app_key_down(enum nack_key key);
-uint32_t nack__app_mods(void);
-bool nack__app_mouse_down(int button);
-void nack__app_mouse_cell(int *x, int *y);
-void nack__app_set_title(const char *title);
-void nack__app_set_fullscreen(bool fullscreen);
-bool nack__app_is_fullscreen(void);
-void nack__app_set_vsync(bool vsync);
-bool nack__app_clipboard_set(const char *utf8);
-const char *nack__app_clipboard_get(void);
-const char *nack__app_get_error(void);
 
 #endif /* NACK_CONSOLE_INTERNAL_H_INCLUDED */

@@ -29,13 +29,13 @@ namespace nack {
 
 static std::string last_error_or(const char *fallback)
 {
-    const char *why = nack__app_get_error();
+    const char *why = nack__c.last_error();
     return why ? std::string(why) : std::string(fallback);
 }
 
 std::string_view last_error()
 {
-    const char *why = nack__app_get_error();
+    const char *why = nack__c.last_error();
     return why ? std::string_view(why) : std::string_view();
 }
 
@@ -191,49 +191,46 @@ const char *key_name(key which)
 
 std::pair<int, int> console_view::size() const
 {
-    int columns = 0, rows = 0;
-    nack__console_size(handle, &columns, &rows);
-    return { columns, rows };
+    return { handle->columns, handle->rows };
 }
 
-void console_view::clear() const { nack__console_clear(handle); }
+void console_view::clear() const { handle->clear(); }
 
 void console_view::clear(color fg, color bg) const
 {
-    nack__console_clear_to(handle, to_core(fg), to_core(bg));
+    handle->clear_to(to_core(fg), to_core(bg));
 }
 
 void console_view::put(int x, int y, std::uint32_t codepoint, color fg,
                        color bg) const
 {
-    nack__console_put(handle, x, y, codepoint, to_core(fg), to_core(bg));
+    handle->put(x, y, codepoint, to_core(fg), to_core(bg));
 }
 
 void console_view::put_tile(int x, int y, tileset &tiles, int index,
                             color tint, color bg) const
 {
-    nack__console_put_tile(handle, x, y, tiles.get(), index, to_core(tint),
-                           to_core(bg));
+    handle->put_tile(x, y, tiles.get(), index, to_core(tint), to_core(bg));
 }
 
 void console_view::set_glyph(int x, int y, std::uint32_t codepoint) const
 {
-    nack__console_set_glyph(handle, x, y, codepoint);
+    handle->set_glyph(x, y, codepoint);
 }
 
 void console_view::set_fg(int x, int y, color fg) const
 {
-    nack__console_set_fg(handle, x, y, to_core(fg));
+    handle->set_fg(x, y, to_core(fg));
 }
 
 void console_view::set_bg(int x, int y, color bg) const
 {
-    nack__console_set_bg(handle, x, y, to_core(bg));
+    handle->set_bg(x, y, to_core(bg));
 }
 
 cell console_view::at(int x, int y) const
 {
-    struct nack_cell c = nack__console_get(handle, x, y);
+    struct nack_cell c = handle->get(x, y);
     return cell{ c.glyph, c.tileset, from_core(c.fg), from_core(c.bg) };
 }
 
@@ -241,16 +238,14 @@ int console_view::print(int x, int y, color fg, color bg,
                         std::string_view text) const
 {
     /*
-     * nack__console_print wants a NUL-terminated string. A string_view need
-     * not be terminated, so anything that is not already gets copied - which
+     * console::print wants a NUL-terminated string. A string_view need not
+     * be terminated, so anything that is not already gets copied - which
      * literals and std::strings avoid.
      */
     if (is_terminated(text))
-        return nack__console_print(handle, x, y, to_core(fg), to_core(bg),
-                                   text.data());
+        return handle->print(x, y, to_core(fg), to_core(bg), text.data());
     std::string owned(text);
-    return nack__console_print(handle, x, y, to_core(fg), to_core(bg),
-                               owned.c_str());
+    return handle->print(x, y, to_core(fg), to_core(bg), owned.c_str());
 }
 
 int console_view::print_wrapped(int x, int y, int width, int height,
@@ -258,47 +253,43 @@ int console_view::print_wrapped(int x, int y, int width, int height,
                                 std::string_view text) const
 {
     if (is_terminated(text))
-        return nack__console_print_wrapped(handle, x, y, width, height,
-                                           to_core(fg), to_core(bg),
-                                           text.data());
+        return handle->print_wrapped(x, y, width, height, to_core(fg),
+                                     to_core(bg), text.data());
     std::string owned(text);
-    return nack__console_print_wrapped(handle, x, y, width, height,
-                                       to_core(fg), to_core(bg),
-                                       owned.c_str());
+    return handle->print_wrapped(x, y, width, height, to_core(fg),
+                                 to_core(bg), owned.c_str());
 }
 
 void console_view::fill(int x, int y, int width, int height,
                         std::uint32_t codepoint, color fg, color bg) const
 {
-    nack__console_fill(handle, x, y, width, height, codepoint, to_core(fg),
-                       to_core(bg));
+    handle->fill(x, y, width, height, codepoint, to_core(fg), to_core(bg));
 }
 
 void console_view::draw_box(int x, int y, int width, int height, color fg,
                             color bg, const char *title) const
 {
-    nack__console_draw_box(handle, x, y, width, height, to_core(fg),
-                           to_core(bg), title);
+    handle->draw_box(x, y, width, height, to_core(fg), to_core(bg), title);
 }
 
 void console_view::blit_to(console_view dst, int dst_x, int dst_y, int src_x,
                           int src_y, int width, int height, float fg_alpha,
                           float bg_alpha) const
 {
-    nack__console_blit(handle, src_x, src_y, width, height, dst.get(), dst_x,
-                       dst_y, fg_alpha, bg_alpha);
+    handle->blit_to(dst.get(), src_x, src_y, width, height, dst_x, dst_y,
+                    fg_alpha, bg_alpha);
 }
 
 console::console(int columns, int rows)
 {
-    handle = nack__console_new(columns, rows);
+    handle = nack_console::create(columns, rows);
     if (!handle)
         detail::fail(last_error_or("cannot create a console"));
 }
 
 std::optional<console> console::try_create(int columns, int rows)
 {
-    ::nack_console *raw = nack__console_new(columns, rows);
+    ::nack_console *raw = nack_console::create(columns, rows);
     if (!raw)
         return std::nullopt;
     return console(raw);
@@ -307,17 +298,17 @@ std::optional<console> console::try_create(int columns, int rows)
 console &console::operator=(console &&other) noexcept
 {
     if (this != &other) {
-        nack__console_free(handle);
+        nack_console::destroy(handle);
         handle = std::exchange(other.handle, nullptr);
     }
     return *this;
 }
 
-console::~console() { nack__console_free(handle); }
+console::~console() { nack_console::destroy(handle); }
 
 bool console::resize(int columns, int rows)
 {
-    return nack__console_resize(handle, columns, rows);
+    return handle->resize(columns, rows);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -327,7 +318,7 @@ bool console::resize(int columns, int rows)
 tileset::tileset(const char *path, int tile_width, int tile_height,
                  nack::layout arrangement)
 {
-    handle = nack__tileset_load(
+    handle = nack_tileset::load(
         path, tile_width, tile_height,
         static_cast<enum nack_tileset_layout>(arrangement));
     if (!handle)
@@ -337,7 +328,7 @@ tileset::tileset(const char *path, int tile_width, int tile_height,
 tileset::tileset(const void *data, std::size_t size, int tile_width,
                  int tile_height, nack::layout arrangement)
 {
-    handle = nack__tileset_load_memory(
+    handle = nack_tileset::load_memory(
         data, size, tile_width, tile_height,
         static_cast<enum nack_tileset_layout>(arrangement));
     if (!handle)
@@ -347,42 +338,40 @@ tileset::tileset(const void *data, std::size_t size, int tile_width,
 tileset &tileset::operator=(tileset &&other) noexcept
 {
     if (this != &other) {
-        nack__tileset_free(handle);
+        nack_tileset::destroy(handle);
         handle = std::exchange(other.handle, nullptr);
     }
     return *this;
 }
 
-tileset::~tileset() { nack__tileset_free(handle); }
+tileset::~tileset() { nack_tileset::destroy(handle); }
 
 tileset::dimensions tileset::size() const
 {
-    dimensions d{ 0, 0, 0 };
-    nack__tileset_size(handle, &d.width, &d.height, &d.count);
-    return d;
+    return { handle->tile_width, handle->tile_height, handle->count };
 }
 
 bool tileset::map(std::uint32_t codepoint, int index)
 {
-    return nack__tileset_map(handle, codepoint, index);
+    return handle->map(codepoint, index);
 }
 
 bool tileset::map_range(std::uint32_t first, std::uint32_t last,
                         int first_index)
 {
-    return nack__tileset_map_range(handle, first, last, first_index);
+    return handle->map_range(first, last, first_index);
 }
 
 /* ------------------------------------------------------------------------ */
 /* The application                                                           */
 /* ------------------------------------------------------------------------ */
 
-console_view root() { return console_view(nack__app_root()); }
+console_view root() { return console_view(nack__c.root); }
 
 app::app(const config &settings)
 {
     struct nack_config cfg = to_core(settings);
-    if (!nack__app_init(&cfg))
+    if (!nack__c.init(&cfg))
         detail::fail(last_error_or("cannot start libnack"));
     active = true;
 }
@@ -390,7 +379,7 @@ app::app(const config &settings)
 std::optional<app> app::try_create(const config &settings)
 {
     struct nack_config cfg = to_core(settings);
-    if (!nack__app_init(&cfg))
+    if (!nack__c.init(&cfg))
         return std::nullopt;
     return app(adopt{});
 }
@@ -399,7 +388,7 @@ app &app::operator=(app &&other) noexcept
 {
     if (this != &other) {
         if (active)
-            nack__app_shutdown();
+            nack__c.shutdown();
         active = std::exchange(other.active, false);
     }
     return *this;
@@ -408,25 +397,25 @@ app &app::operator=(app &&other) noexcept
 app::~app()
 {
     if (active)
-        nack__app_shutdown();
+        nack__c.shutdown();
 }
 
-void app::present() const { nack__app_present(); }
+void app::present() const { nack__c.present(); }
 
-bool app::should_close() const { return nack__app_should_close(); }
+bool app::should_close() const { return nack__c.should_close(); }
 
 void app::set_should_close(bool value) const
 {
-    nack__app_set_should_close(value);
+    nack__c.set_should_close(value);
 }
 
-double app::time() const { return nack__app_time(); }
-double app::delta_time() const { return nack__app_delta_time(); }
+double app::time() const { return nack__c.time(); }
+double app::delta_time() const { return nack__c.delta_time(); }
 
 std::optional<event> app::poll() const
 {
     struct nack_event ev;
-    while (nack__app_poll_event(&ev)) {
+    while (nack__c.poll_event(&ev)) {
         if (auto out = detail::to_event(ev))
             return out;
     }
@@ -436,7 +425,7 @@ std::optional<event> app::poll() const
 std::optional<event> app::wait() const
 {
     struct nack_event ev;
-    while (nack__app_wait_event(&ev)) {
+    while (nack__c.wait_event(&ev)) {
         if (auto out = detail::to_event(ev))
             return out;
     }
@@ -446,58 +435,58 @@ std::optional<event> app::wait() const
 std::optional<event> app::wait_for(double seconds) const
 {
     struct nack_event ev;
-    while (nack__app_wait_event_timeout(&ev, seconds)) {
+    while (nack__c.wait_event_timeout(&ev, seconds)) {
         if (auto out = detail::to_event(ev))
             return out;
     }
     return std::nullopt;
 }
 
-void app::wake() const { nack__app_wakeup(); }
+void app::wake() const { nack__c.wakeup(); }
 
 bool app::key_down(nack::key which) const
 {
-    return nack__app_key_down(static_cast<enum nack_key>(which));
+    return nack__c.key_down(static_cast<enum nack_key>(which));
 }
 
 nack::mod app::mods() const
 {
-    return static_cast<nack::mod>(nack__app_mods());
+    return static_cast<nack::mod>(nack__c.mods());
 }
 
 bool app::mouse_down(nack::mouse_button button) const
 {
-    return nack__app_mouse_down(static_cast<int>(button));
+    return nack__c.mouse_down(static_cast<int>(button));
 }
 
 std::pair<int, int> app::mouse_cell() const
 {
     int x = 0, y = 0;
-    nack__app_mouse_cell(&x, &y);
+    nack__c.mouse_cell(&x, &y);
     return { x, y };
 }
 
-void app::set_title(const char *title) const { nack__app_set_title(title); }
+void app::set_title(const char *title) const { nack__c.set_title(title); }
 
-void app::set_fullscreen(bool on) const { nack__app_set_fullscreen(on); }
+void app::set_fullscreen(bool on) const { nack__c.set_fullscreen(on); }
 
-bool app::fullscreen() const { return nack__app_is_fullscreen(); }
+bool app::fullscreen() const { return nack__c.is_fullscreen(); }
 
-void app::set_vsync(bool on) const { nack__app_set_vsync(on); }
+void app::set_vsync(bool on) const { nack__c.set_vsync(on); }
 
 void app::set_font(nack::tileset &tiles) const
 {
-    nack__app_set_font(tiles.get());
+    nack__c.set_font(tiles.get());
 }
 
 bool app::set_clipboard(const char *utf8) const
 {
-    return nack__app_clipboard_set(utf8);
+    return nack__c.clipboard_set(utf8);
 }
 
 std::string app::clipboard() const
 {
-    const char *text = nack__app_clipboard_get();
+    const char *text = nack__c.clipboard_get();
     return text ? std::string(text) : std::string();
 }
 

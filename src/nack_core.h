@@ -235,32 +235,32 @@ enum nack_scaling {
 };
 
 struct nack_config {
-    const char *title;
-    int columns, rows;
+    const char *title = "libnack";
+    int columns = 80, rows = 50;
 
     /* Path to a tileset image. NULL uses the built-in 8x8 font, so a game can
      * start without shipping any assets. */
-    const char *tileset;
-    int tile_width, tile_height;
-    enum nack_tileset_layout tileset_layout;
+    const char *tileset = nullptr;
+    int tile_width = 0, tile_height = 0;
+    enum nack_tileset_layout tileset_layout = NACK_LAYOUT_CP437;
 
-    enum nack_scaling scaling;
-    struct nack_color letterbox;   /* colour of the bars around the console */
+    enum nack_scaling scaling = NACK_SCALE_INTEGER;
+    struct nack_color letterbox = NACK_BLACK;   /* colour of the bars around the console */
 
-    bool vsync;
-    bool resizable;
-    bool fullscreen;
+    bool vsync = true;
+    bool resizable = true;
+    bool fullscreen = false;
 
     /*
      * When set, resizing the window changes the console's dimensions and
      * produces a resize event, rather than scaling a fixed grid. This is
      * what you want if the game reflows its layout.
      */
-    bool auto_resize;
+    bool auto_resize = false;
 
     /* Initial window size, as a multiple of the console's pixel size.
      * 0 picks the largest whole multiple that fits the monitor. */
-    int window_scale;
+    int window_scale = 0;
 };
 
 /* -------------------------------------------------------------------------- */
