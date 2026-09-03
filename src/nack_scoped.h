@@ -8,8 +8,8 @@
  * is hard to write, but because it has to be written correctly on every exit.
  * This type writes it once.
  *
- * C++ only, and internal. The public headers stay as they are: <nack/nack.h>
- * is C, and <nack/nack.hpp> is a wrapper a user includes, not this.
+ * C++ only, and internal. <nack/nack.hpp> is the public header a caller
+ * includes; this is not it.
  */
 #ifndef NACK_SCOPED_H_INCLUDED
 #define NACK_SCOPED_H_INCLUDED

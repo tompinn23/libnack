@@ -2,14 +2,17 @@
  * The internals the tests reach into, declared for C.
  *
  * The library's own internal headers are C++ now - their structs hold
- * std::vector and std::string - but the tests are deliberately C, because
- * compiling them as C is what proves the public API is still usable from C.
- * They only ever call these functions; none of them touches a struct field.
+ * std::vector and std::string. There is no public C API left to prove
+ * usable from C, but image_test.c and the Win32 ABI check are still C on
+ * purpose (the ABI check specifically has to be, since it is comparing
+ * struct layouts a C++ name-mangled declaration could not stand in for), so
+ * this still exists for the two of them. They only ever call these
+ * functions; none of them touches a struct field.
  */
 #ifndef NACK_TEST_HOOKS_H_INCLUDED
 #define NACK_TEST_HOOKS_H_INCLUDED
 
-#include "nack/nack.h"
+#include "nack_core.h"
 #include "nack_backend_id.h"
 
 #include <stddef.h>

@@ -18,7 +18,7 @@
 #ifndef NACK_WINDOW_H_INCLUDED
 #define NACK_WINDOW_H_INCLUDED
 
-#include "nack/nack.h"   /* keys, mods, mouse buttons, colours */
+#include "nack_core.h"   /* keys, mods, mouse buttons, colours */
 #include "nack_backend_id.h"
 
 #include <stdbool.h>

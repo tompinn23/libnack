@@ -1,14 +1,30 @@
 /*
- * A C++20 face for libnack. Header-only, inline, and nothing but a wrapper:
- * every function here forwards to the C API and the compiler folds it away.
+ * libnack - a cell console for roguelikes, in the spirit of libtcod and
+ * BearLibTerminal.
  *
- * This file is optional. libnack is a C library and stays one; including
- * <nack/nack.h> directly still works and is what other languages bind to. A C
- * program links no C++ runtime and does not build {fmt}.
+ * The whole API is a grid of cells you draw glyphs and tiles into. libnack
+ * owns the window, the graphics context and the renderer; none of that is
+ * exposed, because none of it is what a roguelike wants to think about.
  *
- * What this adds is the part C cannot express:
+ *     nack::app app;
+ *     app.set_title("my roguelike");
  *
- *   - Consoles and tilesets free themselves. So does nack_init/nack_shutdown.
+ *     while (!app.should_close()) {
+ *         while (auto ev = app.poll()) { ... }
+ *         app.console().clear();
+ *         app.console().print(1, 1, nack::white, nack::black, "@ you");
+ *         app.present();
+ *     }
+ *
+ * This is the only header: there is no C API behind it any more, so every
+ * operation that takes a console, a tileset or the app is a method on that
+ * object. The one exception is the handful of free functions - nack::print,
+ * nack::clear, nack::put and their neighbours - which draw on the app's root
+ * console without making you fetch it first; write a roguelike that never
+ * uses an offscreen console and you may never touch a console object by
+ * name.
+ *
+ *   - Consoles and tilesets free themselves, as does the app itself.
  *   - Events arrive as a std::variant, so reading the wrong arm of the union
  *     is a compile error rather than a convention in a comment.
  *   - poll() returns std::optional instead of a bool and an out-parameter,
@@ -17,19 +33,12 @@
  *     rather than a bare uint32_t.
  *   - print() takes a {fmt} format string rather than C varargs.
  *
- * <nack/nack.h> carries its own extern "C" guards now that the library behind
- * it is C++, and NACK_RGB spells itself as a braced init there rather than a
- * compound literal, so both are usable from C++. The constexpr colours below
- * are still the idiomatic spelling here - they are typed, scoped and usable
- * in constant expressions, which a macro is not.
- *
  * Exceptions are used only where construction fails. If you build with them
  * off, every constructor has a try_create counterpart returning
  * std::optional, and the throwing paths abort with the message instead.
  */
 #ifndef NACK_HPP_INCLUDED
 #define NACK_HPP_INCLUDED
-
 
 /*
  * C++20, and checked rather than assumed: below it {fmt} drops from rejecting
@@ -48,8 +57,6 @@ static_assert(__cplusplus >= 202002L, "<nack/nack.hpp> requires C++20");
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -59,14 +66,16 @@ static_assert(__cplusplus >= 202002L, "<nack/nack.hpp> requires C++20");
 
 #include <fmt/format.h>
 
-#include <nack/nack.h>
-
 #if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
 #  define NACK_HPP_EXCEPTIONS 1
 #  include <stdexcept>
 #else
 #  define NACK_HPP_EXCEPTIONS 0
 #endif
+
+/* Opaque: only the engine, not this header, ever sees what one holds. */
+struct nack_tileset;
+struct nack_console;
 
 namespace nack {
 
@@ -84,22 +93,7 @@ public:
 
 namespace detail {
 
-/* The library's error string, or a stand-in when it has nothing to say. */
-inline std::string last_error(const char *fallback)
-{
-    const char *why = ::nack_get_error();
-    return why ? std::string(why) : std::string(fallback);
-}
-
-[[noreturn]] inline void fail(const std::string &what)
-{
-#if NACK_HPP_EXCEPTIONS
-    throw error(what);
-#else
-    std::fprintf(stderr, "nack: %s\n", what.c_str());
-    std::abort();
-#endif
-}
+[[noreturn]] void fail(const std::string &what);
 
 }  // namespace detail
 
@@ -107,11 +101,16 @@ inline std::string last_error(const char *fallback)
 /* Colour                                                                    */
 /* ------------------------------------------------------------------------ */
 
-/*
- * The same struct the C API uses, so it passes straight through with no
- * conversion. Only the spelling of the constants changes.
- */
-using color = ::nack_color;
+struct color {
+    std::uint8_t r, g, b, a;
+};
+
+constexpr bool operator==(color a, color b)
+{
+    return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+}
+
+constexpr bool operator!=(color a, color b) { return !(a == b); }
 
 constexpr color rgb(std::uint8_t r, std::uint8_t g, std::uint8_t b)
 {
@@ -145,72 +144,68 @@ inline constexpr color none      = rgba(0, 0, 0, 0);
 /*
  * Physical keys, by USB HID usage code: where the key is, not what is on it.
  * delete_key carries a suffix because `delete` is a keyword; nothing else in
- * the list collides.
+ * the list collides. The values match the engine's own internal enum, which
+ * key_name() and every key event rely on - they are part of what makes this
+ * a stable identifier, not an implementation detail to keep in sync by hand.
  */
-enum class key : std::underlying_type_t<::nack_key> {
-    unknown = NACK_KEY_UNKNOWN, a = NACK_KEY_A, b = NACK_KEY_B,
-    c = NACK_KEY_C, d = NACK_KEY_D, e = NACK_KEY_E, f = NACK_KEY_F,
-    g = NACK_KEY_G, h = NACK_KEY_H, i = NACK_KEY_I, j = NACK_KEY_J,
-    k = NACK_KEY_K, l = NACK_KEY_L, m = NACK_KEY_M, n = NACK_KEY_N,
-    o = NACK_KEY_O, p = NACK_KEY_P, q = NACK_KEY_Q, r = NACK_KEY_R,
-    s = NACK_KEY_S, t = NACK_KEY_T, u = NACK_KEY_U, v = NACK_KEY_V,
-    w = NACK_KEY_W, x = NACK_KEY_X, y = NACK_KEY_Y, z = NACK_KEY_Z,
-    num1 = NACK_KEY_1, num2 = NACK_KEY_2, num3 = NACK_KEY_3,
-    num4 = NACK_KEY_4, num5 = NACK_KEY_5, num6 = NACK_KEY_6,
-    num7 = NACK_KEY_7, num8 = NACK_KEY_8, num9 = NACK_KEY_9,
-    num0 = NACK_KEY_0, enter = NACK_KEY_ENTER, escape = NACK_KEY_ESCAPE,
-    backspace = NACK_KEY_BACKSPACE, tab = NACK_KEY_TAB,
-    space = NACK_KEY_SPACE, minus = NACK_KEY_MINUS, equal = NACK_KEY_EQUAL,
-    left_bracket = NACK_KEY_LEFT_BRACKET,
-    right_bracket = NACK_KEY_RIGHT_BRACKET, backslash = NACK_KEY_BACKSLASH,
-    non_us_hash = NACK_KEY_NON_US_HASH, semicolon = NACK_KEY_SEMICOLON,
-    apostrophe = NACK_KEY_APOSTROPHE, grave = NACK_KEY_GRAVE,
-    comma = NACK_KEY_COMMA, period = NACK_KEY_PERIOD, slash = NACK_KEY_SLASH,
-    caps_lock = NACK_KEY_CAPS_LOCK, f1 = NACK_KEY_F1, f2 = NACK_KEY_F2,
-    f3 = NACK_KEY_F3, f4 = NACK_KEY_F4, f5 = NACK_KEY_F5, f6 = NACK_KEY_F6,
-    f7 = NACK_KEY_F7, f8 = NACK_KEY_F8, f9 = NACK_KEY_F9, f10 = NACK_KEY_F10,
-    f11 = NACK_KEY_F11, f12 = NACK_KEY_F12,
-    print_screen = NACK_KEY_PRINT_SCREEN, scroll_lock = NACK_KEY_SCROLL_LOCK,
-    pause = NACK_KEY_PAUSE, insert = NACK_KEY_INSERT, home = NACK_KEY_HOME,
-    page_up = NACK_KEY_PAGE_UP, delete_key = NACK_KEY_DELETE,
-    end = NACK_KEY_END, page_down = NACK_KEY_PAGE_DOWN,
-    right = NACK_KEY_RIGHT, left = NACK_KEY_LEFT, down = NACK_KEY_DOWN,
-    up = NACK_KEY_UP, num_lock = NACK_KEY_NUM_LOCK,
-    kp_divide = NACK_KEY_KP_DIVIDE, kp_multiply = NACK_KEY_KP_MULTIPLY,
-    kp_subtract = NACK_KEY_KP_SUBTRACT, kp_add = NACK_KEY_KP_ADD,
-    kp_enter = NACK_KEY_KP_ENTER, kp_1 = NACK_KEY_KP_1, kp_2 = NACK_KEY_KP_2,
-    kp_3 = NACK_KEY_KP_3, kp_4 = NACK_KEY_KP_4, kp_5 = NACK_KEY_KP_5,
-    kp_6 = NACK_KEY_KP_6, kp_7 = NACK_KEY_KP_7, kp_8 = NACK_KEY_KP_8,
-    kp_9 = NACK_KEY_KP_9, kp_0 = NACK_KEY_KP_0,
-    kp_decimal = NACK_KEY_KP_DECIMAL,
-    non_us_backslash = NACK_KEY_NON_US_BACKSLASH,
-    application = NACK_KEY_APPLICATION, kp_equal = NACK_KEY_KP_EQUAL,
-    f13 = NACK_KEY_F13, f14 = NACK_KEY_F14, f15 = NACK_KEY_F15,
-    f16 = NACK_KEY_F16, f17 = NACK_KEY_F17, f18 = NACK_KEY_F18,
-    f19 = NACK_KEY_F19, f20 = NACK_KEY_F20, f21 = NACK_KEY_F21,
-    f22 = NACK_KEY_F22, f23 = NACK_KEY_F23, f24 = NACK_KEY_F24,
-    menu = NACK_KEY_MENU, mute = NACK_KEY_MUTE,
-    volume_up = NACK_KEY_VOLUME_UP, volume_down = NACK_KEY_VOLUME_DOWN,
-    left_ctrl = NACK_KEY_LEFT_CTRL, left_shift = NACK_KEY_LEFT_SHIFT,
-    left_alt = NACK_KEY_LEFT_ALT, left_super = NACK_KEY_LEFT_SUPER,
-    right_ctrl = NACK_KEY_RIGHT_CTRL, right_shift = NACK_KEY_RIGHT_SHIFT,
-    right_alt = NACK_KEY_RIGHT_ALT, right_super = NACK_KEY_RIGHT_SUPER};
+enum class key : int {
+    unknown = 0,
 
-inline const char *key_name(key which)
-{
-    return ::nack_key_name(static_cast<::nack_key>(which));
-}
+    a = 4, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w,
+    x, y, z,
 
-/* A set of held modifiers. The C API hands these back as a bare uint32_t. */
+    num1 = 30, num2, num3, num4, num5, num6, num7, num8, num9, num0,
+
+    enter = 40, escape, backspace, tab, space, minus, equal, left_bracket,
+    right_bracket, backslash, non_us_hash, semicolon, apostrophe, grave,
+    comma, period, slash, caps_lock,
+
+    f1 = 58, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12,
+
+    print_screen = 70, scroll_lock, pause, insert, home, page_up,
+    delete_key, end, page_down, right, left, down, up,
+
+    num_lock = 83, kp_divide, kp_multiply, kp_subtract, kp_add, kp_enter,
+    kp_1, kp_2, kp_3, kp_4, kp_5, kp_6, kp_7, kp_8, kp_9,
+    kp_0 = 98, kp_decimal, non_us_backslash, application,
+    kp_equal = 103,
+
+    f13 = 104, f14, f15, f16, f17, f18, f19, f20, f21, f22, f23, f24,
+
+    menu = 118,
+    mute = 127, volume_up, volume_down,
+
+    left_ctrl = 224, left_shift, left_alt, left_super,
+    right_ctrl, right_shift, right_alt, right_super
+};
+
+const char *key_name(key which);
+
+/*
+ * A set of held modifiers.
+ *
+ * GCC's -Wshadow flags mod::none against the colour above of the same name,
+ * even though a scoped enum's enumerators are never found by unqualified
+ * lookup - there is nothing here either name could actually be confused
+ * with. Silenced locally rather than renaming either "none": both are the
+ * obvious, already-public spelling for their own type's empty value.
+ */
+#if defined(__GNUC__) || defined(__clang__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wshadow"
+#endif
 enum class mod : std::uint32_t {
     none      = 0,
-    shift     = NACK_MOD_SHIFT,
-    ctrl      = NACK_MOD_CTRL,
-    alt       = NACK_MOD_ALT,
-    super     = NACK_MOD_SUPER,
-    caps_lock = NACK_MOD_CAPSLOCK,
-    num_lock  = NACK_MOD_NUMLOCK
+    shift     = 1u << 0,
+    ctrl      = 1u << 1,
+    alt       = 1u << 2,
+    super     = 1u << 3,   /* Windows key / Command */
+    caps_lock = 1u << 4,
+    num_lock  = 1u << 5
 };
+#if defined(__GNUC__) || defined(__clang__)
+#  pragma GCC diagnostic pop
+#endif
 
 constexpr mod operator|(mod a, mod b)
 {
@@ -231,13 +226,7 @@ constexpr bool holds(mod set, mod wanted) { return (set & wanted) == wanted; }
 
 constexpr bool any(mod set) { return set != mod::none; }
 
-enum class mouse_button : int {
-    left   = NACK_MOUSE_LEFT,
-    right  = NACK_MOUSE_RIGHT,
-    middle = NACK_MOUSE_MIDDLE,
-    x1     = NACK_MOUSE_X1,
-    x2     = NACK_MOUSE_X2
-};
+enum class mouse_button : int { left = 0, right, middle, x1, x2 };
 
 /* ------------------------------------------------------------------------ */
 /* Events                                                                    */
@@ -262,12 +251,19 @@ struct text_event {
     std::string_view text() const { return std::string_view(utf8); }
 };
 
-struct mouse_event {
+struct mouse_move_event {
     int x, y;          /* cell under the pointer                       */
     int px, py;        /* pixel within the console area                */
     int dx, dy;        /* cell delta since the last motion event       */
+    nack::mod mods;
+};
+
+struct mouse_button_event {
+    int x, y;          /* cell under the pointer                       */
+    int px, py;        /* pixel within the console area                */
     nack::mouse_button button;
-    int clicks;        /* 1 single, 2 double, ...                      */
+    bool down;         /* true on press, false on release              */
+    int clicks;        /* 1 single, 2 double, ... (press only)         */
     nack::mod mods;
 };
 
@@ -281,84 +277,14 @@ struct resize_event {
     int columns, rows;
 };
 
-/* Focus gained or lost; the C API spells these as two event types. */
+/* Focus gained or lost. */
 struct focus_event {
     bool focused;
 };
 
-using event = std::variant<quit_event, key_event, text_event, mouse_event,
-                           scroll_event, resize_event, focus_event,
-                           wakeup_event>;
-
-namespace detail {
-
-inline nack::mod mods_of(std::uint32_t raw)
-{
-    return static_cast<nack::mod>(raw);
-}
-
-/* Turns the C tagged union into the variant, reading only the arm the type
- * says is live. NACK_EVENT_NONE has no variant member and yields nothing. */
-inline std::optional<event> to_event(const ::nack_event &ev)
-{
-    switch (ev.type) {
-    case NACK_EVENT_QUIT:
-        return event{ quit_event{} };
-    case NACK_EVENT_KEY_DOWN:
-    case NACK_EVENT_KEY_UP: {
-        key_event out;
-        out.key = static_cast<nack::key>(ev.data.key.key);
-        out.mods = mods_of(ev.data.key.mods);
-        out.repeat = ev.data.key.repeat;
-        return event{ out };
-    }
-    case NACK_EVENT_TEXT: {
-        text_event out{};
-        std::size_t i = 0;
-        for (; i + 1 < sizeof out.utf8 && ev.data.text.utf8[i]; ++i)
-            out.utf8[i] = ev.data.text.utf8[i];
-        out.utf8[i] = '\0';
-        return event{ out };
-    }
-    case NACK_EVENT_MOUSE_MOVE:
-    case NACK_EVENT_MOUSE_DOWN:
-    case NACK_EVENT_MOUSE_UP: {
-        mouse_event out;
-        out.x = ev.data.mouse.x;
-        out.y = ev.data.mouse.y;
-        out.px = ev.data.mouse.px;
-        out.py = ev.data.mouse.py;
-        out.dx = ev.data.mouse.dx;
-        out.dy = ev.data.mouse.dy;
-        out.button = static_cast<nack::mouse_button>(ev.data.mouse.button);
-        out.clicks = ev.data.mouse.clicks;
-        out.mods = mods_of(ev.data.mouse.mods);
-        return event{ out };
-    }
-    case NACK_EVENT_MOUSE_SCROLL: {
-        scroll_event out;
-        out.dx = ev.data.scroll.dx;
-        out.dy = ev.data.scroll.dy;
-        out.mods = mods_of(ev.data.scroll.mods);
-        out.precise = ev.data.scroll.precise;
-        return event{ out };
-    }
-    case NACK_EVENT_RESIZE:
-        return event{ resize_event{ ev.data.resize.columns,
-                                    ev.data.resize.rows } };
-    case NACK_EVENT_FOCUS:
-        return event{ focus_event{ true } };
-    case NACK_EVENT_BLUR:
-        return event{ focus_event{ false } };
-    case NACK_EVENT_WAKEUP:
-        return event{ wakeup_event{} };
-    case NACK_EVENT_NONE:
-    default:
-        return std::nullopt;
-    }
-}
-
-}  // namespace detail
+using event = std::variant<quit_event, key_event, text_event,
+                           mouse_move_event, mouse_button_event, scroll_event,
+                           resize_event, focus_event, wakeup_event>;
 
 /* ------------------------------------------------------------------------ */
 /* Consoles                                                                  */
@@ -370,11 +296,10 @@ struct cell {
     nack::color fg, bg;
 };
 
-enum class layout : int {
-    cp437     = NACK_LAYOUT_CP437,
-    row_major = NACK_LAYOUT_ROW_MAJOR,
-    tcod      = NACK_LAYOUT_TCOD
-};
+enum class layout : int { cp437 = 0, row_major, tcod };
+
+class console;
+class tileset;
 
 /*
  * A console someone else owns: the root, or one held by a console object.
@@ -385,72 +310,33 @@ enum class layout : int {
 class console_view {
 public:
     console_view() = default;
-    explicit console_view(::nack_console *console) : handle(console) {}
+
+    friend console_view root();
 
     ::nack_console *get() const { return handle; }
     explicit operator bool() const { return handle != nullptr; }
 
-    std::pair<int, int> size() const
-    {
-        int columns = 0, rows = 0;
-        ::nack_console_size(handle, &columns, &rows);
-        return { columns, rows };
-    }
-
+    std::pair<int, int> size() const;
     int columns() const { return size().first; }
     int rows() const { return size().second; }
 
-    void clear() const { ::nack_clear(handle); }
-    void clear(color fg, color bg) const { ::nack_clear_to(handle, fg, bg); }
+    void clear() const;
+    void clear(color fg, color bg) const;
 
-    void put(int x, int y, std::uint32_t codepoint, color fg, color bg) const
-    {
-        ::nack_put(handle, x, y, codepoint, fg, bg);
-    }
+    void put(int x, int y, std::uint32_t codepoint, color fg, color bg) const;
+    void put_tile(int x, int y, tileset &tiles, int index, color tint,
+                  color bg) const;
 
-    void put_tile(int x, int y, ::nack_tileset *tiles, int index, color tint,
-                  color bg) const
-    {
-        ::nack_put_tile(handle, x, y, tiles, index, tint, bg);
-    }
-
-    void set_glyph(int x, int y, std::uint32_t codepoint) const
-    {
-        ::nack_set_glyph(handle, x, y, codepoint);
-    }
-
-    void set_fg(int x, int y, color fg) const
-    {
-        ::nack_set_fg(handle, x, y, fg);
-    }
-
-    void set_bg(int x, int y, color bg) const
-    {
-        ::nack_set_bg(handle, x, y, bg);
-    }
-
-    cell at(int x, int y) const
-    {
-        ::nack_cell c = ::nack_get(handle, x, y);
-        return cell{ c.glyph, c.tileset, c.fg, c.bg };
-    }
+    void set_glyph(int x, int y, std::uint32_t codepoint) const;
+    void set_fg(int x, int y, color fg) const;
+    void set_bg(int x, int y, color bg) const;
+    cell at(int x, int y) const;
 
     /*
-     * Text as it stands. The arguments are in the order the C API uses:
+     * Text as it stands. The arguments are in the order the engine uses:
      * position, then colours, then the text. Returns the cells written.
      */
-    int print(int x, int y, color fg, color bg, std::string_view text) const
-    {
-        /*
-         * The C function wants a NUL-terminated string. A string_view need
-         * not be terminated, so anything that is not already gets copied -
-         * which literals and std::strings avoid.
-         */
-        if (is_terminated(text))
-            return ::nack_print(handle, x, y, fg, bg, text.data());
-        std::string owned(text);
-        return ::nack_print(handle, x, y, fg, bg, owned.c_str());
-    }
+    int print(int x, int y, color fg, color bg, std::string_view text) const;
 
     /*
      * The same, formatted with {fmt}.
@@ -475,16 +361,8 @@ public:
                      fmt::format(spec, std::forward<Args>(args)...));
     }
 
-    int print_wrapped(int x, int y, int width, int height, color fg, color bg,
-                      std::string_view text) const
-    {
-        if (is_terminated(text))
-            return ::nack_print_wrapped(handle, x, y, width, height, fg, bg,
-                                        text.data());
-        std::string owned(text);
-        return ::nack_print_wrapped(handle, x, y, width, height, fg, bg,
-                                    owned.c_str());
-    }
+    int print_wrapped(int x, int y, int width, int height, color fg,
+                      color bg, std::string_view text) const;
 
     template <class... Args,
               class = std::enable_if_t<(sizeof...(Args) > 0)>>
@@ -502,35 +380,18 @@ public:
     }
 
     void fill(int x, int y, int width, int height, std::uint32_t codepoint,
-              color fg, color bg) const
-    {
-        ::nack_fill(handle, x, y, width, height, codepoint, fg, bg);
-    }
+              color fg, color bg) const;
 
     void draw_box(int x, int y, int width, int height, color fg, color bg,
-                  const char *title = nullptr) const
-    {
-        ::nack_draw_box(handle, x, y, width, height, fg, bg, title);
-    }
+                  const char *title = nullptr) const;
 
     /* Copies this console onto another. Alphas below 1 blend. */
     void blit_to(console_view dst, int dst_x, int dst_y, int src_x = 0,
                  int src_y = 0, int width = 0, int height = 0,
-                 float fg_alpha = 1.0f, float bg_alpha = 1.0f) const
-    {
-        ::nack_blit(handle, src_x, src_y, width, height, dst.get(), dst_x,
-                    dst_y, fg_alpha, bg_alpha);
-    }
+                 float fg_alpha = 1.0f, float bg_alpha = 1.0f) const;
 
 protected:
-    static bool is_terminated(std::string_view text)
-    {
-        /*
-         * Reading one past a string_view is only safe when something already
-         * put a NUL there. An empty view has no data() to read at all.
-         */
-        return !text.empty() && text.data()[text.size()] == '\0';
-    }
+    explicit console_view(::nack_console *console) : handle(console) {}
 
     ::nack_console *handle = nullptr;
 };
@@ -538,20 +399,8 @@ protected:
 /* A console this object owns and frees. Move-only: it is a handle. */
 class console : public console_view {
 public:
-    console(int columns, int rows)
-    {
-        handle = ::nack_console_new(columns, rows);
-        if (!handle)
-            detail::fail(detail::last_error("cannot create a console"));
-    }
-
-    static std::optional<console> try_create(int columns, int rows)
-    {
-        ::nack_console *raw = ::nack_console_new(columns, rows);
-        if (!raw)
-            return std::nullopt;
-        return console(raw);
-    }
+    console(int columns, int rows);
+    static std::optional<console> try_create(int columns, int rows);
 
     console(const console &) = delete;
     console &operator=(const console &) = delete;
@@ -561,24 +410,14 @@ public:
         handle = std::exchange(other.handle, nullptr);
     }
 
-    console &operator=(console &&other) noexcept
-    {
-        if (this != &other) {
-            ::nack_console_free(handle);
-            handle = std::exchange(other.handle, nullptr);
-        }
-        return *this;
-    }
+    console &operator=(console &&other) noexcept;
 
-    ~console() { ::nack_console_free(handle); }
+    ~console();
 
-    bool resize(int columns, int rows)
-    {
-        return ::nack_console_resize(handle, columns, rows);
-    }
+    bool resize(int columns, int rows);
 
 private:
-    explicit console(::nack_console *raw) { handle = raw; }
+    explicit console(::nack_console *raw) : console_view(raw) {}
 };
 
 /* ------------------------------------------------------------------------ */
@@ -589,24 +428,9 @@ class tileset {
 public:
     /* A tileset image on disk: PNG or JPEG, decided by its contents. */
     tileset(const char *path, int tile_width, int tile_height,
-            nack::layout arrangement)
-    {
-        handle = ::nack_tileset_load(
-            path, tile_width, tile_height,
-            static_cast<::nack_tileset_layout>(arrangement));
-        if (!handle)
-            detail::fail(detail::last_error("cannot load a tileset"));
-    }
-
+            nack::layout arrangement);
     tileset(const void *data, std::size_t size, int tile_width,
-            int tile_height, nack::layout arrangement)
-    {
-        handle = ::nack_tileset_load_memory(
-            data, size, tile_width, tile_height,
-            static_cast<::nack_tileset_layout>(arrangement));
-        if (!handle)
-            detail::fail(detail::last_error("cannot load a tileset"));
-    }
+            int tile_height, nack::layout arrangement);
 
     tileset(const tileset &) = delete;
     tileset &operator=(const tileset &) = delete;
@@ -614,37 +438,17 @@ public:
     tileset(tileset &&other) noexcept
         : handle(std::exchange(other.handle, nullptr)) {}
 
-    tileset &operator=(tileset &&other) noexcept
-    {
-        if (this != &other) {
-            ::nack_tileset_free(handle);
-            handle = std::exchange(other.handle, nullptr);
-        }
-        return *this;
-    }
+    tileset &operator=(tileset &&other) noexcept;
 
-    ~tileset() { ::nack_tileset_free(handle); }
+    ~tileset();
 
     ::nack_tileset *get() const { return handle; }
 
     struct dimensions { int width, height, count; };
+    dimensions size() const;
 
-    dimensions size() const
-    {
-        dimensions d{ 0, 0, 0 };
-        ::nack_tileset_size(handle, &d.width, &d.height, &d.count);
-        return d;
-    }
-
-    bool map(std::uint32_t codepoint, int index)
-    {
-        return ::nack_tileset_map(handle, codepoint, index);
-    }
-
-    bool map_range(std::uint32_t first, std::uint32_t last, int first_index)
-    {
-        return ::nack_tileset_map_range(handle, first, last, first_index);
-    }
+    bool map(std::uint32_t codepoint, int index);
+    bool map_range(std::uint32_t first, std::uint32_t last, int first_index);
 
 private:
     ::nack_tileset *handle = nullptr;
@@ -654,150 +458,110 @@ private:
 /* The application                                                           */
 /* ------------------------------------------------------------------------ */
 
-using config = ::nack_config;
+/* How the console is fitted to the window when the two do not match. */
+enum class scaling : int {
+    integer = 0,  /* whole-number zoom, letterboxed: always crisp */
+    fit,          /* largest fit preserving aspect, letterboxed   */
+    stretch       /* fill the window, ignoring aspect             */
+};
 
-inline config default_config()
-{
-    config settings;
-    ::nack_config_defaults(&settings);
-    return settings;
-}
+struct config {
+    const char *title = "libnack";
+    int columns = 80, rows = 50;
 
-/* The console the window shows. Valid only while an app is alive. */
-inline console_view root() { return console_view(::nack_root()); }
+    /* Path to a tileset image. Null uses the built-in 8x8 font, so a game
+     * can start without shipping any assets. */
+    const char *tileset = nullptr;
+    int tile_width = 0, tile_height = 0;
+    nack::layout tileset_layout = layout::cp437;
+
+    nack::scaling scaling = scaling::integer;
+    nack::color letterbox = black;   /* colour of the bars around the console */
+
+    bool vsync = true;
+    bool resizable = true;
+    bool fullscreen = false;
+
+    /*
+     * When set, resizing the window changes the console's dimensions and
+     * produces a resize_event, rather than scaling a fixed grid. This is
+     * what you want if the game reflows its layout.
+     */
+    bool auto_resize = false;
+
+    /* Initial window size, as a multiple of the console's pixel size.
+     * 0 picks the largest whole multiple that fits the monitor. */
+    int window_scale = 0;
+};
+
+inline config default_config() { return config{}; }
 
 /*
- * Owns the library's lifetime: constructing one calls nack_init, destroying
- * one calls nack_shutdown. There can only be one at a time, because the C
- * library is a singleton.
+ * The most recent failure from anything in this namespace, or an empty view
+ * if the last call that could fail did not. Exists mainly for the moment
+ * before an app object exists to ask - app::try_create failing is the one
+ * place there is nothing else to ask.
+ */
+std::string_view last_error();
+
+/* The console the window shows. Valid only while an app is alive. */
+console_view root();
+
+/*
+ * Owns the library's lifetime: constructing one starts the window and
+ * renderer, destroying one tears them down. There can only be one at a time,
+ * because the engine underneath is a singleton.
  */
 class app {
 public:
-    explicit app(const config &settings)
-    {
-        if (!::nack_init(&settings))
-            detail::fail(detail::last_error("cannot start libnack"));
-        active = true;
-    }
-
+    explicit app(const config &settings);
     app() : app(default_config()) {}
 
-    static std::optional<app> try_create(const config &settings)
-    {
-        if (!::nack_init(&settings))
-            return std::nullopt;
-        return app(adopt{});
-    }
+    static std::optional<app> try_create(const config &settings);
 
     app(const app &) = delete;
     app &operator=(const app &) = delete;
 
     app(app &&other) noexcept : active(std::exchange(other.active, false)) {}
+    app &operator=(app &&other) noexcept;
 
-    app &operator=(app &&other) noexcept
-    {
-        if (this != &other) {
-            if (active)
-                ::nack_shutdown();
-            active = std::exchange(other.active, false);
-        }
-        return *this;
-    }
-
-    ~app()
-    {
-        if (active)
-            ::nack_shutdown();
-    }
+    ~app();
 
     console_view console() const { return root(); }
 
-    void present() const { ::nack_present(); }
+    void present() const;
 
-    bool should_close() const { return ::nack_should_close(); }
-    void set_should_close(bool value) const
-    {
-        ::nack_set_should_close(value);
-    }
+    bool should_close() const;
+    void set_should_close(bool value) const;
 
-    double time() const { return ::nack_time(); }
-    double delta_time() const { return ::nack_delta_time(); }
+    double time() const;
+    double delta_time() const;
 
     /* Returns nothing when the queue is empty. */
-    std::optional<event> poll() const
-    {
-        ::nack_event ev;
-        while (::nack_poll_event(&ev)) {
-            if (auto out = detail::to_event(ev))
-                return out;
-        }
-        return std::nullopt;
-    }
+    std::optional<event> poll() const;
 
     /* Blocks until something happens, so a turn-based game idles at no cost. */
-    std::optional<event> wait() const
-    {
-        ::nack_event ev;
-        while (::nack_wait_event(&ev)) {
-            if (auto out = detail::to_event(ev))
-                return out;
-        }
-        return std::nullopt;
-    }
-
-    std::optional<event> wait_for(double seconds) const
-    {
-        ::nack_event ev;
-        while (::nack_wait_event_timeout(&ev, seconds)) {
-            if (auto out = detail::to_event(ev))
-                return out;
-        }
-        return std::nullopt;
-    }
+    std::optional<event> wait() const;
+    std::optional<event> wait_for(double seconds) const;
 
     /* Safe from any thread: breaks a wait and delivers a wakeup_event. */
-    void wake() const { ::nack_wakeup(); }
+    void wake() const;
 
-    bool key_down(nack::key which) const
-    {
-        return ::nack_key_down(static_cast<::nack_key>(which));
-    }
+    bool key_down(nack::key which) const;
+    nack::mod mods() const;
+    bool mouse_down(nack::mouse_button button) const;
+    std::pair<int, int> mouse_cell() const;
 
-    nack::mod mods() const { return static_cast<nack::mod>(::nack_mods()); }
+    void set_title(const char *title) const;
+    void set_fullscreen(bool on) const;
+    bool fullscreen() const;
+    void set_vsync(bool on) const;
 
-    bool mouse_down(nack::mouse_button button) const
-    {
-        return ::nack_mouse_down(static_cast<int>(button));
-    }
+    void set_font(nack::tileset &tiles) const;
 
-    std::pair<int, int> mouse_cell() const
-    {
-        int x = 0, y = 0;
-        ::nack_mouse_cell(&x, &y);
-        return { x, y };
-    }
-
-    void set_title(const char *title) const { ::nack_set_title(title); }
-    void set_fullscreen(bool on) const { ::nack_set_fullscreen(on); }
-    bool fullscreen() const { return ::nack_is_fullscreen(); }
-    void set_vsync(bool on) const { ::nack_set_vsync(on); }
-
-    void set_font(nack::tileset &tiles) const
-    {
-        ::nack_set_font(tiles.get());
-    }
-
-    bool set_clipboard(const char *utf8) const
-    {
-        return ::nack_clipboard_set(utf8);
-    }
-
+    bool set_clipboard(const char *utf8) const;
     /* Empty when the clipboard holds nothing this program can read. */
-    std::string clipboard() const
-    {
-        const char *text = ::nack_clipboard_get();
-        return text ? std::string(text) : std::string();
-    }
+    std::string clipboard() const;
 
 private:
     struct adopt {};
@@ -805,6 +569,89 @@ private:
 
     bool active = false;
 };
+
+/* ------------------------------------------------------------------------ */
+/* Root convenience functions                                                */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * Everything above draws through a console_view, and the app's console is
+ * one - `app.console().print(...)`. These are the same calls, spelled
+ * without fetching the root first, for the common case of a roguelike that
+ * only ever draws to the screen it shows.
+ */
+
+inline void clear() { root().clear(); }
+inline void clear(color fg, color bg) { root().clear(fg, bg); }
+
+inline void put(int x, int y, std::uint32_t codepoint, color fg, color bg)
+{
+    root().put(x, y, codepoint, fg, bg);
+}
+
+inline void put_tile(int x, int y, tileset &tiles, int index, color tint,
+                     color bg)
+{
+    root().put_tile(x, y, tiles, index, tint, bg);
+}
+
+inline void set_glyph(int x, int y, std::uint32_t codepoint)
+{
+    root().set_glyph(x, y, codepoint);
+}
+
+inline void set_fg(int x, int y, color fg) { root().set_fg(x, y, fg); }
+inline void set_bg(int x, int y, color bg) { root().set_bg(x, y, bg); }
+inline cell at(int x, int y) { return root().at(x, y); }
+
+inline int print(int x, int y, color fg, color bg, std::string_view text)
+{
+    return root().print(x, y, fg, bg, text);
+}
+
+template <class... Args,
+          class = std::enable_if_t<(sizeof...(Args) > 0)>>
+int print(int x, int y, color fg, color bg, fmt::format_string<Args...> spec,
+          Args &&...args)
+{
+    return root().print(x, y, fg, bg, spec, std::forward<Args>(args)...);
+}
+
+inline int print_wrapped(int x, int y, int width, int height, color fg,
+                         color bg, std::string_view text)
+{
+    return root().print_wrapped(x, y, width, height, fg, bg, text);
+}
+
+template <class... Args,
+          class = std::enable_if_t<(sizeof...(Args) > 0)>>
+int print_wrapped(int x, int y, int width, int height, color fg, color bg,
+                  fmt::format_string<Args...> spec, Args &&...args)
+{
+    return root().print_wrapped(x, y, width, height, fg, bg, spec,
+                                std::forward<Args>(args)...);
+}
+
+inline int measure_wrapped(int width, std::string_view text)
+{
+    return root().measure_wrapped(width, text);
+}
+
+inline void fill(int x, int y, int width, int height, std::uint32_t codepoint,
+                 color fg, color bg)
+{
+    root().fill(x, y, width, height, codepoint, fg, bg);
+}
+
+inline void draw_box(int x, int y, int width, int height, color fg, color bg,
+                     const char *title = nullptr)
+{
+    root().draw_box(x, y, width, height, fg, bg, title);
+}
+
+inline std::pair<int, int> size() { return root().size(); }
+inline int columns() { return root().columns(); }
+inline int rows() { return root().rows(); }
 
 }  // namespace nack
 

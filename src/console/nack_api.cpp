@@ -48,7 +48,7 @@ void nack__clear_error(void)
     nack__c.error.clear();
 }
 
-const char *nack_get_error(void)
+const char *nack__app_get_error(void)
 {
     return nack__c.has_error ? nack__c.error.c_str() : NULL;
 }
@@ -57,7 +57,7 @@ const char *nack_get_error(void)
 /* Lifetime                                                           */
 /* ------------------------------------------------------------------ */
 
-void nack_config_defaults(struct nack_config *config)
+void nack__app_config_defaults(struct nack_config *config)
 {
     if (!config)
         return;
@@ -80,7 +80,7 @@ static void nack__sync_framebuffer(void)
     nack__render_update_viewport();
 }
 
-bool nack_init(const struct nack_config *config)
+bool nack__app_init(const struct nack_config *config)
 {
     struct nack_config cfg;
     struct nack_win_init_desc init;
@@ -90,7 +90,7 @@ bool nack_init(const struct nack_config *config)
     if (nack__c.initialized)
         return true;
 
-    nack_config_defaults(&cfg);
+    nack__app_config_defaults(&cfg);
     if (config)
         cfg = *config;
     if (cfg.columns < 1) cfg.columns = 80;
@@ -167,25 +167,25 @@ bool nack_init(const struct nack_config *config)
 
     nack__c.builtin_font = nack__tileset_builtin();
     if (!nack__c.builtin_font) {
-        nack_shutdown();
+        nack__app_shutdown();
         return false;
     }
     nack__c.font = nack__c.builtin_font;
 
     if (cfg.tileset) {
         struct nack_tileset *tileset =
-            nack_tileset_load(cfg.tileset, cfg.tile_width, cfg.tile_height,
+            nack__tileset_load(cfg.tileset, cfg.tile_width, cfg.tile_height,
                               cfg.tileset_layout);
         if (!tileset) {
-            nack_shutdown();
+            nack__app_shutdown();
             return false;   /* the loader already described the failure */
         }
         nack__c.font = tileset;
     }
 
-    nack__c.root = nack_console_new(cfg.columns, cfg.rows);
+    nack__c.root = nack__console_new(cfg.columns, cfg.rows);
     if (!nack__c.root) {
-        nack_shutdown();
+        nack__app_shutdown();
         return false;
     }
 
@@ -217,7 +217,7 @@ bool nack_init(const struct nack_config *config)
     return true;
 }
 
-void nack_shutdown(void)
+void nack__app_shutdown(void)
 {
     size_t i;
 
@@ -231,12 +231,12 @@ void nack_shutdown(void)
         struct nack_tileset *tileset = nack__c.tilesets[i - 1];
         if (tileset == nack__c.builtin_font)
             continue;
-        nack_tileset_free(tileset);
+        nack__tileset_free(tileset);
     }
     if (nack__c.builtin_font) {
         struct nack_tileset *builtin = nack__c.builtin_font;
         nack__c.builtin_font = NULL;   /* let the free go through */
-        nack_tileset_free(builtin);
+        nack__tileset_free(builtin);
     }
 
     nack__gfx_shutdown();
@@ -244,7 +244,7 @@ void nack_shutdown(void)
     if (nack__c.root) {
         struct nack_console *root = nack__c.root;
         nack__c.root = NULL;
-        nack_console_free(root);
+        nack__console_free(root);
     }
 
     if (nack__c.window) {
@@ -264,7 +264,7 @@ void nack_shutdown(void)
 /* Frames                                                             */
 /* ------------------------------------------------------------------ */
 
-void nack_present(void)
+void nack__app_present(void)
 {
     double now;
 
@@ -307,32 +307,32 @@ bool nack__debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4])
     return nack__gfx_read_pixel(px, py, rgba);
 }
 
-struct nack_console *nack_root(void)
+struct nack_console *nack__app_root(void)
 {
     return nack__c.root;
 }
 
-bool nack_should_close(void)
+bool nack__app_should_close(void)
 {
     return nack__c.should_close ||
            (nack__c.window && nack_window_should_close(nack__c.window));
 }
 
-void nack_set_should_close(bool value)
+void nack__app_set_should_close(bool value)
 {
     nack__c.should_close = value;
     if (nack__c.window)
         nack_window_set_should_close(nack__c.window, value);
 }
 
-double nack_time(void)
+double nack__app_time(void)
 {
     if (!nack__c.initialized)
         return 0.0;
     return nack__win_time_seconds() - nack__c.start_time;
 }
 
-double nack_delta_time(void)
+double nack__app_delta_time(void)
 {
     return nack__c.delta;
 }
@@ -464,7 +464,7 @@ static bool nack__translate(const struct nack_win_event *in,
             if (columns < 1) columns = 1;
             if (rows < 1) rows = 1;
             if (columns != nack__c.root->columns || rows != nack__c.root->rows) {
-                nack_console_resize(nack__c.root, columns, rows);
+                nack__console_resize(nack__c.root, columns, rows);
                 nack__render_update_viewport();
                 out->type = NACK_EVENT_RESIZE;
                 out->data.resize.columns = columns;
@@ -481,7 +481,7 @@ static bool nack__translate(const struct nack_win_event *in,
     }
 }
 
-bool nack_poll_event(struct nack_event *event)
+bool nack__app_poll_event(struct nack_event *event)
 {
     struct nack_win_event raw;
 
@@ -494,12 +494,12 @@ bool nack_poll_event(struct nack_event *event)
     return false;
 }
 
-bool nack_wait_event(struct nack_event *event)
+bool nack__app_wait_event(struct nack_event *event)
 {
-    return nack_wait_event_timeout(event, -1.0);
+    return nack__app_wait_event_timeout(event, -1.0);
 }
 
-bool nack_wait_event_timeout(struct nack_event *event, double seconds)
+bool nack__app_wait_event_timeout(struct nack_event *event, double seconds)
 {
     struct nack_win_event raw;
     double deadline;
@@ -530,33 +530,33 @@ bool nack_wait_event_timeout(struct nack_event *event, double seconds)
     }
 }
 
-void nack_wakeup(void)
+void nack__app_wakeup(void)
 {
     nack__win_wakeup();
 }
 
-bool nack_key_down(enum nack_key key)
+bool nack__app_key_down(enum nack_key key)
 {
     return nack__win_key_is_down(key);
 }
 
-uint32_t nack_mods(void)
+uint32_t nack__app_mods(void)
 {
     return nack__win_get_mods();
 }
 
-bool nack_mouse_down(int button)
+bool nack__app_mouse_down(int button)
 {
     return nack__win_mouse_button_is_down(button);
 }
 
-void nack_mouse_cell(int *x, int *y)
+void nack__app_mouse_cell(int *x, int *y)
 {
     if (x) *x = nack__c.mouse_cell_x;
     if (y) *y = nack__c.mouse_cell_y;
 }
 
-const char *nack_key_name(enum nack_key key)
+const char *nack__key_name(enum nack_key key)
 {
     return nack_key_get_name(key);
 }
@@ -565,24 +565,24 @@ const char *nack_key_name(enum nack_key key)
 /* Window                                                             */
 /* ------------------------------------------------------------------ */
 
-void nack_set_title(const char *title)
+void nack__app_set_title(const char *title)
 {
     if (nack__c.window && title)
         nack_window_set_title(nack__c.window, title);
 }
 
-void nack_set_fullscreen(bool fullscreen)
+void nack__app_set_fullscreen(bool fullscreen)
 {
     if (nack__c.window)
         nack_window_set_fullscreen(nack__c.window, fullscreen);
 }
 
-bool nack_is_fullscreen(void)
+bool nack__app_is_fullscreen(void)
 {
     return nack__c.window && nack_window_is_fullscreen(nack__c.window);
 }
 
-void nack_set_vsync(bool vsync)
+void nack__app_set_vsync(bool vsync)
 {
     nack__c.vsync = vsync;
     nack__gfx_set_vsync(vsync);
@@ -591,7 +591,7 @@ void nack_set_vsync(bool vsync)
 /*
  * The window layer keeps its own error, and the two are not the same store:
  * a backend that explains itself through nack__fail is explaining it there,
- * where nack_get_error never looks. Anything forwarded to that layer has to
+ * where nack__app_get_error never looks. Anything forwarded to that layer has to
  * carry the reason across, or the caller gets a bare false and no account of
  * why - which is what happened to every clipboard failure until now.
  */
@@ -604,14 +604,14 @@ static bool nack__forward_error(const char *what)
                                                            : "no reason given");
 }
 
-bool nack_clipboard_set(const char *utf8)
+bool nack__app_clipboard_set(const char *utf8)
 {
     if (!nack__win_clipboard_set(utf8))
         return nack__forward_error("cannot set the clipboard");
     return true;
 }
 
-const char *nack_clipboard_get(void)
+const char *nack__app_clipboard_get(void)
 {
     return nack__win_clipboard_get();
 }

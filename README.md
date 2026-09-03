@@ -1,38 +1,37 @@
 # libnack
 
-A cell console for roguelikes, in C++20 behind a C API. You get a grid of cells to draw glyphs
+A cell console for roguelikes, in C++20. You get a grid of cells to draw glyphs
 and tiles into, in the spirit of libtcod and BearLibTerminal.
 
 libnack owns the window, the OpenGL context and the renderer. None of that is
 exposed, because none of it is what a roguelike wants to think about. The whole
 API is the console.
 
-```c
-#include "nack/nack.h"
+```cpp
+#include <nack/nack.hpp>
 
-int main(void)
+int main()
 {
-    struct nack_config config;
-    nack_config_defaults(&config);
+    nack::config config = nack::default_config();
     config.title = "my roguelike";
     config.columns = 80;
     config.rows = 50;
-    nack_init(&config);
+    auto app = nack::app::try_create(config);
+    if (!app)
+        return 1;
 
-    while (!nack_should_close()) {
-        nack_clear(nack_root());
-        nack_put(nack_root(), x, y, '@', NACK_WHITE, NACK_BLACK);
-        nack_print(nack_root(), 0, 49, NACK_GREY, NACK_BLACK, "you are in a maze");
-        nack_present();
+    while (!app->should_close()) {
+        nack::clear();
+        nack::put(x, y, '@', nack::white, nack::black);
+        nack::print(0, 49, nack::grey, nack::black, "you are in a maze");
+        app->present();
 
-        struct nack_event event;
-        while (nack_poll_event(&event)) {
-            if (event.type == NACK_EVENT_KEY_DOWN &&
-                event.data.key.key == NACK_KEY_H)
-                x--;
+        while (auto event = app->poll()) {
+            if (auto *key = std::get_if<nack::key_event>(&*event))
+                if (key->key == nack::key::h)
+                    x--;
         }
     }
-    nack_shutdown();
 }
 ```
 
@@ -42,54 +41,58 @@ int main(void)
 | Windows | Win32 | OpenGL 3.3 via WGL |
 | macOS | Cocoa | Metal |
 
-The implementation is C++20. The API is C, in `<nack/nack.h>`, with
-`extern "C"` guards — that is the ABI other languages bind to, and the
-examples and most of the test suite are C precisely so it stays honest.
-`<nack/nack.hpp>` is a C++ face on the same library; see below.
+The library is C++20, and `<nack/nack.hpp>` is the only public header — there
+is no separate C API to bind to. Consoles, tilesets and the app itself free
+themselves; events arrive as a `std::variant`, so reading the wrong arm of the
+union is a compile error rather than a convention in a comment; `poll()`
+returns `std::optional` instead of a bool and an out-parameter; sizes come back
+as structured bindings; and modifiers are a real bitmask type rather than a
+bare `uint32_t`.
 
-Because the library is C++, linking it pulls in the C++ runtime even from a C
-program. If that is a problem for you, this is not the library for you.
+Drawing calls that act on the window's own console — `nack::clear()`,
+`nack::print(...)`, `nack::put(...)` and so on — are free functions, since
+there is always exactly one of those and naming it every time buys nothing.
+Everything else — an offscreen `nack::console`, a `nack::tileset`, the
+`nack::app` itself — is a method on the object it acts on.
 
 ## Why it looks like this
 
 - **A console, not a terminal.** Cells are addressed directly and redrawn as
   you like. There is no scrollback, no reflow and no PTY; it is a grid you
   paint, which is what a roguelike wants.
-- **Turn-based games can sleep.** `nack_wait_event` blocks until the player
-  does something, so a game waiting on input costs no CPU at all. Real-time
-  games call `nack_poll_event` in a loop and present every frame instead. Both
-  work; neither is privileged.
-- **The mouse arrives in cells.** `event.data.mouse.x` is a column, not a
-  pixel, already through the letterbox and scale transform. Pixel positions are
-  there too if you want them.
-- **Keys are physical.** `nack_key` values are USB HID usage codes describing
+- **Turn-based games can sleep.** `app.wait()` blocks until the player does
+  something, so a game waiting on input costs no CPU at all. Real-time games
+  call `app.poll()` in a loop and present every frame instead. Both work;
+  neither is privileged.
+- **The mouse arrives in cells.** A `mouse_move_event`/`mouse_button_event`'s
+  `x`/`y` is a column, not a pixel, already through the letterbox and scale
+  transform. Pixel positions are there too if you want them.
+- **Keys are physical.** `nack::key` values are USB HID usage codes describing
   the position of a key, so a movement binding does not move when the player
   changes layout. The numeric keypad is distinct from the number row, because
   eight-way movement needs it. Text, for entering a character's name, arrives
-  separately as `NACK_EVENT_TEXT` after the platform's dead-key and IME
-  handling; Ctrl chords produce key events and no text.
+  separately as a `text_event` after the platform's dead-key and IME handling;
+  Ctrl chords produce key events and no text.
 - **Whole-pixel scaling by default.** The console is scaled to the window by a
-  whole number and letterboxed, so tiles stay crisp. `NACK_SCALE_FIT` and
-  `NACK_SCALE_STRETCH` are there if you would rather fill the window.
+  whole number and letterboxed, so tiles stay crisp. `nack::scaling::fit` and
+  `nack::scaling::stretch` are there if you would rather fill the window.
 
 ## Tilesets
 
 The built-in 8x8 CP437 font means a game runs before it ships any assets,
 including box drawing and block characters. Beyond that:
 
-```c
-/* A CP437 sheet: the classic roguelike tileset layout. */
-struct nack_tileset *font =
-    nack_tileset_load("terminal16x16.png", 16, 16, NACK_LAYOUT_CP437);
-nack_set_font(font);
+```cpp
+// A CP437 sheet: the classic roguelike tileset layout.
+nack::tileset font{"terminal16x16.png", 16, 16, nack::layout::cp437};
+app->set_font(font);
 
-/* Graphical tiles, drawn by index rather than by codepoint. */
-struct nack_tileset *tiles =
-    nack_tileset_load("creatures.png", 32, 32, NACK_LAYOUT_ROW_MAJOR);
-nack_put_tile(nack_root(), x, y, tiles, ORC_TILE, NACK_WHITE, NACK_BLACK);
+// Graphical tiles, drawn by index rather than by codepoint.
+nack::tileset tiles{"creatures.png", 32, 32, nack::layout::row_major};
+nack::put_tile(x, y, tiles, ORC_TILE, nack::white, nack::black);
 
-/* Unicode past CP437's 256 slots. */
-nack_tileset_map_range(font, 0x4E00, 0x4E7F, 256);
+// Unicode past CP437's 256 slots.
+font.map_range(0x4E00, 0x4E7F, 256);
 ```
 
 A sheet that only contains greys is treated as a font and tinted by each cell's
@@ -106,48 +109,25 @@ that has been attacked for years. Only PNG and JPEG are compiled in, so the
 other seven formats stb_image knows are not reachable from a file the program
 did not write. See `third_party/VENDORING.md`.
 
-## C++
+## Consoles
 
-`<nack/nack.hpp>` is an optional header-only C++20 face on the same library.
-It is a wrapper and nothing else — every call forwards to the C API and the
-compiler folds it away — but it adds the parts C cannot express:
+Every drawing method lives on a console. The window's own console is reached
+through the root free functions (`nack::clear()`, `nack::print(...)`, and so
+on) or through `app.console()`; offscreen consoles are for composing:
 
 ```cpp
-#include <nack/nack.hpp>
-
-int main()
-{
-    nack::config config = nack::default_config();
-    config.title = "roguelike";
-    nack::app app{config};                       // nack_shutdown on scope exit
-
-    int purse = 120;
-    nack::console panel{20, 10};                 // freed on scope exit
-    panel.draw_box(0, 0, 20, 10, nack::grey, nack::black, "inventory");
-    panel.print(2, 2, nack::white, nack::black, "a) rusty sword");
-    panel.print(2, 3, nack::grey, nack::black, "{} gold", purse);
-
-    while (!app.should_close()) {
-        app.console().clear();
-        panel.blit_to(app.console(), 30, 20);
-        app.present();
-
-        if (auto ev = app.wait()) {
-            if (auto *key = std::get_if<nack::key_event>(&*ev))
-                if (key->key == nack::key::escape)
-                    break;
-        }
-    }
-}
+nack::console panel{20, 10};                 // freed on scope exit
+panel.draw_box(0, 0, 20, 10, nack::grey, nack::black, "inventory");
+panel.print(2, 2, nack::white, nack::black, "a) rusty sword");
+panel.print(2, 3, nack::grey, nack::black, "{} gold", 120);
+panel.blit_to(app->console(), 30, 20, 1.0f, 0.9f);
 ```
 
-Consoles, tilesets and the library itself free themselves. Events arrive as a
-`std::variant`, so reading the wrong arm of the union is a compile error rather
-than a convention in a comment. `poll()` returns `std::optional` instead of a
-bool and an out-parameter, sizes come back as structured bindings, and
-modifiers are a real bitmask type rather than a bare `uint32_t`.
+The last two arguments to `blit_to` are foreground and background alpha, so a
+translucent overlay is a blit with a low background alpha.
 
-`console_view` is the non-owning half, so one helper takes either kind:
+`console_view` is the non-owning half — a reference to either the root or an
+owned console — so one helper takes either kind:
 
 ```cpp
 void draw_panel(nack::console_view console);   // the root or an owned console
@@ -160,40 +140,17 @@ rejected where it is written — {fmt}'s compile-time checking, which is one of
 the reasons the header asks for C++20. `tests/cpp_bad_format.cpp` is a file
 that must fail to compile, and the test suite checks that it does.
 
-Colours are `constexpr` here — `nack::white`, `nack::rgb(...)` — rather than
-the C macros. `NACK_RGB` is usable from C++ too (it spells itself as a braced
-init there, since C++ has no compound literals), but the `constexpr` forms are
-typed, scoped, and usable in constant expressions.
+Colours are `constexpr`: `nack::white`, `nack::rgb(...)`, and so on — typed,
+scoped, and usable in constant expressions.
 
-Exceptions are used only where construction fails, and every constructor has a
-`try_create` counterpart returning `std::optional`. Built with exceptions off,
-the throwing paths abort with the message instead.
+Exceptions are used only where construction fails, and every constructor that
+can fail has a `try_create` counterpart returning `std::optional`. Compiled
+with `-fno-exceptions` (or the MSVC equivalent), the throwing paths abort with
+the message instead.
 
-{fmt} is vendored under `third_party/fmt` and built header-only, so it is
-compiled into whoever includes `<nack/nack.hpp>` and never into libnack
-itself.
-
-The C API is unchanged by any of this and stays what other languages bind to.
-
-## Consoles
-
-Every drawing call takes a console. `nack_root()` is the one that gets
-presented; offscreen consoles are for composing:
-
-```c
-struct nack_console *panel = nack_console_new(20, 10);
-nack_draw_box(panel, 0, 0, 20, 10, NACK_GREY, NACK_BLACK, "inventory");
-nack_print(panel, 2, 2, NACK_WHITE, NACK_BLACK, "a) rusty sword");
-nack_blit(panel, 0, 0, 20, 10, nack_root(), 30, 20, 1.0f, 0.9f);
-```
-
-The last two arguments are foreground and background alpha, so a translucent
-overlay is a blit with a low background alpha.
-
-Passing `NULL` as a console is an error, not a shorthand for the root. That
-matters because `nack_console_new` returns `NULL` when it fails: if `NULL`
-meant the root, an unchecked allocation failure would quietly draw over the
-screen instead of doing nothing and saying why.
+{fmt} is vendored under `third_party/fmt` and built header-only; it is
+compiled into whoever includes `<nack/nack.hpp>`, which now means libnack
+itself as well as its callers.
 
 ## Building
 
@@ -286,11 +243,11 @@ exercises it on a compositor that does support the protocol.
 
 ## Testing
 
-`tests/console_smoke.c` drives the console API and verifies frames by reading
-pixels back out of the framebuffer, not merely by checking that `nack_present`
-returned. It is run twice: once normally, and once with the preferred renderer
-forced to fail, which is how the fallback gets exercised on a machine with
-only one working renderer.
+`tests/console_smoke.cpp` drives the console through `<nack/nack.hpp>` and
+verifies frames by reading pixels back out of the framebuffer, not merely by
+checking that `present()` returned. It is run twice: once normally, and once
+with the preferred renderer forced to fail, which is how the fallback gets
+exercised on a machine with only one working renderer.
 
 `tests/image_test.c` covers the seam between libnack and the vendored decoder.
 PNGs are generated by `tools/mkpng.py` across every colour type, bit depth and
@@ -303,12 +260,13 @@ implementations agree to within a few levels on every channel, which is worth
 more than either checked against itself. Corrupt and truncated input must not
 crash, and must not report a size it did not produce.
 
-`tests/cpp_smoke.cpp` covers the C++ header: that handles free themselves and
-free exactly once, that a moved-from handle does not double free, that views
-and owners are interchangeable where a helper takes one, and that the variant
-carries the arm the event type says it does. CI runs the whole suite a second
-time under AddressSanitizer, UndefinedBehaviorSanitizer and LeakSanitizer,
-which is what a RAII wrapper has to be held to.
+`tests/cpp_smoke.cpp` is a second, smaller pass focused on the public header
+itself: that handles free themselves and free exactly once, that a moved-from
+handle does not double free, that views and owners are interchangeable where a
+helper takes one, and that the variant carries the arm the event type says it
+does. CI runs the whole suite a second time under AddressSanitizer,
+UndefinedBehaviorSanitizer and LeakSanitizer, which is what a RAII wrapper has
+to be held to.
 
 `tests/win32_abi_check` compares the hand-rolled Win32 declarations with the
 SDK.

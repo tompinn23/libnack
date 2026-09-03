@@ -23,7 +23,7 @@
 #  endif
 #endif
 
-#include "nack/nack.h"
+#include "nack_core.h"
 #include "nack_window.h"
 
 /*

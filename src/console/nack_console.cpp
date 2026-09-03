@@ -17,12 +17,12 @@
  * NULL used to mean the root console, which made a null pointer
  * indistinguishable from a mistake: a console that failed to allocate drew to
  * the screen instead of failing, and the caller never found out. The root is
- * spelled nack_root() now, so NULL can mean what it looks like.
+ * spelled nack::root() now, so NULL can mean what it looks like.
  */
 struct nack_console *nack__console_resolve(struct nack_console *console)
 {
     if (!console) {
-        nack__error("no console given (the root console is nack_root())");
+        nack__error("no console given (the root console is nack::root())");
         return NULL;
     }
     return console;
@@ -60,7 +60,7 @@ uint32_t nack__utf8_next(const char **cursor)
 /* Lifetime                                                           */
 /* ------------------------------------------------------------------ */
 
-struct nack_console *nack_console_new(int columns, int rows)
+struct nack_console *nack__console_new(int columns, int rows)
 {
     if (columns < 1 || rows < 1) {
         nack__error("console size %dx%d is not positive", columns, rows);
@@ -71,19 +71,19 @@ struct nack_console *nack_console_new(int columns, int rows)
         console->cells.resize((size_t)columns * (size_t)rows);
         console->columns = columns;
         console->rows = rows;
-        nack_clear(console.get());
+        nack__console_clear(console.get());
         return console.release();
     }, (struct nack_console *)NULL);
 }
 
-void nack_console_free(struct nack_console *console)
+void nack__console_free(struct nack_console *console)
 {
     if (!console || console == nack__c.root)
         return;
     delete console;
 }
 
-void nack_console_size(const struct nack_console *console, int *columns, int *rows)
+void nack__console_size(const struct nack_console *console, int *columns, int *rows)
 {
     const struct nack_console *c =
         nack__console_resolve((struct nack_console *)console);
@@ -91,7 +91,7 @@ void nack_console_size(const struct nack_console *console, int *columns, int *ro
     if (rows)    *rows = c ? c->rows : 0;
 }
 
-bool nack_console_resize(struct nack_console *console, int columns, int rows)
+bool nack__console_resize(struct nack_console *console, int columns, int rows)
 {
     struct nack_console *c = nack__console_resolve(console);
 
@@ -133,7 +133,7 @@ static struct nack_cell *nack__cell_at(struct nack_console *c, int x, int y)
     return &c->cells[(size_t)y * (size_t)c->columns + (size_t)x];
 }
 
-void nack_clear_to(struct nack_console *console, struct nack_color fg,
+void nack__console_clear_to(struct nack_console *console, struct nack_color fg,
                    struct nack_color bg)
 {
     struct nack_console *c = nack__console_resolve(console);
@@ -150,14 +150,14 @@ void nack_clear_to(struct nack_console *console, struct nack_color fg,
     }
 }
 
-void nack_clear(struct nack_console *console)
+void nack__console_clear(struct nack_console *console)
 {
     struct nack_color fg = NACK_WHITE;
     struct nack_color bg = NACK_BLACK;
-    nack_clear_to(console, fg, bg);
+    nack__console_clear_to(console, fg, bg);
 }
 
-void nack_put(struct nack_console *console, int x, int y, uint32_t codepoint,
+void nack__console_put(struct nack_console *console, int x, int y, uint32_t codepoint,
               struct nack_color fg, struct nack_color bg)
 {
     struct nack_console *c = nack__console_resolve(console);
@@ -172,7 +172,7 @@ void nack_put(struct nack_console *console, int x, int y, uint32_t codepoint,
     cell->bg = bg;
 }
 
-void nack_put_tile(struct nack_console *console, int x, int y,
+void nack__console_put_tile(struct nack_console *console, int x, int y,
                    struct nack_tileset *tileset, int index,
                    struct nack_color tint, struct nack_color bg)
 {
@@ -190,7 +190,7 @@ void nack_put_tile(struct nack_console *console, int x, int y,
     cell->bg = bg;
 }
 
-void nack_set_glyph(struct nack_console *console, int x, int y,
+void nack__console_set_glyph(struct nack_console *console, int x, int y,
                     uint32_t codepoint)
 {
     struct nack_console *c = nack__console_resolve(console);
@@ -203,21 +203,21 @@ void nack_set_glyph(struct nack_console *console, int x, int y,
     cell->tileset = NULL;
 }
 
-void nack_set_fg(struct nack_console *console, int x, int y, struct nack_color fg)
+void nack__console_set_fg(struct nack_console *console, int x, int y, struct nack_color fg)
 {
     struct nack_console *c = nack__console_resolve(console);
     if (nack__in_bounds(c, x, y))
         nack__cell_at(c, x, y)->fg = fg;
 }
 
-void nack_set_bg(struct nack_console *console, int x, int y, struct nack_color bg)
+void nack__console_set_bg(struct nack_console *console, int x, int y, struct nack_color bg)
 {
     struct nack_console *c = nack__console_resolve(console);
     if (nack__in_bounds(c, x, y))
         nack__cell_at(c, x, y)->bg = bg;
 }
 
-struct nack_cell nack_get(const struct nack_console *console, int x, int y)
+struct nack_cell nack__console_get(const struct nack_console *console, int x, int y)
 {
     const struct nack_console *c =
         nack__console_resolve((struct nack_console *)console);
@@ -229,7 +229,7 @@ struct nack_cell nack_get(const struct nack_console *console, int x, int y)
     return c->cells[(size_t)y * (size_t)c->columns + (size_t)x];
 }
 
-int nack_print(struct nack_console *console, int x, int y, struct nack_color fg,
+int nack__console_print(struct nack_console *console, int x, int y, struct nack_color fg,
                struct nack_color bg, const char *utf8)
 {
     struct nack_console *c = nack__console_resolve(console);
@@ -247,53 +247,10 @@ int nack_print(struct nack_console *console, int x, int y, struct nack_color fg,
         }
         if (x + written >= c->columns)
             break;
-        nack_put(c, x + written, y, codepoint, fg, bg);
+        nack__console_put(c, x + written, y, codepoint, fg, bg);
         written++;
     }
     return written;
-}
-
-int nack_vprintf(struct nack_console *console, int x, int y,
-                 struct nack_color fg, struct nack_color bg, const char *fmt,
-                 va_list args)
-{
-    char stack_buffer[512];
-    va_list copy;
-    int needed;
-
-    va_copy(copy, args);
-    needed = vsnprintf(stack_buffer, sizeof stack_buffer, fmt, copy);
-    va_end(copy);
-
-    /*
-     * A negative return means the conversion failed part way through. What is
-     * in the buffer then is whatever was formatted before the failure - glibc
-     * terminates that, the standard does not promise even so much - so using
-     * it would draw a truncated line and report the count as a success.
-     */
-    if (needed < 0)
-        return 0;
-    if (needed < (int)sizeof stack_buffer)
-        return nack_print(console, x, y, fg, bg, stack_buffer);
-
-    return nack::guarded("cannot format the text", [&] {
-        std::string buffer((size_t)needed + 1, '\0');
-        vsnprintf(buffer.data(), buffer.size(), fmt, args);
-        buffer.resize((size_t)needed);
-        return nack_print(console, x, y, fg, bg, buffer.c_str());
-    }, 0);
-}
-
-int nack_printf(struct nack_console *console, int x, int y, struct nack_color fg,
-                struct nack_color bg, const char *fmt, ...)
-{
-    va_list args;
-    int result;
-
-    va_start(args, fmt);
-    result = nack_vprintf(console, x, y, fg, bg, fmt, args);
-    va_end(args);
-    return result;
 }
 
 /*
@@ -301,7 +258,7 @@ int nack_printf(struct nack_console *console, int x, int y, struct nack_color fg
  * of its own. Passing height 0 measures instead of drawing, which is how you
  * size a message log before deciding where to put it.
  */
-int nack_print_wrapped(struct nack_console *console, int x, int y, int width,
+int nack__console_print_wrapped(struct nack_console *console, int x, int y, int width,
                        int height, struct nack_color fg, struct nack_color bg,
                        const char *utf8)
 {
@@ -350,7 +307,7 @@ int nack_print_wrapped(struct nack_console *console, int x, int y, int width,
                 column = 0;
             }
             if (!measure && row < height)
-                nack_put(c, x + column, y + row, codepoint, fg, bg);
+                nack__console_put(c, x + column, y + row, codepoint, fg, bg);
             column++;
         }
         cursor = scan;
@@ -359,7 +316,7 @@ int nack_print_wrapped(struct nack_console *console, int x, int y, int width,
     return row + 1;
 }
 
-void nack_fill(struct nack_console *console, int x, int y, int width, int height,
+void nack__console_fill(struct nack_console *console, int x, int y, int width, int height,
                uint32_t codepoint, struct nack_color fg, struct nack_color bg)
 {
     struct nack_console *c = nack__console_resolve(console);
@@ -369,10 +326,10 @@ void nack_fill(struct nack_console *console, int x, int y, int width, int height
         return;
     for (iy = y; iy < y + height; ++iy)
         for (ix = x; ix < x + width; ++ix)
-            nack_put(c, ix, iy, codepoint, fg, bg);
+            nack__console_put(c, ix, iy, codepoint, fg, bg);
 }
 
-void nack_draw_box(struct nack_console *console, int x, int y, int width,
+void nack__console_draw_box(struct nack_console *console, int x, int y, int width,
                    int height, struct nack_color fg, struct nack_color bg,
                    const char *title)
 {
@@ -383,17 +340,17 @@ void nack_draw_box(struct nack_console *console, int x, int y, int width,
         return;
 
     for (i = 1; i < width - 1; ++i) {
-        nack_put(c, x + i, y, 0x2500, fg, bg);
-        nack_put(c, x + i, y + height - 1, 0x2500, fg, bg);
+        nack__console_put(c, x + i, y, 0x2500, fg, bg);
+        nack__console_put(c, x + i, y + height - 1, 0x2500, fg, bg);
     }
     for (i = 1; i < height - 1; ++i) {
-        nack_put(c, x, y + i, 0x2502, fg, bg);
-        nack_put(c, x + width - 1, y + i, 0x2502, fg, bg);
+        nack__console_put(c, x, y + i, 0x2502, fg, bg);
+        nack__console_put(c, x + width - 1, y + i, 0x2502, fg, bg);
     }
-    nack_put(c, x, y, 0x250C, fg, bg);
-    nack_put(c, x + width - 1, y, 0x2510, fg, bg);
-    nack_put(c, x, y + height - 1, 0x2514, fg, bg);
-    nack_put(c, x + width - 1, y + height - 1, 0x2518, fg, bg);
+    nack__console_put(c, x, y, 0x250C, fg, bg);
+    nack__console_put(c, x + width - 1, y, 0x2510, fg, bg);
+    nack__console_put(c, x, y + height - 1, 0x2514, fg, bg);
+    nack__console_put(c, x + width - 1, y + height - 1, 0x2518, fg, bg);
 
     if (title && *title) {
         /* Centred on the top edge, with a space either side of the text. */
@@ -409,9 +366,9 @@ void nack_draw_box(struct nack_console *console, int x, int y, int width,
             length = width - 4;
         if (length > 0) {
             start = x + (width - length - 2) / 2;
-            nack_put(c, start, y, ' ', fg, bg);
-            nack_print(c, start + 1, y, fg, bg, title);
-            nack_put(c, start + length + 1, y, ' ', fg, bg);
+            nack__console_put(c, start, y, ' ', fg, bg);
+            nack__console_print(c, start + 1, y, fg, bg, title);
+            nack__console_put(c, start + length + 1, y, ' ', fg, bg);
         }
     }
 }
@@ -438,7 +395,7 @@ static struct nack_color nack__blend(struct nack_color dst,
     return out;
 }
 
-void nack_blit(const struct nack_console *src, int src_x, int src_y, int width,
+void nack__console_blit(const struct nack_console *src, int src_x, int src_y, int width,
                int height, struct nack_console *dst, int dst_x, int dst_y,
                float fg_alpha, float bg_alpha)
 {

@@ -9,6 +9,9 @@
  */
 #include <nack/nack.hpp>
 
+#include "nack_hpp_test_hooks.h"
+#include "console/nack_console_internal.h"
+
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -44,16 +47,16 @@ int main()
 
     auto app = nack::app::try_create(config);
     if (!app) {
-        const char *why = ::nack_get_error();
-        if (!why)
+        std::string why(nack::last_error());
+        if (why.empty())
             why = "no reason given";
-        if (std::strncmp(why, "cannot open a window", 20) == 0 ||
-            std::strncmp(why, "cannot create a window", 22) == 0 ||
-            std::strstr(why, "cannot create an OpenGL 3.3 context") != nullptr) {
-            std::printf("skipping: %s\n", why);
+        if (why.rfind("cannot open a window", 0) == 0 ||
+            why.rfind("cannot create a window", 0) == 0 ||
+            why.find("cannot create an OpenGL 3.3 context") != std::string::npos) {
+            std::printf("skipping: %s\n", why.c_str());
             return 77;
         }
-        std::fprintf(stderr, "nack::app failed: %s\n", why);
+        std::fprintf(stderr, "nack::app failed: %s\n", why.c_str());
         return 1;
     }
     check(true, "app constructed");
@@ -174,7 +177,7 @@ int main()
 
     {
         /* Built by hand rather than waited for: input cannot be synthesised. */
-        ::nack_event raw{};
+        struct nack_event raw{};
         raw.type = NACK_EVENT_KEY_DOWN;
         raw.data.key.key = NACK_KEY_ESCAPE;
         raw.data.key.mods = NACK_MOD_SHIFT | NACK_MOD_CTRL;
@@ -187,7 +190,7 @@ int main()
               nack::holds(key->mods, nack::mod::shift | nack::mod::ctrl),
               "with its key, mods and repeat intact");
 
-        raw = ::nack_event{};
+        raw = nack_event{};
         raw.type = NACK_EVENT_TEXT;
         std::memcpy(raw.data.text.utf8, "\xE2\x94\x80", 4);   /* with the NUL */
         ev = nack::detail::to_event(raw);
@@ -195,14 +198,14 @@ int main()
         check(text && text->text() == "\xE2\x94\x80",
               "text arrives as a view into the event");
 
-        raw = ::nack_event{};
+        raw = nack_event{};
         raw.type = NACK_EVENT_BLUR;
         ev = nack::detail::to_event(raw);
         const auto *focus = std::get_if<nack::focus_event>(&*ev);
         check(focus && !focus->focused,
               "focus and blur collapse into one alternative");
 
-        raw = ::nack_event{};
+        raw = nack_event{};
         raw.type = NACK_EVENT_NONE;
         check(!nack::detail::to_event(raw).has_value(),
               "an empty event yields nothing");
@@ -217,8 +220,8 @@ int main()
     /* Tilesets are handles too. The built-in font is not one we own. */
     {
         auto size = nack::tileset::dimensions{ 0, 0, 0 };
-        ::nack_tileset_size(::nack_get_font(), &size.width, &size.height,
-                            &size.count);
+        nack__tileset_size(nack__app_get_font(), &size.width, &size.height,
+                          &size.count);
         check(size.width == 8 && size.count == 256,
               "the built-in font is 256 8x8 tiles");
     }

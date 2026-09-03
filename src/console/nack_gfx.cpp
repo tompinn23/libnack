@@ -111,7 +111,7 @@ bool nack__gfx_init(struct nack_window *window)
             return true;
         }
 
-        why = nack_get_error();
+        why = nack__app_get_error();
         nack__log("nack: the %s renderer is unavailable: %s", nack__gfx->name(),
                   why ? why : "no reason given");
         /*

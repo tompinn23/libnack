@@ -1,14 +1,16 @@
 #
-# {fmt}, header-only, for the C++ header's formatting.
+# {fmt}, header-only, for <nack/nack.hpp>'s formatting.
 #
 # Nothing is compiled here: FMT_HEADER_ONLY makes fmt entirely inline, so this
 # is an interface target that carries the include path and that macro to
-# whoever includes <nack/nack.hpp>. The C library does not use it and does not
-# link it - a C program still needs no C++ runtime at all.
+# whoever includes <nack/nack.hpp> - which now includes libnack itself, since
+# the library's own public header is the only one there is.
 #
 add_library(nack_fmt INTERFACE)
 
-target_include_directories(nack_fmt INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(nack_fmt INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/nack/third_party/fmt>)
 target_compile_definitions(nack_fmt INTERFACE FMT_HEADER_ONLY=1)
 
 #

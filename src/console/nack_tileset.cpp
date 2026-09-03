@@ -91,7 +91,7 @@ int nack__tileset_index_for(const struct nack_tileset *tileset,
     return -1;
 }
 
-bool nack_tileset_map(struct nack_tileset *tileset, uint32_t codepoint, int index)
+bool nack__tileset_map(struct nack_tileset *tileset, uint32_t codepoint, int index)
 {
     if (!tileset || index < 0 || index >= tileset->count)
         return nack__error("tile index %d is outside the tileset", index);
@@ -104,7 +104,7 @@ bool nack_tileset_map(struct nack_tileset *tileset, uint32_t codepoint, int inde
                          false);
 }
 
-bool nack_tileset_map_range(struct nack_tileset *tileset, uint32_t first,
+bool nack__tileset_map_range(struct nack_tileset *tileset, uint32_t first,
                             uint32_t last, int first_index)
 {
     uint32_t codepoint;
@@ -113,7 +113,7 @@ bool nack_tileset_map_range(struct nack_tileset *tileset, uint32_t first,
     if (!tileset || last < first)
         return nack__error("bad codepoint range");
     for (codepoint = first; codepoint <= last; ++codepoint, ++index) {
-        if (!nack_tileset_map(tileset, codepoint, index))
+        if (!nack__tileset_map(tileset, codepoint, index))
             return false;
     }
     return true;
@@ -223,7 +223,7 @@ struct nack_tileset *nack__tileset_from_rgba(uint8_t *rgba, int width, int heigh
             int index = i;
             if (layout == NACK_LAYOUT_TCOD)
                 index = (i % 16) * 16 + i / 16;
-            nack_tileset_map(tileset, nack__cp437[i], index);
+            nack__tileset_map(tileset, nack__cp437[i], index);
         }
         /* ASCII is also reachable by its own codepoint, which is the same
          * thing for CP437 but keeps plain ASCII working on odd sheets. */
@@ -235,7 +235,7 @@ struct nack_tileset *nack__tileset_from_rgba(uint8_t *rgba, int width, int heigh
         for (i = 0; i < 256 && i < tileset->count; ++i) {
             int index = (i % tileset->rows) * tileset->columns + (i / tileset->rows);
             if (index < tileset->count)
-                nack_tileset_map(tileset, nack__cp437[i], index);
+                nack__tileset_map(tileset, nack__cp437[i], index);
         }
     } else {
         for (i = 0; i < 256 && i < tileset->count; ++i)
@@ -296,7 +296,7 @@ struct nack_tileset *nack__tileset_builtin(void)
 /* Public entry points                                                */
 /* ------------------------------------------------------------------ */
 
-struct nack_tileset *nack_tileset_load_memory(const void *data, size_t size,
+struct nack_tileset *nack__tileset_load_memory(const void *data, size_t size,
                                               int tile_width, int tile_height,
                                               enum nack_tileset_layout layout)
 {
@@ -319,7 +319,7 @@ struct nack_tileset *nack_tileset_load_memory(const void *data, size_t size,
                                    tile_height, layout);
 }
 
-struct nack_tileset *nack_tileset_load(const char *path, int tile_width,
+struct nack_tileset *nack__tileset_load(const char *path, int tile_width,
                                        int tile_height,
                                        enum nack_tileset_layout layout)
 {
@@ -353,11 +353,11 @@ struct nack_tileset *nack_tileset_load(const char *path, int tile_width,
         return NULL;
     }
 
-    return nack_tileset_load_memory(data.get(), (size_t)size, tile_width,
+    return nack__tileset_load_memory(data.get(), (size_t)size, tile_width,
                                     tile_height, layout);
 }
 
-void nack_tileset_free(struct nack_tileset *tileset)
+void nack__tileset_free(struct nack_tileset *tileset)
 {
     if (!tileset || tileset == nack__c.builtin_font)
         return;
@@ -365,7 +365,7 @@ void nack_tileset_free(struct nack_tileset *tileset)
     nack__tileset_destroy(tileset);
 }
 
-void nack_tileset_size(const struct nack_tileset *tileset, int *tile_width,
+void nack__tileset_size(const struct nack_tileset *tileset, int *tile_width,
                        int *tile_height, int *count)
 {
     if (tile_width)  *tile_width = tileset ? tileset->tile_width : 0;
@@ -373,13 +373,13 @@ void nack_tileset_size(const struct nack_tileset *tileset, int *tile_width,
     if (count)       *count = tileset ? tileset->count : 0;
 }
 
-void nack_set_font(struct nack_tileset *tileset)
+void nack__app_set_font(struct nack_tileset *tileset)
 {
     if (tileset)
         nack__c.font = tileset;
 }
 
-struct nack_tileset *nack_get_font(void)
+struct nack_tileset *nack__app_get_font(void)
 {
     return nack__c.font;
 }

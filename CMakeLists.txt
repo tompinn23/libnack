@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.21)
 
 #
 # C is still here for two reasons: the vendored stb_image and the code
-# wayland-scanner generates are C, and the tests and examples are C on purpose
-# - they are what proves the C API still works now that the library behind it
-# is C++.
+# wayland-scanner generates are C, and a couple of tests (image_test.c, the
+# Win32 ABI check) are C on purpose - the rest of the library, its public
+# header, and its tests and examples are C++.
 #
 project(libnack
     VERSION 0.2.0
@@ -15,6 +15,10 @@ project(libnack
 if(APPLE)
     enable_language(OBJCXX)
 endif()
+
+# Needed early: third_party/fmt's install interface include path (below)
+# references CMAKE_INSTALL_INCLUDEDIR before the Install section runs.
+include(GNUInstallDirs)
 
 # --------------------------------------------------------------------------
 # Options
@@ -46,6 +50,7 @@ cmake_dependent_option(NACK_XCB_XLIB_FALLBACK
 set(NACK_SOURCES
     src/nack.cpp
     src/nack_keys.cpp
+    src/nack_hpp_impl.cpp
     src/common/nack_proc_cache.cpp
     src/console/nack_api.cpp
     src/console/nack_console.cpp
@@ -71,9 +76,10 @@ endif()
 add_subdirectory(third_party/stb)
 
 #
-# {fmt}, for the C++ header's formatting. Header-only and interface-only: it
-# is compiled into whoever includes <nack/nack.hpp>, never into libnack, so a
-# C program still links no C++ runtime.
+# {fmt}, for <nack/nack.hpp>'s formatting. Header-only and interface-only:
+# nothing of fmt's own is compiled, but libnack links against it now that its
+# public header is the library's own implementation rather than a wrapper a
+# caller may or may not include.
 #
 add_subdirectory(third_party/fmt)
 
@@ -213,7 +219,7 @@ target_include_directories(nack_objects
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_BINARY_DIR}
             ${NACK_VENDORED_INCLUDES})
-target_link_libraries(nack_objects PRIVATE ${NACK_LIBRARIES})
+target_link_libraries(nack_objects PUBLIC nack_fmt PRIVATE ${NACK_LIBRARIES})
 target_compile_definitions(nack_objects PRIVATE ${NACK_DEFINITIONS})
 
 set_target_properties(nack_objects PROPERTIES
@@ -277,7 +283,7 @@ target_include_directories(nack
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
-target_link_libraries(nack PUBLIC ${NACK_LIBRARIES})
+target_link_libraries(nack PUBLIC nack_fmt ${NACK_LIBRARIES})
 
 set_target_properties(nack PROPERTIES
     VERSION ${PROJECT_VERSION}
@@ -297,16 +303,16 @@ if(PROJECT_IS_TOP_LEVEL)
     # Links the objects rather than the library: the test reads the
     # framebuffer back through an internal hook to check that frames actually
     # rendered, and a shared build would have hidden that symbol.
-    add_executable(nack_smoke tests/console_smoke.c
+    add_executable(nack_smoke tests/console_smoke.cpp
         $<TARGET_OBJECTS:nack_objects> ${NACK_VENDORED_OBJECTS})
-    target_link_libraries(nack_smoke PRIVATE ${NACK_LIBRARIES})
+    target_link_libraries(nack_smoke PRIVATE ${NACK_LIBRARIES} nack_fmt)
     target_include_directories(nack_smoke PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
         ${CMAKE_CURRENT_BINARY_DIR})
     set_target_properties(nack_smoke PROPERTIES
-        C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
+        CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
     #
     # X11 selections only take the interesting path when two processes are
     # involved: reading a selection this process owns is served from its own
@@ -340,9 +346,10 @@ if(PROJECT_IS_TOP_LEVEL)
         SKIP_RETURN_CODE 77)
 
     #
-    # The C++ header is a wrapper over the C API, so it is only worth anything
-    # if it compiles and runs. libnack is C++ itself now, so a C++ compiler is
-    # no longer optional and there is nothing to check for.
+    # A second, smaller smoke test that only exercises the public
+    # <nack/nack.hpp> surface (no internal test hooks), so a regression in the
+    # public API itself is caught even if console_smoke.cpp's deeper,
+    # internals-reaching checks would have papered over it.
     #
     add_executable(nack_cpp_smoke tests/cpp_smoke.cpp
         $<TARGET_OBJECTS:nack_objects> ${NACK_VENDORED_OBJECTS})
@@ -458,14 +465,16 @@ endif()
 # Install
 # --------------------------------------------------------------------------
 
-include(GNUInstallDirs)
-
-install(TARGETS nack
+install(TARGETS nack nack_fmt
     EXPORT nackTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(DIRECTORY include/nack DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+# <nack/nack.hpp> includes fmt directly, so a consumer of the installed
+# library needs fmt's headers too, not just nack's own.
+install(DIRECTORY third_party/fmt/fmt
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nack/third_party/fmt)
 install(EXPORT nackTargets
     FILE nackTargets.cmake
     NAMESPACE nack::
