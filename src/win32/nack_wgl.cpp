@@ -315,7 +315,7 @@ bool nack__wgl_choose_pixel_format(struct nack_window *w, HDC hdc, int *out_form
 /* ------------------------------------------------------------------ */
 
 struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const struct nack__gl_desc *desc,
-                                          const struct nack_backend_vt *vt)
+                                          nack_backend_vt *vt)
 {
     if (!nack__wgl.initialized) {
         nack__fail(NACK_ERROR_UNSUPPORTED, "WGL is not available");

@@ -1099,57 +1099,143 @@ static void nack__cocoa_shutdown(void)
 
 /* ------------------------------------------------------------------ */
 
-static const struct nack_backend_vt nack__cocoa_vt_template = {
-    .name = "cocoa",
-    .id = NACK_BACKEND_COCOA,
-    .init = nack__cocoa_init,
-    .shutdown = nack__cocoa_shutdown,
-    .window_create = nack__cocoa_window_create,
-    .window_destroy = nack__cocoa_window_destroy,
-    .window_show = nack__cocoa_window_show,
-    .window_focus = nack__cocoa_window_focus,
-    .window_set_title = nack__cocoa_window_set_title,
-    .window_set_size = nack__cocoa_window_set_size,
-    .window_set_position = nack__cocoa_window_set_position,
-    .window_apply_size_hints = nack__cocoa_apply_size_hints,
-    .window_set_fullscreen = nack__cocoa_window_set_fullscreen,
-    .window_minimize = nack__cocoa_window_minimize,
-    .window_maximize = nack__cocoa_window_maximize,
-    .window_restore = nack__cocoa_window_restore,
-    .window_request_attention = nack__cocoa_window_request_attention,
-    .window_request_redraw = nack__cocoa_window_request_redraw,
-    .window_set_cursor_shape = nack__cocoa_set_cursor_shape,
-    .window_set_cursor_mode = nack__cocoa_set_cursor_mode,
-    .window_get_native = nack__cocoa_window_get_native,
-    .pump_events = nack__cocoa_pump_events,
-    .wakeup = nack__cocoa_wakeup,
-    .gl_create = NULL,          /* patched in by nack__backend_cocoa */
-    .gl_destroy = nack__nsgl_destroy_context,
-    .gl_make_current = nack__nsgl_make_current,
-    .gl_swap_buffers = nack__nsgl_swap_buffers,
-    .gl_set_swap_interval = nack__nsgl_set_swap_interval,
-    .gl_get_proc_address = nack__nsgl_get_proc_address,
-    .clipboard_set = nack__cocoa_clipboard_set,
-    .clipboard_get = nack__cocoa_clipboard_get,
-    .primary_set = NULL,   /* macOS has no primary selection */
-    .primary_get = NULL,
+namespace {
+
+class cocoa_backend final : public nack_backend_vt {
+public:
+    const char *name() const override { return "cocoa"; }
+    enum nack_backend id() const override { return NACK_BACKEND_COCOA; }
+
+    bool init(const struct nack_win_init_desc *desc) override
+    {
+        return nack__cocoa_init(desc);
+    }
+    void shutdown() override
+    {
+        nack__cocoa_shutdown();
+    }
+    bool window_create(struct nack_window *w, const struct nack_window_desc *desc) override
+    {
+        return nack__cocoa_window_create(w, desc);
+    }
+    void window_destroy(struct nack_window *w) override
+    {
+        nack__cocoa_window_destroy(w);
+    }
+    void window_show(struct nack_window *w, bool show) override
+    {
+        nack__cocoa_window_show(w, show);
+    }
+    void window_set_title(struct nack_window *w, const char *title) override
+    {
+        nack__cocoa_window_set_title(w, title);
+    }
+    void window_set_size(struct nack_window *w, int width, int height) override
+    {
+        nack__cocoa_window_set_size(w, width, height);
+    }
+    void window_apply_size_hints(struct nack_window *w) override
+    {
+        nack__cocoa_apply_size_hints(w);
+    }
+    void window_set_fullscreen(struct nack_window *w, bool fullscreen) override
+    {
+        nack__cocoa_window_set_fullscreen(w, fullscreen);
+    }
+    void window_minimize(struct nack_window *w) override
+    {
+        nack__cocoa_window_minimize(w);
+    }
+    void window_maximize(struct nack_window *w) override
+    {
+        nack__cocoa_window_maximize(w);
+    }
+    void window_restore(struct nack_window *w) override
+    {
+        nack__cocoa_window_restore(w);
+    }
+    void window_request_redraw(struct nack_window *w) override
+    {
+        nack__cocoa_window_request_redraw(w);
+    }
+    void window_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape) override
+    {
+        nack__cocoa_set_cursor_shape(w, shape);
+    }
+    void window_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode) override
+    {
+        nack__cocoa_set_cursor_mode(w, mode);
+    }
+    void window_get_native(const struct nack_window *w, struct nack_native_window *out) override
+    {
+        nack__cocoa_window_get_native(w, out);
+    }
+    void window_focus(struct nack_window *w) override
+    {
+        nack__cocoa_window_focus(w);
+    }
+    void window_set_position(struct nack_window *w, int x, int y) override
+    {
+        nack__cocoa_window_set_position(w, x, y);
+    }
+    void window_request_attention(struct nack_window *w) override
+    {
+        nack__cocoa_window_request_attention(w);
+    }
+    void pump_events(double timeout) override
+    {
+        nack__cocoa_pump_events(timeout);
+    }
+    void wakeup() override
+    {
+        nack__cocoa_wakeup();
+    }
+    struct nack_gl_context *gl_create(struct nack_window *w,
+                                      const struct nack__gl_desc *desc) override
+    {
+        return nack__nsgl_create_context(w, desc, this);
+    }
+    void gl_destroy(struct nack_gl_context *ctx) override
+    {
+        nack__nsgl_destroy_context(ctx);
+    }
+    bool gl_make_current(struct nack_window *w, struct nack_gl_context *ctx) override
+    {
+        return nack__nsgl_make_current(w, ctx);
+    }
+    void gl_swap_buffers(struct nack_window *w) override
+    {
+        nack__nsgl_swap_buffers(w);
+    }
+    void gl_set_swap_interval(int interval) override
+    {
+        nack__nsgl_set_swap_interval(interval);
+    }
+    void *gl_get_proc_address(const char *name) override
+    {
+        return nack__nsgl_get_proc_address(name);
+    }
+    bool clipboard_set(const char *utf8) override
+    {
+        return nack__cocoa_clipboard_set(utf8);
+    }
+    const char *clipboard_get() override
+    {
+        return nack__cocoa_clipboard_get();
+    }
 };
+
+cocoa_backend nack__cocoa_backend_instance;
+
+}   /* namespace */
+
 
 static struct nack_gl_context *nack__cocoa_gl_create(struct nack_window *w,
                                               const struct nack__gl_desc *desc);
 
-const struct nack_backend_vt *nack__backend_cocoa(void)
+nack_backend_vt *nack__backend_cocoa(void)
 {
-    /* gl_create needs the vtable's own address, so it is patched in on first
-     * use rather than written as a static initialiser. */
-    static struct nack_backend_vt vt;
-    static bool ready = false;
-    if (!ready) {
-        vt = nack__cocoa_vt_template;
-        vt.gl_create = nack__cocoa_gl_create;
-        ready = true;
-    }
-    return &vt;
+    return &nack__cocoa_backend_instance;
 }
 
 static struct nack_gl_context *nack__cocoa_gl_create(struct nack_window *w,

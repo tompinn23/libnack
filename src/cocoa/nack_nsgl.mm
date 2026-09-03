@@ -29,7 +29,7 @@ struct nack_nsgl_context {
 static void *nack__nsgl_framework;
 
 struct nack_gl_context *nack__nsgl_create_context(struct nack_window *w, const struct nack__gl_desc *desc,
-                                           const struct nack_backend_vt *vt)
+                                           nack_backend_vt *vt)
 {
     @autoreleasepool {
         if (desc->profile == NACK__GL_PROFILE_ES) {

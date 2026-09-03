@@ -424,7 +424,7 @@ const char *nack__win_backend_name(enum nack_backend backend)
     }
 }
 
-static const struct nack_backend_vt *nack__select_backend(enum nack_backend preferred)
+static nack_backend_vt *nack__select_backend(enum nack_backend preferred)
 {
 #if defined(NACK_PLATFORM_WIN32)
     (void)preferred;
@@ -468,14 +468,14 @@ static const struct nack_backend_vt *nack__select_backend(enum nack_backend pref
 static bool nack__try_init_backends(const struct nack_win_init_desc *desc)
 {
 #if defined(NACK_PLATFORM_UNIX)
-    const struct nack_backend_vt *order[2] = { NULL, NULL };
+    nack_backend_vt *order[2] = { NULL, NULL };
     size_t n = 0;
-    const struct nack_backend_vt *first = nack__select_backend(desc->backend);
+    nack_backend_vt *first = nack__select_backend(desc->backend);
     if (!first)
         return nack__fail(NACK_ERROR_NO_BACKEND, "no display backend compiled in");
     order[n++] = first;
 #if defined(NACK_HAS_WAYLAND) && defined(NACK_HAS_X11)
-    order[n++] = (first->id == NACK_BACKEND_WAYLAND) ? nack__backend_x11()
+    order[n++] = (first->id() == NACK_BACKEND_WAYLAND) ? nack__backend_x11()
                                                      : nack__backend_wayland();
 #endif
     for (size_t i = 0; i < n; ++i) {
@@ -484,14 +484,14 @@ static bool nack__try_init_backends(const struct nack_win_init_desc *desc)
         nack__g.vt = order[i];
         if (order[i]->init(desc))
             return true;
-        nack__log("nack: backend '%s' unavailable: %s", order[i]->name,
+        nack__log("nack: backend '%s' unavailable: %s", order[i]->name(),
                   nack__g.error_message);
         nack__g.vt = NULL;
     }
     return nack__fail(NACK_ERROR_NO_BACKEND,
                       "no usable display backend (tried wayland/x11)");
 #else
-    const struct nack_backend_vt *vt = nack__select_backend(desc->backend);
+    nack_backend_vt *vt = nack__select_backend(desc->backend);
     if (!vt)
         return nack__fail(NACK_ERROR_NO_BACKEND, "no display backend compiled in");
     nack__g.vt = vt;
@@ -524,7 +524,7 @@ bool nack__win_init(const struct nack_win_init_desc *desc)
             return false;
         }
         nack__g.initialized = true;
-        nack__log("nack: using %s backend", nack__g.vt->name);
+        nack__log("nack: using %s backend", nack__g.vt->name());
         return true;
     }, false);
 }
@@ -537,7 +537,7 @@ void nack__win_shutdown(void)
     while (!nack__g.windows.empty())
         nack_window_destroy(nack__g.windows.back());
 
-    if (nack__g.vt && nack__g.vt->shutdown)
+    if (nack__g.vt)
         nack__g.vt->shutdown();
 
     /* Entry points belong to the driver we are dropping. */
@@ -554,7 +554,7 @@ bool nack__win_is_initialized(void)
 
 enum nack_backend nack__win_get_backend(void)
 {
-    return nack__g.vt ? nack__g.vt->id : NACK_BACKEND_NONE;
+    return nack__g.vt ? nack__g.vt->id() : NACK_BACKEND_NONE;
 }
 
 /* ------------------------------------------------------------------ */
@@ -719,31 +719,31 @@ void nack_window_hide(struct nack_window *window)
 
 void nack_window_focus(struct nack_window *window)
 {
-    if (window && window->vt->window_focus)
+    if (window)
         window->vt->window_focus(window);
 }
 
 void nack_window_minimize(struct nack_window *window)
 {
-    if (window && window->vt->window_minimize)
+    if (window)
         window->vt->window_minimize(window);
 }
 
 void nack_window_maximize(struct nack_window *window)
 {
-    if (window && window->vt->window_maximize)
+    if (window)
         window->vt->window_maximize(window);
 }
 
 void nack_window_restore(struct nack_window *window)
 {
-    if (window && window->vt->window_restore)
+    if (window)
         window->vt->window_restore(window);
 }
 
 void nack_window_request_attention(struct nack_window *window)
 {
-    if (window && window->vt->window_request_attention)
+    if (window)
         window->vt->window_request_attention(window);
 }
 
@@ -785,7 +785,7 @@ void nack_window_get_position(const struct nack_window *window, int *x, int *y)
 
 void nack_window_set_position(struct nack_window *window, int x, int y)
 {
-    if (window && window->vt->window_set_position)
+    if (window)
         window->vt->window_set_position(window, x, y);
 }
 
@@ -802,8 +802,7 @@ void nack_window_set_size_limits(struct nack_window *window, int min_width, int 
     window->min_height = min_height > 0 ? min_height : 0;
     window->max_width = max_width > 0 ? max_width : 0;
     window->max_height = max_height > 0 ? max_height : 0;
-    if (window->vt->window_apply_size_hints)
-        window->vt->window_apply_size_hints(window);
+            window->vt->window_apply_size_hints(window);
 }
 
 void nack_window_set_size_increments(struct nack_window *window, int dw, int dh)
@@ -811,13 +810,12 @@ void nack_window_set_size_increments(struct nack_window *window, int dw, int dh)
     if (!window) return;
     window->inc_width = dw > 0 ? dw : 0;
     window->inc_height = dh > 0 ? dh : 0;
-    if (window->vt->window_apply_size_hints)
-        window->vt->window_apply_size_hints(window);
+            window->vt->window_apply_size_hints(window);
 }
 
 void nack_window_set_fullscreen(struct nack_window *window, bool fullscreen)
 {
-    if (window && window->vt->window_set_fullscreen)
+    if (window)
         window->vt->window_set_fullscreen(window, fullscreen);
 }
 
@@ -850,8 +848,7 @@ void nack_window_set_cursor_shape(struct nack_window *window,
     if (!window || shape < 0 || shape >= NACK_CURSOR_SHAPE_COUNT)
         return;
     window->cursor_shape = shape;
-    if (window->vt->window_set_cursor_shape)
-        window->vt->window_set_cursor_shape(window, shape);
+            window->vt->window_set_cursor_shape(window, shape);
 }
 
 void nack_window_set_cursor_mode(struct nack_window *window, enum nack_cursor_mode mode)
@@ -859,8 +856,7 @@ void nack_window_set_cursor_mode(struct nack_window *window, enum nack_cursor_mo
     if (!window)
         return;
     window->cursor_mode = mode;
-    if (window->vt->window_set_cursor_mode)
-        window->vt->window_set_cursor_mode(window, mode);
+            window->vt->window_set_cursor_mode(window, mode);
 }
 
 enum nack_cursor_mode nack_window_get_cursor_mode(const struct nack_window *window)
@@ -870,12 +866,8 @@ enum nack_cursor_mode nack_window_get_cursor_mode(const struct nack_window *wind
 
 void nack_window_request_redraw(struct nack_window *window)
 {
-    if (!window)
-        return;
-    if (window->vt->window_request_redraw)
+    if (window)
         window->vt->window_request_redraw(window);
-    else
-        nack__emit_simple(window, NACK_WIN_EVENT_WINDOW_EXPOSE);
 }
 
 void nack_window_get_native(const struct nack_window *window,
@@ -886,9 +878,8 @@ void nack_window_get_native(const struct nack_window *window,
     memset(out, 0, sizeof *out);
     if (!window)
         return;
-    out->backend = window->vt->id;
-    if (window->vt->window_get_native)
-        window->vt->window_get_native(window, out);
+    out->backend = window->vt->id();
+            window->vt->window_get_native(window, out);
 }
 
 /* ------------------------------------------------------------------ */
@@ -944,7 +935,7 @@ bool nack__win_wait_event_timeout(struct nack_win_event *event, double timeout)
 
 void nack__win_wakeup(void)
 {
-    if (nack__g.initialized && nack__g.vt->wakeup)
+    if (nack__g.initialized)
         nack__g.vt->wakeup();
 }
 
@@ -989,10 +980,6 @@ struct nack_gl_context *nack__gl_context_create(struct nack_window *window,
     nack__gl_desc_defaults(&d);
     if (desc)
         d = *desc;
-    if (!nack__g.vt->gl_create) {
-        nack__fail(NACK_ERROR_UNSUPPORTED, "backend has no OpenGL support");
-        return NULL;
-    }
     return nack__g.vt->gl_create(window, &d);
 }
 
@@ -1010,8 +997,6 @@ void nack__gl_context_destroy(struct nack_gl_context *context)
 bool nack__gl_make_current(struct nack_window *window, struct nack_gl_context *context)
 {
     NACK_REQUIRE_INIT_RET(false);
-    if (!nack__g.vt->gl_make_current)
-        return nack__fail(NACK_ERROR_UNSUPPORTED, "backend has no OpenGL support");
     if (!nack__g.vt->gl_make_current(window, context))
         return false;
     nack__g.current_window = context ? window : NULL;
@@ -1021,7 +1006,7 @@ bool nack__gl_make_current(struct nack_window *window, struct nack_gl_context *c
 
 void nack__gl_swap_buffers(struct nack_window *window)
 {
-    if (window && nack__g.vt && nack__g.vt->gl_swap_buffers)
+    if (window && nack__g.vt)
         nack__g.vt->gl_swap_buffers(window);
 }
 
@@ -1030,15 +1015,17 @@ void nack__gl_set_swap_interval(int interval)
     if (!nack__g.initialized)
         return;
     nack__g.swap_interval = interval;
-    if (nack__g.vt->gl_set_swap_interval)
-        nack__g.vt->gl_set_swap_interval(interval);
+            nack__g.vt->gl_set_swap_interval(interval);
 }
 
 void *nack__gl_get_proc_address(const char *name)
 {
-    if (!nack__g.initialized || !name || !nack__g.vt->gl_get_proc_address)
+    if (!nack__g.initialized || !name)
         return NULL;
-    return nack__proc_cache_get(name, nack__g.vt->gl_get_proc_address);
+    /* The cache takes a plain function; a capture-less lambda is one. */
+    return nack__proc_cache_get(name, [](const char *symbol) {
+        return nack__g.vt->gl_get_proc_address(symbol);
+    });
 }
 
 /* ------------------------------------------------------------------ */
@@ -1050,29 +1037,26 @@ bool nack__win_clipboard_set(const char *utf8)
     NACK_REQUIRE_INIT_RET(false);
     if (!utf8)
         return nack__fail(NACK_ERROR_INVALID_ARGUMENT, "no text to set");
-    if (!nack__g.vt->clipboard_set)
-        return nack__fail(NACK_ERROR_UNSUPPORTED,
-                          "this backend has no clipboard");
     return nack__g.vt->clipboard_set(utf8);
 }
 
 const char *nack__win_clipboard_get(void)
 {
-    if (!nack__g.initialized || !nack__g.vt->clipboard_get)
+    if (!nack__g.initialized)
         return NULL;
     return nack__g.vt->clipboard_get();
 }
 
 bool nack__win_primary_set(const char *utf8)
 {
-    if (!nack__g.initialized || !utf8 || !nack__g.vt->primary_set)
+    if (!nack__g.initialized || !utf8)
         return false;
     return nack__g.vt->primary_set(utf8);
 }
 
 const char *nack__win_primary_get(void)
 {
-    if (!nack__g.initialized || !nack__g.vt->primary_get)
+    if (!nack__g.initialized)
         return NULL;
     return nack__g.vt->primary_get();
 }

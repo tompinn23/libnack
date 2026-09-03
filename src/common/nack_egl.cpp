@@ -186,7 +186,7 @@ bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack__
 }
 
 struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const struct nack__gl_desc *desc,
-                                          EGLConfig config, const struct nack_backend_vt *vt)
+                                          EGLConfig config, nack_backend_vt *vt)
 {
     EGLenum api = (desc->profile == NACK__GL_PROFILE_ES) ? EGL_OPENGL_ES_API
                                                         : EGL_OPENGL_API;

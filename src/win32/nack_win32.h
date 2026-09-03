@@ -72,7 +72,7 @@ bool  nack__wgl_init(void);
 void  nack__wgl_terminate(void);
 bool  nack__wgl_choose_pixel_format(struct nack_window *w, HDC hdc, int *out_format);
 struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const struct nack__gl_desc *desc,
-                                          const struct nack_backend_vt *vt);
+                                          nack_backend_vt *vt);
 void  nack__wgl_destroy_context(struct nack_gl_context *ctx);
 bool  nack__wgl_make_current(struct nack_window *w, struct nack_gl_context *ctx);
 void  nack__wgl_swap_buffers(struct nack_window *w);

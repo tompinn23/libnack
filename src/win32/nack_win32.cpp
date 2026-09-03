@@ -1218,41 +1218,136 @@ static void nack__win32_shutdown(void)
 
 /* ------------------------------------------------------------------ */
 
-static const struct nack_backend_vt nack__win32_vt = {
-    .name = "win32",
-    .id = NACK_BACKEND_WIN32,
-    .init = nack__win32_init,
-    .shutdown = nack__win32_shutdown,
-    .window_create = nack__win32_window_create,
-    .window_destroy = nack__win32_window_destroy,
-    .window_show = nack__win32_window_show,
-    .window_focus = nack__win32_window_focus,
-    .window_set_title = nack__win32_window_set_title,
-    .window_set_size = nack__win32_window_set_size,
-    .window_set_position = nack__win32_window_set_position,
-    .window_apply_size_hints = nack__win32_apply_size_hints,
-    .window_set_fullscreen = nack__win32_window_set_fullscreen,
-    .window_minimize = nack__win32_window_minimize,
-    .window_maximize = nack__win32_window_maximize,
-    .window_restore = nack__win32_window_restore,
-    .window_request_attention = nack__win32_window_request_attention,
-    .window_request_redraw = nack__win32_window_request_redraw,
-    .window_set_cursor_shape = nack__win32_set_cursor_shape,
-    .window_set_cursor_mode = nack__win32_set_cursor_mode,
-    .window_get_native = nack__win32_window_get_native,
-    .pump_events = nack__win32_pump_events,
-    .wakeup = nack__win32_wakeup,
-    .gl_create = NULL,          /* filled in below */
-    .gl_destroy = nack__wgl_destroy_context,
-    .gl_make_current = nack__wgl_make_current,
-    .gl_swap_buffers = nack__wgl_swap_buffers,
-    .gl_set_swap_interval = nack__wgl_set_swap_interval,
-    .gl_get_proc_address = nack__wgl_get_proc_address,
-    .clipboard_set = nack__win32_clipboard_set,
-    .clipboard_get = nack__win32_clipboard_get,
-    .primary_set = NULL,        /* Windows has no primary selection */
-    .primary_get = NULL,
+namespace {
+
+class win32_backend final : public nack_backend_vt {
+public:
+    const char *name() const override { return "win32"; }
+    enum nack_backend id() const override { return NACK_BACKEND_WIN32; }
+
+    bool init(const struct nack_win_init_desc *desc) override
+    {
+        return nack__win32_init(desc);
+    }
+    void shutdown() override
+    {
+        nack__win32_shutdown();
+    }
+    bool window_create(struct nack_window *w, const struct nack_window_desc *desc) override
+    {
+        return nack__win32_window_create(w, desc);
+    }
+    void window_destroy(struct nack_window *w) override
+    {
+        nack__win32_window_destroy(w);
+    }
+    void window_show(struct nack_window *w, bool show) override
+    {
+        nack__win32_window_show(w, show);
+    }
+    void window_set_title(struct nack_window *w, const char *title) override
+    {
+        nack__win32_window_set_title(w, title);
+    }
+    void window_set_size(struct nack_window *w, int width, int height) override
+    {
+        nack__win32_window_set_size(w, width, height);
+    }
+    void window_apply_size_hints(struct nack_window *w) override
+    {
+        nack__win32_apply_size_hints(w);
+    }
+    void window_set_fullscreen(struct nack_window *w, bool fullscreen) override
+    {
+        nack__win32_window_set_fullscreen(w, fullscreen);
+    }
+    void window_minimize(struct nack_window *w) override
+    {
+        nack__win32_window_minimize(w);
+    }
+    void window_maximize(struct nack_window *w) override
+    {
+        nack__win32_window_maximize(w);
+    }
+    void window_restore(struct nack_window *w) override
+    {
+        nack__win32_window_restore(w);
+    }
+    void window_request_redraw(struct nack_window *w) override
+    {
+        nack__win32_window_request_redraw(w);
+    }
+    void window_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape) override
+    {
+        nack__win32_set_cursor_shape(w, shape);
+    }
+    void window_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode) override
+    {
+        nack__win32_set_cursor_mode(w, mode);
+    }
+    void window_get_native(const struct nack_window *w, struct nack_native_window *out) override
+    {
+        nack__win32_window_get_native(w, out);
+    }
+    void window_focus(struct nack_window *w) override
+    {
+        nack__win32_window_focus(w);
+    }
+    void window_set_position(struct nack_window *w, int x, int y) override
+    {
+        nack__win32_window_set_position(w, x, y);
+    }
+    void window_request_attention(struct nack_window *w) override
+    {
+        nack__win32_window_request_attention(w);
+    }
+    void pump_events(double timeout) override
+    {
+        nack__win32_pump_events(timeout);
+    }
+    void wakeup() override
+    {
+        nack__win32_wakeup();
+    }
+    struct nack_gl_context *gl_create(struct nack_window *w,
+                                      const struct nack__gl_desc *desc) override
+    {
+        return nack__wgl_create_context(w, desc, this);
+    }
+    void gl_destroy(struct nack_gl_context *ctx) override
+    {
+        nack__wgl_destroy_context(ctx);
+    }
+    bool gl_make_current(struct nack_window *w, struct nack_gl_context *ctx) override
+    {
+        return nack__wgl_make_current(w, ctx);
+    }
+    void gl_swap_buffers(struct nack_window *w) override
+    {
+        nack__wgl_swap_buffers(w);
+    }
+    void gl_set_swap_interval(int interval) override
+    {
+        nack__wgl_set_swap_interval(interval);
+    }
+    void *gl_get_proc_address(const char *name) override
+    {
+        return nack__wgl_get_proc_address(name);
+    }
+    bool clipboard_set(const char *utf8) override
+    {
+        return nack__win32_clipboard_set(utf8);
+    }
+    const char *clipboard_get() override
+    {
+        return nack__win32_clipboard_get();
+    }
 };
+
+win32_backend nack__win32_backend_instance;
+
+}   /* namespace */
+
 
 static struct nack_gl_context *nack__win32_gl_create(struct nack_window *w,
                                               const struct nack__gl_desc *desc)
@@ -1260,16 +1355,7 @@ static struct nack_gl_context *nack__win32_gl_create(struct nack_window *w,
     return nack__wgl_create_context(w, desc, &nack__win32_vt);
 }
 
-const struct nack_backend_vt *nack__backend_win32(void)
+nack_backend_vt *nack__backend_win32(void)
 {
-    /* gl_create needs the vtable's address, so it is patched in on first use
-     * rather than written as a static initialiser. */
-    static struct nack_backend_vt vt;
-    static bool ready = false;
-    if (!ready) {
-        vt = nack__win32_vt;
-        vt.gl_create = nack__win32_gl_create;
-        ready = true;
-    }
-    return &vt;
+    return &nack__win32_backend_instance;
 }

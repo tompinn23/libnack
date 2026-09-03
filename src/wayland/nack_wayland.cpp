@@ -9,7 +9,6 @@
 
 struct nack_wayland_state nack__wl;
 
-static const struct nack_backend_vt *nack__wl_vt_ptr(void);
 
 /* ------------------------------------------------------------------ */
 /* Outputs                                                            */
@@ -758,7 +757,8 @@ static bool nack__wl_ensure_surface(struct nack_window *w, EGLConfig config)
     return ww->egl_surface != EGL_NO_SURFACE;
 }
 
-static struct nack_gl_context *nack__wl_gl_create(struct nack_window *w,
+static struct nack_gl_context *nack__wl_gl_create(nack_backend_vt *vt,
+                                                 struct nack_window *w,
                                                   const struct nack__gl_desc *desc)
 {
     if (!nack__egl.initialized) {
@@ -773,7 +773,7 @@ static struct nack_gl_context *nack__wl_gl_create(struct nack_window *w,
     }
     if (!nack__wl_ensure_surface(w, ww->config))
         return NULL;
-    return nack__egl_create_context(w, desc, ww->config, nack__wl_vt_ptr());
+    return nack__egl_create_context(w, desc, ww->config, vt);
 }
 
 static bool nack__wl_gl_make_current(struct nack_window *w, struct nack_gl_context *ctx)
@@ -999,45 +999,133 @@ static void nack__wl_shutdown(void)
 
 /* ------------------------------------------------------------------ */
 
-static const struct nack_backend_vt nack__wl_vt = {
-    .name = "wayland",
-    .id = NACK_BACKEND_WAYLAND,
-    .init = nack__wl_init,
-    .shutdown = nack__wl_shutdown,
-    .window_create = nack__wl_window_create,
-    .window_destroy = nack__wl_window_destroy,
-    .window_show = nack__wl_window_show,
-    .window_set_title = nack__wl_window_set_title,
-    .window_set_size = nack__wl_window_set_size,
-    .window_apply_size_hints = nack__wl_apply_size_hints,
-    .window_set_fullscreen = nack__wl_window_set_fullscreen,
-    .window_minimize = nack__wl_window_minimize,
-    .window_maximize = nack__wl_window_maximize,
-    .window_restore = nack__wl_window_restore,
-    .window_request_redraw = nack__wl_window_request_redraw,
-    .window_set_cursor_shape = nack__wl_set_cursor_shape,
-    .window_set_cursor_mode = nack__wl_set_cursor_mode,
-    .window_get_native = nack__wl_window_get_native,
-    .pump_events = nack__wl_pump_events,
-    .wakeup = nack__wl_wakeup,
-    .gl_create = nack__wl_gl_create,
-    .gl_destroy = nack__egl_destroy_context,
-    .gl_make_current = nack__wl_gl_make_current,
-    .gl_swap_buffers = nack__wl_gl_swap_buffers,
-    .gl_set_swap_interval = nack__egl_set_swap_interval,
-    .gl_get_proc_address = nack__egl_get_proc_address,
-    .clipboard_set = nack__wl_clipboard_set,
-    .clipboard_get = nack__wl_clipboard_get,
-    .primary_set = nack__wl_primary_set,
-    .primary_get = nack__wl_primary_get,
+namespace {
+
+class wayland_backend final : public nack_backend_vt {
+public:
+    const char *name() const override { return "wayland"; }
+    enum nack_backend id() const override { return NACK_BACKEND_WAYLAND; }
+
+    bool init(const struct nack_win_init_desc *desc) override
+    {
+        return nack__wl_init(desc);
+    }
+    void shutdown() override
+    {
+        nack__wl_shutdown();
+    }
+    bool window_create(struct nack_window *w, const struct nack_window_desc *desc) override
+    {
+        return nack__wl_window_create(w, desc);
+    }
+    void window_destroy(struct nack_window *w) override
+    {
+        nack__wl_window_destroy(w);
+    }
+    void window_show(struct nack_window *w, bool show) override
+    {
+        nack__wl_window_show(w, show);
+    }
+    void window_set_title(struct nack_window *w, const char *title) override
+    {
+        nack__wl_window_set_title(w, title);
+    }
+    void window_set_size(struct nack_window *w, int width, int height) override
+    {
+        nack__wl_window_set_size(w, width, height);
+    }
+    void window_apply_size_hints(struct nack_window *w) override
+    {
+        nack__wl_apply_size_hints(w);
+    }
+    void window_set_fullscreen(struct nack_window *w, bool fullscreen) override
+    {
+        nack__wl_window_set_fullscreen(w, fullscreen);
+    }
+    void window_minimize(struct nack_window *w) override
+    {
+        nack__wl_window_minimize(w);
+    }
+    void window_maximize(struct nack_window *w) override
+    {
+        nack__wl_window_maximize(w);
+    }
+    void window_restore(struct nack_window *w) override
+    {
+        nack__wl_window_restore(w);
+    }
+    void window_request_redraw(struct nack_window *w) override
+    {
+        nack__wl_window_request_redraw(w);
+    }
+    void window_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape) override
+    {
+        nack__wl_set_cursor_shape(w, shape);
+    }
+    void window_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode) override
+    {
+        nack__wl_set_cursor_mode(w, mode);
+    }
+    void window_get_native(const struct nack_window *w, struct nack_native_window *out) override
+    {
+        nack__wl_window_get_native(w, out);
+    }
+    void pump_events(double timeout) override
+    {
+        nack__wl_pump_events(timeout);
+    }
+    void wakeup() override
+    {
+        nack__wl_wakeup();
+    }
+    struct nack_gl_context *gl_create(struct nack_window *w, const struct nack__gl_desc *desc) override
+    {
+        return nack__wl_gl_create(this, w, desc);
+    }
+    void gl_destroy(struct nack_gl_context *ctx) override
+    {
+        nack__egl_destroy_context(ctx);
+    }
+    bool gl_make_current(struct nack_window *w, struct nack_gl_context *ctx) override
+    {
+        return nack__wl_gl_make_current(w, ctx);
+    }
+    void gl_swap_buffers(struct nack_window *w) override
+    {
+        nack__wl_gl_swap_buffers(w);
+    }
+    void gl_set_swap_interval(int interval) override
+    {
+        nack__egl_set_swap_interval(interval);
+    }
+    void *gl_get_proc_address(const char *name) override
+    {
+        return nack__egl_get_proc_address(name);
+    }
+    bool clipboard_set(const char *utf8) override
+    {
+        return nack__wl_clipboard_set(utf8);
+    }
+    const char *clipboard_get() override
+    {
+        return nack__wl_clipboard_get();
+    }
+    bool primary_set(const char *utf8) override
+    {
+        return nack__wl_primary_set(utf8);
+    }
+    const char *primary_get() override
+    {
+        return nack__wl_primary_get();
+    }
 };
 
-static const struct nack_backend_vt *nack__wl_vt_ptr(void)
-{
-    return &nack__wl_vt;
-}
+wayland_backend nack__wl_backend_instance;
 
-const struct nack_backend_vt *nack__backend_wayland(void)
+}   /* namespace */
+
+
+nack_backend_vt *nack__backend_wayland(void)
 {
-    return &nack__wl_vt;
+    return &nack__wl_backend_instance;
 }

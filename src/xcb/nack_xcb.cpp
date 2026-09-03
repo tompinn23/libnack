@@ -1218,7 +1218,6 @@ static void nack__xcb_window_get_native(const struct nack_window *w,
 /* OpenGL                                                             */
 /* ------------------------------------------------------------------ */
 
-static const struct nack_backend_vt *nack__xcb_vt_ptr(void);
 
 static bool nack__xcb_ensure_surface(struct nack_window *w, EGLConfig config)
 {
@@ -1238,7 +1237,8 @@ static bool nack__xcb_ensure_surface(struct nack_window *w, EGLConfig config)
     return xw->surface != EGL_NO_SURFACE;
 }
 
-static struct nack_gl_context *nack__xcb_gl_create(struct nack_window *w,
+static struct nack_gl_context *nack__xcb_gl_create(nack_backend_vt *vt,
+                                                  struct nack_window *w,
                                                    const struct nack__gl_desc *desc)
 {
     if (!nack__egl.initialized) {
@@ -1253,7 +1253,7 @@ static struct nack_gl_context *nack__xcb_gl_create(struct nack_window *w,
     }
     if (!nack__xcb_ensure_surface(w, xw->config))
         return NULL;
-    return nack__egl_create_context(w, desc, xw->config, nack__xcb_vt_ptr());
+    return nack__egl_create_context(w, desc, xw->config, vt);
 }
 
 static void nack__xcb_gl_destroy(struct nack_gl_context *ctx)
@@ -1454,48 +1454,145 @@ static void nack__xcb_shutdown(void)
 
 /* ------------------------------------------------------------------ */
 
-static const struct nack_backend_vt nack__xcb_vt = {
-    .name = "xcb",
-    .id = NACK_BACKEND_X11,
-    .init = nack__xcb_init,
-    .shutdown = nack__xcb_shutdown,
-    .window_create = nack__xcb_window_create,
-    .window_destroy = nack__xcb_window_destroy,
-    .window_show = nack__xcb_window_show,
-    .window_focus = nack__xcb_window_focus,
-    .window_set_title = nack__xcb_set_title,
-    .window_set_size = nack__xcb_window_set_size,
-    .window_set_position = nack__xcb_window_set_position,
-    .window_apply_size_hints = nack__xcb_apply_size_hints,
-    .window_set_fullscreen = nack__xcb_window_set_fullscreen,
-    .window_minimize = nack__xcb_window_minimize,
-    .window_maximize = nack__xcb_window_maximize,
-    .window_restore = nack__xcb_window_restore,
-    .window_request_attention = nack__xcb_window_request_attention,
-    .window_request_redraw = nack__xcb_window_request_redraw,
-    .window_set_cursor_shape = nack__xcb_set_cursor_shape,
-    .window_set_cursor_mode = nack__xcb_set_cursor_mode,
-    .window_get_native = nack__xcb_window_get_native,
-    .pump_events = nack__xcb_pump_events,
-    .wakeup = nack__xcb_wakeup,
-    .gl_create = nack__xcb_gl_create,
-    .gl_destroy = nack__xcb_gl_destroy,
-    .gl_make_current = nack__xcb_gl_make_current,
-    .gl_swap_buffers = nack__xcb_gl_swap_buffers,
-    .gl_set_swap_interval = nack__egl_set_swap_interval,
-    .gl_get_proc_address = nack__egl_get_proc_address,
-    .clipboard_set = nack__xcb_clipboard_set,
-    .clipboard_get = nack__xcb_clipboard_get,
-    .primary_set = nack__xcb_primary_set,
-    .primary_get = nack__xcb_primary_get,
+namespace {
+
+class xcb_backend final : public nack_backend_vt {
+public:
+    const char *name() const override { return "xcb"; }
+    enum nack_backend id() const override { return NACK_BACKEND_X11; }
+
+    bool init(const struct nack_win_init_desc *desc) override
+    {
+        return nack__xcb_init(desc);
+    }
+    void shutdown() override
+    {
+        nack__xcb_shutdown();
+    }
+    bool window_create(struct nack_window *w, const struct nack_window_desc *desc) override
+    {
+        return nack__xcb_window_create(w, desc);
+    }
+    void window_destroy(struct nack_window *w) override
+    {
+        nack__xcb_window_destroy(w);
+    }
+    void window_show(struct nack_window *w, bool show) override
+    {
+        nack__xcb_window_show(w, show);
+    }
+    void window_set_title(struct nack_window *w, const char *title) override
+    {
+        nack__xcb_set_title(w, title);
+    }
+    void window_set_size(struct nack_window *w, int width, int height) override
+    {
+        nack__xcb_window_set_size(w, width, height);
+    }
+    void window_apply_size_hints(struct nack_window *w) override
+    {
+        nack__xcb_apply_size_hints(w);
+    }
+    void window_set_fullscreen(struct nack_window *w, bool fullscreen) override
+    {
+        nack__xcb_window_set_fullscreen(w, fullscreen);
+    }
+    void window_minimize(struct nack_window *w) override
+    {
+        nack__xcb_window_minimize(w);
+    }
+    void window_maximize(struct nack_window *w) override
+    {
+        nack__xcb_window_maximize(w);
+    }
+    void window_restore(struct nack_window *w) override
+    {
+        nack__xcb_window_restore(w);
+    }
+    void window_request_redraw(struct nack_window *w) override
+    {
+        nack__xcb_window_request_redraw(w);
+    }
+    void window_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape) override
+    {
+        nack__xcb_set_cursor_shape(w, shape);
+    }
+    void window_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode) override
+    {
+        nack__xcb_set_cursor_mode(w, mode);
+    }
+    void window_get_native(const struct nack_window *w, struct nack_native_window *out) override
+    {
+        nack__xcb_window_get_native(w, out);
+    }
+    void window_focus(struct nack_window *w) override
+    {
+        nack__xcb_window_focus(w);
+    }
+    void window_set_position(struct nack_window *w, int x, int y) override
+    {
+        nack__xcb_window_set_position(w, x, y);
+    }
+    void window_request_attention(struct nack_window *w) override
+    {
+        nack__xcb_window_request_attention(w);
+    }
+    void pump_events(double timeout) override
+    {
+        nack__xcb_pump_events(timeout);
+    }
+    void wakeup() override
+    {
+        nack__xcb_wakeup();
+    }
+    struct nack_gl_context *gl_create(struct nack_window *w, const struct nack__gl_desc *desc) override
+    {
+        return nack__xcb_gl_create(this, w, desc);
+    }
+    void gl_destroy(struct nack_gl_context *ctx) override
+    {
+        nack__xcb_gl_destroy(ctx);
+    }
+    bool gl_make_current(struct nack_window *w, struct nack_gl_context *ctx) override
+    {
+        return nack__xcb_gl_make_current(w, ctx);
+    }
+    void gl_swap_buffers(struct nack_window *w) override
+    {
+        nack__xcb_gl_swap_buffers(w);
+    }
+    void gl_set_swap_interval(int interval) override
+    {
+        nack__egl_set_swap_interval(interval);
+    }
+    void *gl_get_proc_address(const char *name) override
+    {
+        return nack__egl_get_proc_address(name);
+    }
+    bool clipboard_set(const char *utf8) override
+    {
+        return nack__xcb_clipboard_set(utf8);
+    }
+    const char *clipboard_get() override
+    {
+        return nack__xcb_clipboard_get();
+    }
+    bool primary_set(const char *utf8) override
+    {
+        return nack__xcb_primary_set(utf8);
+    }
+    const char *primary_get() override
+    {
+        return nack__xcb_primary_get();
+    }
 };
 
-static const struct nack_backend_vt *nack__xcb_vt_ptr(void)
-{
-    return &nack__xcb_vt;
-}
+xcb_backend nack__xcb_backend_instance;
 
-const struct nack_backend_vt *nack__backend_x11(void)
+}   /* namespace */
+
+
+nack_backend_vt *nack__backend_x11(void)
 {
-    return &nack__xcb_vt;
+    return &nack__xcb_backend_instance;
 }

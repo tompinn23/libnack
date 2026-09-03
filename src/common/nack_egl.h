@@ -50,7 +50,7 @@ bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack__
 /* Creates the EGLContext. The window's surface is created separately so the
  * backend can pick the right native window representation. */
 struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const struct nack__gl_desc *desc,
-                                          EGLConfig config, const struct nack_backend_vt *vt);
+                                          EGLConfig config, nack_backend_vt *vt);
 void nack__egl_destroy_context(struct nack_gl_context *ctx);
 
 EGLSurface nack__egl_create_window_surface(EGLConfig config, void *native_window,

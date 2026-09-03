@@ -55,10 +55,10 @@
 #  define NACK_PLATFORM_UNIX 1
 #endif
 
-struct nack_backend_vt;
+class nack_backend_vt;
 
 struct nack_window {
-    const struct nack_backend_vt *vt;
+    nack_backend_vt *vt;
     void *native;              /* backend-owned per-window state */
 
     std::string title;
@@ -99,52 +99,92 @@ struct nack_window {
 };
 
 struct nack_gl_context {
-    const struct nack_backend_vt *vt;
+    nack_backend_vt *vt;
     void *native;
     struct nack_window *owner;   /* window whose pixel format the context matches */
 };
 
-struct nack_backend_vt {
-    const char *name;
-    enum nack_backend id;
+/*
+ * One windowing system.
+ *
+ * A class rather than a table of function pointers, and for the same reason
+ * the renderer is: the choice is made at run time - Wayland falling back to
+ * X11, NACK_BACKEND picking between them - so a template cannot express it.
+ *
+ * The gain over the table is narrower here than it was for the renderer,
+ * because these were already filled in by field name rather than positionally.
+ * What it adds is that leaving an operation out is a compile error instead of
+ * a NULL slot, and that the three operations which are genuinely optional say
+ * so once, here, instead of every caller having to guard them. All three are
+ * Wayland: a client there cannot focus itself, cannot place itself, and needs
+ * xdg-activation to ask for attention.
+ */
+class nack_backend_vt {
+public:
+    virtual ~nack_backend_vt() = default;
 
-    bool (*init)(const struct nack_win_init_desc *desc);
-    void (*shutdown)(void);
+    virtual const char *name() const = 0;
+    virtual enum nack_backend id() const = 0;
 
-    bool (*window_create)(struct nack_window *w, const struct nack_window_desc *desc);
-    void (*window_destroy)(struct nack_window *w);
-    void (*window_show)(struct nack_window *w, bool show);
-    void (*window_focus)(struct nack_window *w);
-    void (*window_set_title)(struct nack_window *w, const char *title);
-    void (*window_set_size)(struct nack_window *w, int width, int height);
-    void (*window_set_position)(struct nack_window *w, int x, int y);
-    void (*window_apply_size_hints)(struct nack_window *w);
-    void (*window_set_fullscreen)(struct nack_window *w, bool fullscreen);
-    void (*window_minimize)(struct nack_window *w);
-    void (*window_maximize)(struct nack_window *w);
-    void (*window_restore)(struct nack_window *w);
-    void (*window_request_attention)(struct nack_window *w);
-    void (*window_request_redraw)(struct nack_window *w);
-    void (*window_set_cursor_shape)(struct nack_window *w, enum nack_cursor_shape shape);
-    void (*window_set_cursor_mode)(struct nack_window *w, enum nack_cursor_mode mode);
-    void (*window_get_native)(const struct nack_window *w, struct nack_native_window *out);
+    virtual bool init(const struct nack_win_init_desc *desc) = 0;
+    virtual void shutdown() = 0;
+
+    virtual bool window_create(struct nack_window *w,
+                               const struct nack_window_desc *desc) = 0;
+    virtual void window_destroy(struct nack_window *w) = 0;
+    virtual void window_show(struct nack_window *w, bool show) = 0;
+    virtual void window_set_title(struct nack_window *w, const char *title) = 0;
+    virtual void window_set_size(struct nack_window *w, int width,
+                                 int height) = 0;
+    virtual void window_apply_size_hints(struct nack_window *w) = 0;
+    virtual void window_set_fullscreen(struct nack_window *w,
+                                       bool fullscreen) = 0;
+    virtual void window_minimize(struct nack_window *w) = 0;
+    virtual void window_maximize(struct nack_window *w) = 0;
+    virtual void window_restore(struct nack_window *w) = 0;
+    virtual void window_request_redraw(struct nack_window *w) = 0;
+    virtual void window_set_cursor_shape(struct nack_window *w,
+                                         enum nack_cursor_shape shape) = 0;
+    virtual void window_set_cursor_mode(struct nack_window *w,
+                                        enum nack_cursor_mode mode) = 0;
+    virtual void window_get_native(const struct nack_window *w,
+                                   struct nack_native_window *out) = 0;
+
+    /*
+     * Not every windowing system offers these. Declining is what the default
+     * means; it is not the same as forgetting, which no longer compiles.
+     */
+    virtual void window_focus(struct nack_window *w) { (void)w; }
+    virtual void window_set_position(struct nack_window *w, int x, int y)
+    {
+        (void)w; (void)x; (void)y;
+    }
+    virtual void window_request_attention(struct nack_window *w) { (void)w; }
 
     /* Pump platform events into the queue. timeout < 0 blocks indefinitely,
      * 0 polls, > 0 waits at most that many seconds. */
-    void (*pump_events)(double timeout);
-    void (*wakeup)(void);
+    virtual void pump_events(double timeout) = 0;
+    virtual void wakeup() = 0;
 
-    struct nack_gl_context *(*gl_create)(struct nack_window *w, const struct nack__gl_desc *desc);
-    void  (*gl_destroy)(struct nack_gl_context *ctx);
-    bool  (*gl_make_current)(struct nack_window *w, struct nack_gl_context *ctx);
-    void  (*gl_swap_buffers)(struct nack_window *w);
-    void  (*gl_set_swap_interval)(int interval);
-    void *(*gl_get_proc_address)(const char *name);
+    virtual struct nack_gl_context *gl_create(struct nack_window *w,
+                                              const struct nack__gl_desc *desc) = 0;
+    virtual void gl_destroy(struct nack_gl_context *ctx) = 0;
+    virtual bool gl_make_current(struct nack_window *w,
+                                 struct nack_gl_context *ctx) = 0;
+    virtual void gl_swap_buffers(struct nack_window *w) = 0;
+    virtual void gl_set_swap_interval(int interval) = 0;
+    virtual void *gl_get_proc_address(const char *name) = 0;
 
-    bool         (*clipboard_set)(const char *utf8);
-    const char  *(*clipboard_get)(void);
-    bool         (*primary_set)(const char *utf8);
-    const char  *(*primary_get)(void);
+    virtual bool clipboard_set(const char *utf8) = 0;
+    virtual const char *clipboard_get() = 0;
+
+    /*
+     * The PRIMARY selection - select to copy, middle click to paste - is an
+     * X11 idea. Windows and macOS have no equivalent, and say so by leaving
+     * these alone rather than by a NULL slot the caller had to know about.
+     */
+    virtual bool primary_set(const char *utf8) { (void)utf8; return false; }
+    virtual const char *primary_get() { return NULL; }
 };
 
 /* ------------------------------------------------------------------ */
@@ -153,7 +193,7 @@ struct nack_backend_vt {
 
 struct nack_state {
     bool initialized;
-    const struct nack_backend_vt *vt;
+    nack_backend_vt *vt;
     std::string app_id;
 
     void (*log_fn)(const char *, void *);
@@ -245,9 +285,9 @@ uint32_t nack__utf8_encode(uint32_t codepoint, char out[5]);
 bool nack__codepoint_is_text(uint32_t codepoint);
 
 /* Backend registration - each platform provides the ones it supports. */
-const struct nack_backend_vt *nack__backend_win32(void);
-const struct nack_backend_vt *nack__backend_cocoa(void);
-const struct nack_backend_vt *nack__backend_wayland(void);
-const struct nack_backend_vt *nack__backend_x11(void);
+nack_backend_vt *nack__backend_win32(void);
+nack_backend_vt *nack__backend_cocoa(void);
+nack_backend_vt *nack__backend_wayland(void);
+nack_backend_vt *nack__backend_x11(void);
 
 #endif /* NACK_INTERNAL_H_INCLUDED */
