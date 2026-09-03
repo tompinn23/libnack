@@ -179,7 +179,7 @@ enum class key : int {
     right_ctrl, right_shift, right_alt, right_super
 };
 
-const char *key_name(key which);
+std::string_view key_name(key which);
 
 /*
  * A set of held modifiers.

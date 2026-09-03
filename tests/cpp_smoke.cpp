@@ -158,7 +158,7 @@ int main()
         check(!nack::any(nack::mod::none), "none is empty");
     }
 
-    check(std::strcmp(nack::key_name(nack::key::escape), "Escape") == 0,
+    check(nack::key_name(nack::key::escape) == "Escape",
           "keys keep their names");
 
     /* The event variant must carry the arm the type says it does. */

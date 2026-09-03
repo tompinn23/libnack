@@ -180,7 +180,7 @@ static bool is_terminated(std::string_view text)
 /* Keys                                                                      */
 /* ------------------------------------------------------------------------ */
 
-const char *key_name(key which)
+std::string_view key_name(key which)
 {
     return nack__key_name(static_cast<enum nack_key>(which));
 }
