@@ -9,9 +9,77 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
+#if defined(NACK_X11_SELECTION_PEER)
+#  include <poll.h>
+#  include <unistd.h>
+#  include "x11_selection_payload.h"
+#endif
+
 static int failures;
+
+/*
+ * Talking to the selection peer.
+ *
+ * A selection this process owns is served from libnack's own copy without
+ * touching the server, so neither INCR path is reachable from here alone.
+ * tests/x11_selection_peer.c is the other end; these run it and wait on its
+ * output rather than sleeping, so the test is not a race.
+ */
+#if defined(NACK_X11_SELECTION_PEER)
+
+static FILE *nack__test_peer_start(const char *mode)
+{
+    char command[4096];
+
+    /* Quoted: the build directory is wherever the user put it. */
+    snprintf(command, sizeof command, "\"%s\" %s", NACK_X11_SELECTION_PEER,
+             mode);
+    return popen(command, "r");
+}
+
+/*
+ * Reads a line from the peer while keeping our own event loop turning. The
+ * peer is waiting on us for the whole transfer, so a blocking read here would
+ * deadlock: it cannot finish until we answer, and we would not be answering.
+ */
+static int nack__test_peer_line(FILE *pipe, char *out, size_t size,
+                                double timeout)
+{
+    int fd = fileno(pipe);
+    size_t filled = 0;
+    double deadline = nack_time() + timeout;
+
+    while (nack_time() < deadline) {
+        struct pollfd pfd;
+        struct nack_event ignored;
+        ssize_t got;
+
+        pfd.fd = fd;
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        if (poll(&pfd, 1, 0) > 0 && (pfd.revents & (POLLIN | POLLHUP))) {
+            got = read(fd, out + filled, size - filled - 1);
+            if (got <= 0)
+                break;                 /* the peer exited */
+            filled += (size_t)got;
+            out[filled] = '\0';
+            if (strchr(out, '\n') || filled + 1 >= size)
+                return 1;
+            continue;
+        }
+
+        /* Servicing the connection is what lets the peer make progress. */
+        nack_wait_event_timeout(&ignored, 0.01);
+    }
+
+    out[filled] = '\0';
+    return filled > 0;
+}
+
+#endif /* NACK_X11_SELECTION_PEER */
 
 static void check(int ok, const char *what)
 {
@@ -232,6 +300,86 @@ int main(void)
     check(!nack_should_close(), "not asked to close");
     nack_set_should_close(true);
     check(nack_should_close(), "should_close is settable");
+
+    /*
+     * The clipboard, in both directions and at a size that has to be sent in
+     * chunks. Nothing exercised any of this before: the INCR code is the most
+     * intricate in the X11 backend and had never been run.
+     */
+    {
+        const char *back;
+
+        check(nack_clipboard_set("hello clipboard"), "clipboard accepts text");
+        back = nack_clipboard_get();
+        check(back && strcmp(back, "hello clipboard") == 0,
+              "clipboard round trips a short string");
+    }
+
+#if defined(NACK_X11_SELECTION_PEER)
+    {
+        char *payload = (char *)malloc(NACK_PEER_PAYLOAD_BYTES);
+        const char *back;
+        char line[256];
+        FILE *peer;
+
+        if (!payload) {
+            check(0, "out of memory building the clipboard payload");
+        } else {
+            nack__peer_payload(payload, NACK_PEER_PAYLOAD_BYTES);
+
+            /*
+             * Reading: the peer owns the selection and serves it in 4K
+             * chunks, so what comes back has crossed the wire and been
+             * reassembled rather than being handed over from our own copy.
+             * The payload is unlike anything we put on the clipboard
+             * ourselves, so a read served locally would not match it.
+             */
+            peer = nack__test_peer_start("own");
+            check(peer != NULL, "the selection peer starts");
+            if (peer) {
+                check(nack__test_peer_line(peer, line, sizeof line, 5.0) &&
+                      strncmp(line, "ready", 5) == 0,
+                      "another client owns the clipboard");
+
+                back = nack_clipboard_get();
+                check(back != NULL && strlen(back) == strlen(payload),
+                      "an INCR selection arrives at its full length");
+                check(back != NULL && strcmp(back, payload) == 0,
+                      "and every chunk landed in the right place");
+                pclose(peer);
+            }
+
+            /*
+             * Writing: the same size back out, read by the peer. This is the
+             * serving half of INCR, which announces the transfer and then has
+             * to answer each property delete with the next chunk.
+             */
+            check(nack_clipboard_set(payload), "clipboard accepts 300K");
+            peer = nack__test_peer_start("read");
+            check(peer != NULL, "the selection peer starts again");
+            if (peer) {
+                unsigned long length = 0;
+                unsigned sum = 0;
+                int incremental = 0;
+                int parsed = nack__test_peer_line(peer, line, sizeof line,
+                                                  10.0) &&
+                             sscanf(line, "len=%lu sum=%x incr=%d", &length,
+                                    &sum, &incremental) == 3;
+
+                check(parsed, "another client reads the clipboard back");
+                check(parsed && incremental,
+                      "and is served incrementally, not in one property");
+                check(parsed && length == strlen(payload) &&
+                      sum == nack__peer_checksum(payload, strlen(payload)),
+                      "with the bytes intact");
+                pclose(peer);
+            }
+            free(payload);
+        }
+    }
+#else
+    printf("%-52s %s\n", "INCR transfers both ways", "skipped (no X11)");
+#endif
 
     nack_set_title("renamed");
     check(1, "set_title survived");

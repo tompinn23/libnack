@@ -782,7 +782,14 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_PROPERTY_NOTIFY: {
         xcb_property_notify_event_t *event = (xcb_property_notify_event_t *)generic;
-        struct nack_window *w = nack__xcb_lookup(event->window);
+        struct nack_window *w;
+
+        /* A requestor deleting a property is asking for the next chunk of a
+         * selection we are serving, and arrives on its window, not ours. */
+        if (nack__xcb_handle_property_notify(event))
+            break;
+
+        w = nack__xcb_lookup(event->window);
         if (!w || event->atom != nack__xcb.atom.NET_WM_STATE)
             break;
 

@@ -300,6 +300,25 @@ if(PROJECT_IS_TOP_LEVEL)
         ${CMAKE_CURRENT_BINARY_DIR})
     set_target_properties(nack_smoke PROPERTIES
         C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
+    #
+    # X11 selections only take the interesting path when two processes are
+    # involved: reading a selection this process owns is served from its own
+    # copy and never reaches the server, so the INCR chunking on both sides is
+    # unreachable from a single-process test. This peer is the second process.
+    # It is not xclip: whether xclip uses INCR depends on the server's maximum
+    # request length, and on a server with BIG-REQUESTS a 300K selection goes
+    # over in one property, so the test would pass having exercised nothing.
+    #
+    if(NACK_ENABLE_XCB)
+        add_executable(nack_x11_selection_peer tests/x11_selection_peer.c)
+        target_link_libraries(nack_x11_selection_peer PRIVATE PkgConfig::XCB)
+        set_target_properties(nack_x11_selection_peer PROPERTIES
+            C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
+        add_dependencies(nack_smoke nack_x11_selection_peer)
+        target_compile_definitions(nack_smoke PRIVATE
+            NACK_X11_SELECTION_PEER="$<TARGET_FILE:nack_x11_selection_peer>")
+    endif()
+
     add_test(NAME smoke COMMAND nack_smoke)
     # The test tells a machine with no display (exit 77) apart from a real
     # failure; only the first is allowed to pass silently.

@@ -110,6 +110,9 @@ static inline struct nack_xcb_window *nack__xcb_win(struct nack_window *w)
 /* Selection handling lives in nack_xcb_clipboard.c. */
 bool  nack__xcb_handle_selection_request(xcb_selection_request_event_t *event);
 void  nack__xcb_handle_selection_clear(xcb_selection_clear_event_t *event);
+/* Serves the next chunk of an outgoing INCR transfer. False if the event was
+ * not part of one, so the caller can carry on handling it. */
+bool  nack__xcb_handle_property_notify(xcb_property_notify_event_t *event);
 bool  nack__xcb_clipboard_set(const char *utf8);
 const char *nack__xcb_clipboard_get(void);
 bool  nack__xcb_primary_set(const char *utf8);
