@@ -468,7 +468,7 @@ void nack__wl_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode)
                 ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
         }
         if (!ww->relative_pointer || !ww->locked_pointer)
-            nack__log("nack: compositor lacks pointer constraints; "
+            nack_log("nack: compositor lacks pointer constraints; "
                       "captured cursor mode is approximate");
     } else {
         if (ww->locked_pointer) {

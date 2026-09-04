@@ -388,7 +388,7 @@ struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const st
          */
         glrc = nack__wgl.CreateContext(ww->hdc);
         if (glrc && share && !nack__wgl.ShareLists(share, glrc))
-            nack__log("nack: wglShareLists failed; contexts will not share objects");
+            nack_log("nack: wglShareLists failed; contexts will not share objects");
     }
 
     if (!glrc) {

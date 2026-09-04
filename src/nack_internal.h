@@ -25,7 +25,7 @@
 
 #include "nack_core.h"
 #include "nack_window.h"
-
+#include "fmt/printf.h"
 /*
  * C++ only, like the console's internal header and for the same reason: the
  * state below holds std::string and std::deque. nack_window.h stays C - it
@@ -42,10 +42,6 @@
 #include <string>
 #include <vector>
 
-#include <limits.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
 
 #if defined(_WIN32)
 #  define NACK_PLATFORM_WIN32 1
@@ -221,10 +217,14 @@ struct nack_state {
     std::string error_message;
 };
 
-extern struct nack_state nack__g;
+extern struct nack_state state;
 
 /* Diagnostics */
-void nack__log(const char *fmt, ...);
+
+template<typename... T>
+void nack_log(fmt::format_string<T...> format, T&&... args) {
+    fmt::v
+}
 bool nack__fail(enum nack_result code, const char *fmt, ...);
 
 /*

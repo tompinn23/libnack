@@ -91,7 +91,7 @@ bool nack__gfx_init(struct nack_window *window)
             break;
         }
         if (i == count)
-            nack__log("nack: NACK_RENDERER=%s names no renderer this build "
+            nack_log("nack: NACK_RENDERER=%s names no renderer this build "
                       "has; ignoring it", preferred);
     }
 
@@ -107,12 +107,12 @@ bool nack__gfx_init(struct nack_window *window)
              * the caller only cares that one of them worked.
              */
             nack__c.clear_error();
-            nack__log("nack: rendering with %s", nack__gfx->name());
+            nack_log("nack: rendering with %s", nack__gfx->name());
             return true;
         }
 
         why = nack__c.last_error();
-        nack__log("nack: the %s renderer is unavailable: %s", nack__gfx->name(),
+        nack_log("nack: the %s renderer is unavailable: %s", nack__gfx->name(),
                   why ? why : "no reason given");
         /*
          * Keep the last renderer's complaint. If every candidate fails, that

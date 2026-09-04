@@ -112,7 +112,7 @@ bool nack__egl_init(EGLenum platform, void *native_display, const EGLAttrib *att
     nack__egl.gles_library = dlopen("libGLESv2.so.2", RTLD_LAZY | RTLD_LOCAL);
 
     nack__egl.initialized = true;
-    nack__log("nack: EGL %d.%d initialized", nack__egl.major, nack__egl.minor);
+    nack_log("nack: EGL %d.%d initialized", nack__egl.major, nack__egl.minor);
     return true;
 }
 

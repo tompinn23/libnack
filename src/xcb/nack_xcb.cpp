@@ -1380,7 +1380,7 @@ static bool nack__xcb_init(const struct nack_win_init_desc *desc)
     nack__xcb.scale = nack__xcb_query_scale();
 
     if (!nack__xcb_init_xkb())
-        nack__log("nack: XKB unavailable, keyboard input will be limited");
+        nack_log("nack: XKB unavailable, keyboard input will be limited");
 
     if (xcb_cursor_context_new(nack__xcb.connection, nack__xcb.screen,
                                &nack__xcb.cursor_context) < 0)
@@ -1404,7 +1404,7 @@ static bool nack__xcb_init(const struct nack_win_init_desc *desc)
     if (!egl_ok && nack__xcb.xlib_display)
         egl_ok = nack__egl_init(EGL_PLATFORM_X11_KHR, nack__xcb.xlib_display, NULL);
     if (!egl_ok)
-        nack__log("nack: EGL unavailable; windows will have no OpenGL support");
+        nack_log("nack: EGL unavailable; windows will have no OpenGL support");
 
     xcb_flush(nack__xcb.connection);
     return true;

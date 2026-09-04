@@ -553,7 +553,7 @@ bool nack__wl_decor_enable(struct nack_window *w)
 
     ww->client_side_decorations = true;
     nack__wl_decor_resize(w);
-    nack__log("nack: compositor has no xdg-decoration support; "
+    nack_log("nack: compositor has no xdg-decoration support; "
               "drawing fallback client-side decorations");
     return true;
 

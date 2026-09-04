@@ -4,7 +4,8 @@
 #include <algorithm>
 #include <exception>
 #include <memory>
-#include <stdio.h>
+#include <cstdio>
+#include "fmt/printf.h"
 
 #if defined(NACK_PLATFORM_WIN32)
 #  if defined(NACK_WIN32_USE_SDK_HEADERS)
@@ -16,7 +17,7 @@
 #  include <time.h>
 #endif
 
-struct nack_state nack__g;
+nack_state state;
 
 #define NACK_DOUBLE_CLICK_NS      400000000ull   /* 400 ms */
 #define NACK_DOUBLE_CLICK_SLOP    4.0            /* logical pixels */
@@ -25,16 +26,16 @@ struct nack_state nack__g;
 /* Diagnostics                                                        */
 /* ------------------------------------------------------------------ */
 
-void nack__log(const char *fmt, ...)
+void nack_log(const char *fmt, ...)
 {
-    if (!nack__g.log_fn)
+    if (!state.log_fn)
         return;
     char buf[512];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(buf, sizeof buf, fmt, ap);
     va_end(ap);
-    nack__g.log_fn(buf, nack__g.log_user_data);
+    state.log_fn(buf, state.log_user_data);
 }
 
 bool nack__fail(enum nack_result code, const char *fmt, ...)
@@ -48,19 +49,19 @@ bool nack__fail(enum nack_result code, const char *fmt, ...)
 
     /* Recording a failure must not be the thing that fails. */
     try {
-        nack__g.error_message = message;
+        state.error_message = message;
     } catch (const std::exception &) {
     }
-    nack__g.error_code = code;
-    nack__log("nack: error: %s", message);
+    state.error_code = code;
+    nack_log("nack: error: %s", message);
     return false;
 }
 
 enum nack_result nack__win_get_error(const char **message)
 {
     if (message)
-        *message = nack__g.error_message.c_str();
-    return nack__g.error_code;
+        *message = state.error_message.c_str();
+    return state.error_code;
 }
 
 uint32_t nack__utf8_encode(uint32_t cp, char out[5])
@@ -159,7 +160,7 @@ double nack__win_time_seconds(void)
 
 bool nack__queue_empty(void)
 {
-    return nack__g.queue.empty();
+    return state.queue.empty();
 }
 
 void nack__push_event(const struct nack_win_event *ev)
@@ -171,9 +172,9 @@ void nack__push_event(const struct nack_win_event *ev)
      * event handler.
      */
     try {
-        nack__g.queue.push_back(*ev);
+        state.queue.push_back(*ev);
     } catch (const std::exception &) {
-        nack__log("nack: dropped an event: out of memory");
+        nack_log("nack: dropped an event: out of memory");
     }
 }
 
@@ -189,10 +190,10 @@ struct nack_win_event *nack__event_begin(enum nack_win_event_type type, struct n
 
 static bool nack__pop(struct nack_win_event *out)
 {
-    if (nack__g.queue.empty())
+    if (state.queue.empty())
         return false;
-    *out = nack__g.queue.front();
-    nack__g.queue.pop_front();
+    *out = state.queue.front();
+    state.queue.pop_front();
     return true;
 }
 
@@ -249,12 +250,12 @@ void nack__emit_focus(struct nack_window *w, bool focused)
     if (!focused) {
         /* Never leave keys latched when focus leaves the window. */
         for (int i = 0; i < NACK_KEY_COUNT; ++i) {
-            if (nack__g.keys[i]) {
-                nack__g.keys[i] = false;
-                nack__emit_key(w, (enum nack_key)i, 0, nack__g.mods, false, false);
+            if (state.keys[i]) {
+                state.keys[i] = false;
+                nack__emit_key(w, (enum nack_key)i, 0, state.mods, false, false);
             }
         }
-        nack__g.mods = 0;
+        state.mods = 0;
     }
     nack__emit_simple(w, focused ? NACK_WIN_EVENT_WINDOW_FOCUS : NACK_WIN_EVENT_WINDOW_BLUR);
 }
@@ -263,13 +264,13 @@ void nack__emit_key(struct nack_window *w, enum nack_key key, uint32_t scancode,
                     bool down, bool repeat)
 {
     if (key > 0 && key < NACK_KEY_COUNT) {
-        if (!down && !nack__g.keys[key] && !repeat) {
+        if (!down && !state.keys[key] && !repeat) {
             /* Release without a matching press (focus loss, grab). Still
              * report it: consumers track their own state. */
         }
-        nack__g.keys[key] = down;
+        state.keys[key] = down;
     }
-    nack__g.mods = mods;
+    state.mods = mods;
 
     struct nack_win_event *ev = nack__event_begin(down ? NACK_WIN_EVENT_KEY_DOWN : NACK_WIN_EVENT_KEY_UP, w);
     ev->data.key.key = key;
@@ -302,7 +303,7 @@ void nack__emit_mouse_move(struct nack_window *w, double x, double y, uint32_t m
     ev->data.motion.mods = mods;
     w->mouse_x = x;
     w->mouse_y = y;
-    nack__g.mods = mods;
+    state.mods = mods;
     nack__push_event(ev);
 }
 
@@ -311,8 +312,8 @@ void nack__emit_mouse_button(struct nack_window *w, int button, bool down, doubl
 {
     if (button < 0 || button >= NACK_MOUSE_BUTTON_COUNT)
         return;
-    nack__g.mouse_buttons[button] = down;
-    nack__g.mods = mods;
+    state.mouse_buttons[button] = down;
+    state.mods = mods;
     w->mouse_x = x;
     w->mouse_y = y;
 
@@ -367,23 +368,23 @@ void nack__emit_scroll(struct nack_window *w, double dx, double dy, uint32_t mod
 
 void nack__register_window(struct nack_window *w)
 {
-    nack__g.windows.push_back(w);
+    state.windows.push_back(w);
 }
 
 void nack__unregister_window(struct nack_window *w)
 {
-    auto at = std::find(nack__g.windows.begin(), nack__g.windows.end(), w);
-    if (at != nack__g.windows.end())
-        nack__g.windows.erase(at);
+    auto at = std::find(state.windows.begin(), state.windows.end(), w);
+    if (at != state.windows.end())
+        state.windows.erase(at);
 }
 
 /* Drop queued events referring to a window that is going away. */
 static void nack__purge_window_events(struct nack_window *w)
 {
     auto stale = [w](const struct nack_win_event &ev) { return ev.window == w; };
-    nack__g.queue.erase(std::remove_if(nack__g.queue.begin(),
-                                       nack__g.queue.end(), stale),
-                        nack__g.queue.end());
+    state.queue.erase(std::remove_if(state.queue.begin(),
+                                       state.queue.end(), stale),
+                        state.queue.end());
 }
 
 /* ------------------------------------------------------------------ */
@@ -458,12 +459,12 @@ static bool nack__try_init_backends(const struct nack_win_init_desc *desc)
     for (size_t i = 0; i < n; ++i) {
         if (!order[i])
             continue;
-        nack__g.vt = order[i];
+        state.vt = order[i];
         if (order[i]->init(desc))
             return true;
-        nack__log("nack: backend '%s' unavailable: %s", order[i]->name(),
-                  nack__g.error_message);
-        nack__g.vt = NULL;
+        nack_log("nack: backend '%s' unavailable: %s", order[i]->name(),
+                  state.error_message);
+        state.vt = NULL;
     }
     return nack__fail(NACK_ERROR_NO_BACKEND,
                       "no usable display backend (tried wayland/x11)");
@@ -471,17 +472,17 @@ static bool nack__try_init_backends(const struct nack_win_init_desc *desc)
     nack_backend_vt *vt = nack__select_backend(desc->backend);
     if (!vt)
         return nack__fail(NACK_ERROR_NO_BACKEND, "no display backend compiled in");
-    nack__g.vt = vt;
+    state.vt = vt;
     if (vt->init(desc))
         return true;
-    nack__g.vt = NULL;
+    state.vt = nullptr;
     return false;
 #endif
 }
 
 bool nack__win_init(const struct nack_win_init_desc *desc)
 {
-    if (nack__g.initialized)
+    if (state.initialized)
         return true;
 
     struct nack_win_init_desc local;
@@ -489,49 +490,49 @@ bool nack__win_init(const struct nack_win_init_desc *desc)
     if (desc)
         local = *desc;
 
-    nack__g = nack_state{};
-    nack__g.log_fn = local.log_fn;
-    nack__g.log_user_data = local.log_user_data;
-    nack__g.swap_interval = 1;
+    state = nack_state{};
+    state.log_fn = local.log_fn;
+    state.log_user_data = local.log_user_data;
+    state.swap_interval = 1;
 
     return nack::guarded_win("cannot start the window layer", [&] {
-        nack__g.app_id = local.app_id ? local.app_id : "libnack";
+        state.app_id = local.app_id ? local.app_id : "libnack";
         if (!nack__try_init_backends(&local)) {
-            nack__g.app_id.clear();
+            state.app_id.clear();
             return false;
         }
-        nack__g.initialized = true;
-        nack__log("nack: using %s backend", nack__g.vt->name());
+        state.initialized = true;
+        nack_log("nack: using %s backend", state.vt->name());
         return true;
     }, false);
 }
 
 void nack__win_shutdown(void)
 {
-    if (!nack__g.initialized)
+    if (!state.initialized)
         return;
 
-    while (!nack__g.windows.empty())
-        nack_window_destroy(nack__g.windows.back());
+    while (!state.windows.empty())
+        nack_window_destroy(state.windows.back());
 
-    if (nack__g.vt)
-        nack__g.vt->shutdown();
+    if (state.vt)
+        state.vt->shutdown();
 
     /* Entry points belong to the driver we are dropping. */
     nack__proc_cache_clear();
 
     /* Assignment, not memset: the state owns strings and a queue now. */
-    nack__g = nack_state{};
+    state = nack_state{};
 }
 
 bool nack__win_is_initialized(void)
 {
-    return nack__g.initialized;
+    return state.initialized;
 }
 
 enum nack_backend nack__win_get_backend(void)
 {
-    return nack__g.vt ? nack__g.vt->id() : NACK_BACKEND_NONE;
+    return state.vt ? state.vt->id() : NACK_BACKEND_NONE;
 }
 
 /* ------------------------------------------------------------------ */
@@ -618,7 +619,7 @@ struct nack_window *nack_window_create(const struct nack_window_desc *desc)
         return NULL;
 
     struct nack_window *w = owner.get();
-    w->vt = nack__g.vt;
+    w->vt = state.vt;
     w->title = d.title ? d.title : "";
     w->width = d.width;
     w->height = d.height;
@@ -641,7 +642,7 @@ struct nack_window *nack_window_create(const struct nack_window_desc *desc)
     w->cursor_shape = NACK_CURSOR_ARROW;
     w->last_click_button = -1;
 
-    if (!nack__g.vt->window_create(w, &d))
+    if (!state.vt->window_create(w, &d))
         return NULL;
 
     if (!nack::guarded_win("cannot register the window",
@@ -669,9 +670,9 @@ void nack_window_destroy(struct nack_window *window)
         return;
     window->destroyed = true;
 
-    if (nack__g.current_window == window) {
-        nack__g.current_window = NULL;
-        nack__g.current_context = NULL;
+    if (state.current_window == window) {
+        state.current_window = NULL;
+        state.current_context = NULL;
     }
 
     nack__purge_window_events(window);
@@ -870,7 +871,7 @@ bool nack__win_poll_event(struct nack_win_event *event)
         return false;
     if (nack__pop(event))
         return true;
-    nack__g.vt->pump_events(0.0);
+    state.vt->pump_events(0.0);
     return nack__pop(event);
 }
 
@@ -890,8 +891,8 @@ bool nack__win_wait_event_timeout(struct nack_win_event *event, double timeout)
     if (timeout < 0.0) {
         /* Block until the platform produces something we can hand back. */
         while (nack__queue_empty()) {
-            nack__g.vt->pump_events(-1.0);
-            if (nack__g.windows.empty() && nack__queue_empty())
+            state.vt->pump_events(-1.0);
+            if (state.windows.empty() && nack__queue_empty())
                 return false;   /* nothing left that could wake us */
         }
         return nack__pop(event);
@@ -902,7 +903,7 @@ bool nack__win_wait_event_timeout(struct nack_win_event *event, double timeout)
         double remaining = deadline - nack__win_time_seconds();
         if (remaining < 0.0)
             remaining = 0.0;
-        nack__g.vt->pump_events(remaining);
+        state.vt->pump_events(remaining);
         if (nack__pop(event))
             return true;
         if (nack__win_time_seconds() >= deadline)
@@ -912,27 +913,27 @@ bool nack__win_wait_event_timeout(struct nack_win_event *event, double timeout)
 
 void nack__win_wakeup(void)
 {
-    if (nack__g.initialized)
-        nack__g.vt->wakeup();
+    if (state.initialized)
+        state.vt->wakeup();
 }
 
 bool nack__win_key_is_down(enum nack_key key)
 {
     if (key <= 0 || key >= NACK_KEY_COUNT)
         return false;
-    return nack__g.keys[key];
+    return state.keys[key];
 }
 
 uint32_t nack__win_get_mods(void)
 {
-    return nack__g.mods;
+    return state.mods;
 }
 
 bool nack__win_mouse_button_is_down(int button)
 {
     if (button < 0 || button >= NACK_MOUSE_BUTTON_COUNT)
         return false;
-    return nack__g.mouse_buttons[button];
+    return state.mouse_buttons[button];
 }
 
 void nack__win_get_mouse_position(struct nack_window *window, double *x, double *y)
@@ -957,16 +958,16 @@ struct nack_gl_context *nack__gl_context_create(struct nack_window *window,
     nack__gl_desc_defaults(&d);
     if (desc)
         d = *desc;
-    return nack__g.vt->gl_create(window, &d);
+    return state.vt->gl_create(window, &d);
 }
 
 void nack__gl_context_destroy(struct nack_gl_context *context)
 {
     if (!context)
         return;
-    if (nack__g.current_context == context) {
-        nack__g.current_context = NULL;
-        nack__g.current_window = NULL;
+    if (state.current_context == context) {
+        state.current_context = NULL;
+        state.current_window = NULL;
     }
     context->vt->gl_destroy(context);
 }
@@ -974,34 +975,34 @@ void nack__gl_context_destroy(struct nack_gl_context *context)
 bool nack__gl_make_current(struct nack_window *window, struct nack_gl_context *context)
 {
     NACK_REQUIRE_INIT_RET(false);
-    if (!nack__g.vt->gl_make_current(window, context))
+    if (!state.vt->gl_make_current(window, context))
         return false;
-    nack__g.current_window = context ? window : NULL;
-    nack__g.current_context = context;
+    state.current_window = context ? window : NULL;
+    state.current_context = context;
     return true;
 }
 
 void nack__gl_swap_buffers(struct nack_window *window)
 {
-    if (window && nack__g.vt)
-        nack__g.vt->gl_swap_buffers(window);
+    if (window && state.vt)
+        state.vt->gl_swap_buffers(window);
 }
 
 void nack__gl_set_swap_interval(int interval)
 {
-    if (!nack__g.initialized)
+    if (!state.initialized)
         return;
-    nack__g.swap_interval = interval;
-            nack__g.vt->gl_set_swap_interval(interval);
+    state.swap_interval = interval;
+            state.vt->gl_set_swap_interval(interval);
 }
 
 void *nack__gl_get_proc_address(const char *name)
 {
-    if (!nack__g.initialized || !name)
+    if (!state.initialized || !name)
         return NULL;
     /* The cache takes a plain function; a capture-less lambda is one. */
     return nack__proc_cache_get(name, [](const char *symbol) {
-        return nack__g.vt->gl_get_proc_address(symbol);
+        return state.vt->gl_get_proc_address(symbol);
     });
 }
 
@@ -1014,26 +1015,26 @@ bool nack__win_clipboard_set(const char *utf8)
     NACK_REQUIRE_INIT_RET(false);
     if (!utf8)
         return nack__fail(NACK_ERROR_INVALID_ARGUMENT, "no text to set");
-    return nack__g.vt->clipboard_set(utf8);
+    return state.vt->clipboard_set(utf8);
 }
 
 const char *nack__win_clipboard_get(void)
 {
-    if (!nack__g.initialized)
+    if (!state.initialized)
         return NULL;
-    return nack__g.vt->clipboard_get();
+    return state.vt->clipboard_get();
 }
 
 bool nack__win_primary_set(const char *utf8)
 {
-    if (!nack__g.initialized || !utf8)
+    if (!state.initialized || !utf8)
         return false;
-    return nack__g.vt->primary_set(utf8);
+    return state.vt->primary_set(utf8);
 }
 
 const char *nack__win_primary_get(void)
 {
-    if (!nack__g.initialized)
+    if (!state.initialized)
         return NULL;
-    return nack__g.vt->primary_get();
+    return state.vt->primary_get();
 }

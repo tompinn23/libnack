@@ -564,7 +564,7 @@ static bool nack__wl_window_create(struct nack_window *w,
 
     ww->egl_window = wl_egl_window_create(ww->surface, w->width, w->height);
     if (!ww->egl_window)
-        nack__log("nack: wl_egl_window_create failed; no OpenGL on this window");
+        nack_log("nack: wl_egl_window_create failed; no OpenGL on this window");
 
     w->fb_width = w->width;
     w->fb_height = w->height;
@@ -948,7 +948,7 @@ static bool nack__wl_init(const struct nack_win_init_desc *desc)
     }
 
     if (!nack__egl_init(EGL_PLATFORM_WAYLAND_KHR, nack__wl.display, NULL))
-        nack__log("nack: EGL unavailable; windows will have no OpenGL support");
+        nack_log("nack: EGL unavailable; windows will have no OpenGL support");
 
     return true;
 }

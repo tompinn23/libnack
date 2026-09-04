@@ -128,7 +128,7 @@ static bool nack__token_in_list(const char *list, const char *name)
 
 bool nack__gl_extension_supported(const char *name)
 {
-    if (!name || !*name || !nack__g.initialized || !nack__g.current_context)
+    if (!name || !*name || !state.initialized || !state.current_context)
         return false;
 
     nack__pfn_get_stringi get_stringi =

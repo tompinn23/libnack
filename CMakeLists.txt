@@ -89,22 +89,11 @@ add_subdirectory(third_party/stb)
 # rather than two.
 #
 if(NACK_FMT_EXTERNAL)
-    if(NOT TARGET fmt::fmt)
+    if(NOT TARGET fmt)
         find_package(fmt REQUIRED)
     endif()
-    add_library(nack_fmt INTERFACE)
-    target_link_libraries(nack_fmt INTERFACE fmt::fmt)
 else()
     add_subdirectory(third_party/fmt)
-endif()
-
-# {fmt} static_asserts that MSVC is building with /utf-8 and wants
-# /Zc:__cplusplus to report the standard it is actually compiling (see
-# third_party/fmt/CMakeLists.txt for the long version) - true of a linked-in
-# external copy exactly as much as the vendored one, so this applies either
-# way rather than living inside just the vendored branch.
-if(MSVC)
-    target_compile_options(nack_fmt INTERFACE /utf-8 /Zc:__cplusplus)
 endif()
 
 set(NACK_LIBRARIES "")
@@ -243,7 +232,7 @@ target_include_directories(nack_objects
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_BINARY_DIR}
             ${NACK_VENDORED_INCLUDES})
-target_link_libraries(nack_objects PUBLIC nack_fmt PRIVATE ${NACK_LIBRARIES})
+target_link_libraries(nack_objects PUBLIC fmt PRIVATE ${NACK_LIBRARIES})
 target_compile_definitions(nack_objects PRIVATE ${NACK_DEFINITIONS})
 
 set_target_properties(nack_objects PROPERTIES
@@ -307,7 +296,7 @@ target_include_directories(nack
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
-target_link_libraries(nack PUBLIC nack_fmt ${NACK_LIBRARIES})
+target_link_libraries(nack PUBLIC fmt ${NACK_LIBRARIES})
 
 set_target_properties(nack PROPERTIES
     VERSION ${PROJECT_VERSION}
@@ -499,19 +488,19 @@ endif()
 # add_subdirectory, and nothing embedded that way installs itself - the
 # including project installs, if anything does.
 #
-if(NOT NACK_FMT_EXTERNAL)
-    install(TARGETS nack nack_fmt
-        EXPORT nackTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-    install(DIRECTORY include/nack DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-    # <nack/nack.hpp> includes fmt directly, so a consumer of the installed
-    # library needs fmt's headers too, not just nack's own.
-    install(DIRECTORY third_party/fmt/fmt
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nack/third_party/fmt)
-    install(EXPORT nackTargets
-        FILE nackTargets.cmake
-        NAMESPACE nack::
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/nack)
-endif()
+#if(NOT NACK_FMT_EXTERNAL)
+#    install(TARGETS nack nack_fmt
+#        EXPORT nackTargets
+#        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+#        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+#        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+#    install(DIRECTORY include/nack DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+#    # <nack/nack.hpp> includes fmt directly, so a consumer of the installed
+#    # library needs fmt's headers too, not just nack's own.
+#    install(DIRECTORY third_party/fmt/fmt
+#        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nack/third_party/fmt)
+#    install(EXPORT nackTargets
+#        FILE nackTargets.cmake
+#        NAMESPACE nack::
+#        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/nack)
+#endif()

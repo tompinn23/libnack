@@ -571,11 +571,11 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
              * Windows does not send a WM_KEYUP for the second shift when both
              * are held, so release whichever ones are no longer down.
              */
-            if (nack__g.keys[NACK_KEY_LEFT_SHIFT] &&
+            if (state.keys[NACK_KEY_LEFT_SHIFT] &&
                 !(GetKeyState(VK_LSHIFT) & 0x8000))
                 nack__emit_key(w, NACK_KEY_LEFT_SHIFT, scancode,
                                nack__win32_mods(), false, false);
-            if (nack__g.keys[NACK_KEY_RIGHT_SHIFT] &&
+            if (state.keys[NACK_KEY_RIGHT_SHIFT] &&
                 !(GetKeyState(VK_RSHIFT) & 0x8000))
                 nack__emit_key(w, NACK_KEY_RIGHT_SHIFT, scancode,
                                nack__win32_mods(), false, false);
@@ -697,9 +697,9 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
         /* Capture keeps the release event coming to us even if the pointer
          * leaves the window mid-drag, which selection handling depends on. */
         if (down) {
-            if (!nack__g.mouse_buttons[NACK_MOUSE_LEFT] &&
-                !nack__g.mouse_buttons[NACK_MOUSE_RIGHT] &&
-                !nack__g.mouse_buttons[NACK_MOUSE_MIDDLE])
+            if (!state.mouse_buttons[NACK_MOUSE_LEFT] &&
+                !state.mouse_buttons[NACK_MOUSE_RIGHT] &&
+                !state.mouse_buttons[NACK_MOUSE_MIDDLE])
                 SetCapture(hwnd);
         }
 
@@ -707,9 +707,9 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
                                 GET_Y_LPARAM(lparam), nack__win32_mods());
 
         if (!down) {
-            if (!nack__g.mouse_buttons[NACK_MOUSE_LEFT] &&
-                !nack__g.mouse_buttons[NACK_MOUSE_RIGHT] &&
-                !nack__g.mouse_buttons[NACK_MOUSE_MIDDLE])
+            if (!state.mouse_buttons[NACK_MOUSE_LEFT] &&
+                !state.mouse_buttons[NACK_MOUSE_RIGHT] &&
+                !state.mouse_buttons[NACK_MOUSE_MIDDLE])
                 ReleaseCapture();
         }
 
@@ -834,7 +834,7 @@ static bool nack__win32_window_create(struct nack_window *w,
         pfd.nVersion = 1;
         DescribePixelFormat(ww->hdc, ww->pixel_format, sizeof pfd, &pfd);
         if (!SetPixelFormat(ww->hdc, ww->pixel_format, &pfd))
-            nack__log("nack: SetPixelFormat failed (error %lu)", GetLastError());
+            nack_log("nack: SetPixelFormat failed (error %lu)", GetLastError());
     }
 
     return true;
@@ -1000,8 +1000,8 @@ static void nack__win32_drain(void)
         if (msg.message == WM_QUIT) {
             size_t i;
             nack__emit_simple(NULL, NACK_WIN_EVENT_QUIT);
-            for (i = 0; i < nack__g.windows.size(); ++i)
-                nack__g.windows[i]->should_close = true;
+            for (i = 0; i < state.windows.size(); ++i)
+                state.windows[i]->should_close = true;
             continue;
         }
         /*
@@ -1049,8 +1049,8 @@ static void nack__win32_wakeup(void)
 
 static HWND nack__win32_any_window(void)
 {
-    for (size_t i = 0; i < nack__g.windows.size(); ++i) {
-        struct nack_win32_window *ww = (struct nack_win32_window *)nack__g.windows[i]->native;
+    for (size_t i = 0; i < state.windows.size(); ++i) {
+        struct nack_win32_window *ww = (struct nack_win32_window *)state.windows[i]->native;
         if (ww && ww->hwnd)
             return ww->hwnd;
     }
