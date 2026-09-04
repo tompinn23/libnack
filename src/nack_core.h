@@ -19,9 +19,7 @@
 #ifndef NACK_CORE_H_INCLUDED
 #define NACK_CORE_H_INCLUDED
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <stddef.h>
+#include <cstdint>
 
 /* -------------------------------------------------------------------------- */
 /* Colour                                                                     */
