@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct nack_console_state nack__c;
+nack_console_state nack__c;
 
 static void nack__log_to_stderr(const char *message, void *user_data)
 {
@@ -50,7 +50,7 @@ void nack_console_state::clear_error()
 
 const char *nack_console_state::last_error() const
 {
-    return has_error ? error.c_str() : NULL;
+    return has_error ? error.c_str() : nullptr;
 }
 
 /* ------------------------------------------------------------------ */
@@ -64,11 +64,11 @@ static void nack__sync_framebuffer(void)
     nack__render_update_viewport();
 }
 
-bool nack_console_state::init(const struct nack_config *config)
+bool nack_console_state::init(const nack_config *config)
 {
-    struct nack_config cfg;
-    struct nack_win_init_desc init_desc;
-    struct nack_window_desc window_desc;
+    nack_config cfg;
+    nack_win_init_desc init_desc;
+    nack_window_desc window_desc;
     int tile_w, tile_h, pixel_w, pixel_h, scale;
 
     if (initialized)
@@ -96,7 +96,7 @@ bool nack_console_state::init(const struct nack_config *config)
     if (getenv("NACK_DEBUG"))
         init_desc.log_fn = nack__log_to_stderr;
     if (!state.init(&init_desc)) {
-        const char *message = NULL;
+        const char *message = nullptr;
         state.last_error(&message);
         return set_error("cannot open a window: %s",
                          message ? message : "unknown");
@@ -129,7 +129,7 @@ bool nack_console_state::init(const struct nack_config *config)
 
     window = nack_window::create(&window_desc);
     if (!window) {
-        const char *message = NULL;
+        const char *message = nullptr;
         state.last_error(&message);
         state.shutdown();
         return set_error("cannot create a window: %s",
@@ -138,7 +138,7 @@ bool nack_console_state::init(const struct nack_config *config)
 
     if (!nack__gfx_init(window)) {
         nack_window::destroy(window);
-        window = NULL;
+        window = nullptr;
         state.shutdown();
         return false;   /* the backend already described the failure */
     }
@@ -154,7 +154,7 @@ bool nack_console_state::init(const struct nack_config *config)
     font = builtin_font;
 
     if (cfg.tileset) {
-        struct nack_tileset *tileset =
+        nack_tileset *tileset =
             nack_tileset::load(cfg.tileset, cfg.tile_width, cfg.tile_height,
                                cfg.tileset_layout);
         if (!tileset) {
@@ -207,22 +207,22 @@ void nack_console_state::shutdown()
      * first leaked every atlas, the built-in font included.
      */
     for (i = tilesets.size(); i > 0; --i) {
-        struct nack_tileset *tileset = tilesets[i - 1];
+        nack_tileset *tileset = tilesets[i - 1];
         if (tileset == builtin_font)
             continue;
         nack_tileset::destroy(tileset);
     }
     if (builtin_font) {
-        struct nack_tileset *builtin = builtin_font;
-        builtin_font = NULL;   /* let the destroy go through */
+        nack_tileset *builtin = builtin_font;
+        builtin_font = nullptr;   /* let the destroy go through */
         nack_tileset::destroy(builtin);
     }
 
     nack__gfx_shutdown();
 
     if (root) {
-        struct nack_console *old_root = root;
-        root = NULL;
+        nack_console *old_root = root;
+        root = nullptr;
         nack_console::destroy(old_root);
     }
 
@@ -267,7 +267,7 @@ void nack__debug_capture_frames(bool capture)
 
 bool nack__debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4])
 {
-    const struct nack_console *console = nack__c.root;
+    const nack_console *console = nack__c.root;
     int px, py;
 
     if (!nack__c.initialized || !console)
@@ -317,7 +317,7 @@ double nack_console_state::delta_time() const
 static void nack__pixel_to_cell(double px, double py, int *cx, int *cy,
                                 int *out_px, int *out_py)
 {
-    const struct nack_console *console = nack__c.root;
+    const nack_console *console = nack__c.root;
     double scale = nack__c.dpi_scale > 0.0f ? nack__c.dpi_scale : 1.0;
     double fx = px * scale - nack__c.viewport_x;
     double fy = py * scale - nack__c.viewport_y;
@@ -340,8 +340,8 @@ static void nack__pixel_to_cell(double px, double py, int *cx, int *cy,
 }
 
 /* Returns false for window events the console does not surface. */
-static bool nack__translate(const struct nack_win_event *in,
-                            struct nack_event *out)
+static bool nack__translate(const nack_win_event *in,
+                            nack_event *out)
 {
     memset(out, 0, sizeof *out);
 
@@ -453,9 +453,9 @@ static bool nack__translate(const struct nack_win_event *in,
     }
 }
 
-bool nack_console_state::poll_event(struct nack_event *event)
+bool nack_console_state::poll_event(nack_event *event)
 {
-    struct nack_win_event raw;
+    nack_win_event raw;
 
     if (!initialized || !event)
         return false;
@@ -466,15 +466,15 @@ bool nack_console_state::poll_event(struct nack_event *event)
     return false;
 }
 
-bool nack_console_state::wait_event(struct nack_event *event)
+bool nack_console_state::wait_event(nack_event *event)
 {
     return wait_event_timeout(event, -1.0);
 }
 
-bool nack_console_state::wait_event_timeout(struct nack_event *event,
+bool nack_console_state::wait_event_timeout(nack_event *event,
                                             double seconds)
 {
-    struct nack_win_event raw;
+    nack_win_event raw;
     double deadline;
 
     if (!initialized || !event)
@@ -508,7 +508,7 @@ void nack_console_state::wakeup()
     state.wakeup();
 }
 
-bool nack_console_state::key_down(enum nack_key key) const
+bool nack_console_state::key_down(nack_key key) const
 {
     return state.key_is_down(key);
 }
@@ -529,7 +529,7 @@ void nack_console_state::mouse_cell(int *x, int *y) const
     if (y) *y = mouse_cell_y;
 }
 
-const char *nack__key_name(enum nack_key key)
+const char *nack__key_name(nack_key key)
 {
     return nack_key_get_name(key);
 }
@@ -561,7 +561,7 @@ void nack_console_state::set_vsync(bool on)
     nack__gfx_set_vsync(on);
 }
 
-void nack_console_state::set_font(struct nack_tileset *tileset)
+void nack_console_state::set_font(nack_tileset *tileset)
 {
     if (tileset)
         font = tileset;
@@ -577,7 +577,7 @@ void nack_console_state::set_font(struct nack_tileset *tileset)
  */
 static bool nack__forward_error(const char *what)
 {
-    const char *message = NULL;
+    const char *message = nullptr;
 
     state.last_error(&message);
     return nack__c.set_error("%s: %s", what,

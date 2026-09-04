@@ -23,8 +23,8 @@ struct nack__gl_texture {
 };
 
 struct nack_gl_backend {
-    struct nack_window *window;
-    struct nack_gl_context *context;
+    nack_window *window;
+    nack_gl_context *context;
     nack_gluint program;
     nack_gluint vao, vbo;
     nack_glint uniform_viewport, uniform_atlas, uniform_mode;
@@ -37,7 +37,7 @@ struct nack_gl_backend {
     int frame_width, frame_height;
 };
 
-static struct nack_gl_backend nack__gl;
+static nack_gl_backend nack__gl;
 
 static const char *nack__vertex_source =
     "#version 330 core\n"
@@ -82,12 +82,12 @@ static nack_gluint nack__compile(nack_glenum stage, const char *source)
     nack_gluint shader = glCreateShader(stage);
     nack_glint status = 0;
 
-    glShaderSource(shader, 1, &source, NULL);
+    glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
     glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
     if (!status) {
         char log[1024];
-        glGetShaderInfoLog(shader, sizeof log, NULL, log);
+        glGetShaderInfoLog(shader, sizeof log, nullptr, log);
         nack__c.set_error("console shader failed to compile: %s", log);
         glDeleteShader(shader);
         return 0;
@@ -95,10 +95,10 @@ static nack_gluint nack__compile(nack_glenum stage, const char *source)
     return shader;
 }
 
-static bool nack__glr_init(struct nack_window *window)
+static bool nack__glr_init(nack_window *window)
 {
-    struct nack__gl_desc desc;
-    const char *missing = NULL;
+    nack__gl_desc desc;
+    const char *missing = nullptr;
     nack_gluint vertex, fragment;
     nack_glint status = 0;
 
@@ -111,7 +111,7 @@ static bool nack__glr_init(struct nack_window *window)
 
     nack__gl.context = nack_gl_context::create(window, &desc);
     if (!nack__gl.context) {
-        const char *message = NULL;
+        const char *message = nullptr;
         state.last_error(&message);
         return nack__c.set_error("cannot create an OpenGL 3.3 context: %s",
                            message ? message : "unknown");
@@ -140,7 +140,7 @@ static bool nack__glr_init(struct nack_window *window)
     glDeleteShader(fragment);
     if (!status) {
         char log[1024];
-        glGetProgramInfoLog(nack__gl.program, sizeof log, NULL, log);
+        glGetProgramInfoLog(nack__gl.program, sizeof log, nullptr, log);
         glDeleteProgram(nack__gl.program);
         nack__gl.program = 0;
         return nack__c.set_error("console shader failed to link: %s", log);
@@ -186,10 +186,10 @@ static void nack__glr_shutdown(void)
     nack__gl = nack_gl_backend{};
 }
 
-static struct nack_texture *nack__glr_texture_create(const uint8_t *rgba,
+static nack_texture *nack__glr_texture_create(const uint8_t *rgba,
                                                      int width, int height)
 {
-    struct nack__gl_texture *texture = new nack__gl_texture{};
+    nack__gl_texture *texture = new nack__gl_texture{};
 
     glGenTextures(1, &texture->id);
     glBindTexture(GL_TEXTURE_2D, texture->id);
@@ -201,12 +201,12 @@ static struct nack_texture *nack__glr_texture_create(const uint8_t *rgba,
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    return (struct nack_texture *)texture;
+    return (nack_texture *)texture;
 }
 
-static void nack__glr_texture_destroy(struct nack_texture *handle)
+static void nack__glr_texture_destroy(nack_texture *handle)
 {
-    struct nack__gl_texture *texture = (struct nack__gl_texture *)handle;
+    nack__gl_texture *texture = (nack__gl_texture *)handle;
 
     if (!texture)
         return;
@@ -215,7 +215,7 @@ static void nack__glr_texture_destroy(struct nack_texture *handle)
     delete texture;
 }
 
-static void nack__glr_begin_frame(struct nack_color clear, int fb_width,
+static void nack__glr_begin_frame(nack_color clear, int fb_width,
                                   int fb_height, int viewport_x,
                                   int viewport_y, int viewport_w,
                                   int viewport_h)
@@ -242,9 +242,9 @@ static void nack__glr_begin_frame(struct nack_color clear, int fb_width,
 }
 
 static void nack__glr_draw(const float *vertices, size_t vertex_count,
-                           int mode, struct nack_texture *handle)
+                           int mode, nack_texture *handle)
 {
-    struct nack__gl_texture *texture = (struct nack__gl_texture *)handle;
+    nack__gl_texture *texture = (nack__gl_texture *)handle;
 
     if (vertex_count == 0)
         return;
@@ -357,23 +357,23 @@ class gl_backend final : public nack_gfx_backend {
 public:
     const char *name() const override { return "opengl"; }
 
-    bool init(struct nack_window *window) override
+    bool init(nack_window *window) override
     {
         return nack__glr_init(window);
     }
     void shutdown() override { nack__glr_shutdown(); }
 
-    struct nack_texture *texture_create(const uint8_t *rgba, int width,
+    nack_texture *texture_create(const uint8_t *rgba, int width,
                                         int height) override
     {
         return nack__glr_texture_create(rgba, width, height);
     }
-    void texture_destroy(struct nack_texture *texture) override
+    void texture_destroy(nack_texture *texture) override
     {
         nack__glr_texture_destroy(texture);
     }
 
-    void begin_frame(struct nack_color clear, int fb_width, int fb_height,
+    void begin_frame(nack_color clear, int fb_width, int fb_height,
                      int viewport_x, int viewport_y, int viewport_w,
                      int viewport_h) override
     {
@@ -381,7 +381,7 @@ public:
                               viewport_y, viewport_w, viewport_h);
     }
     void draw(const float *vertices, size_t vertex_count, int mode,
-              struct nack_texture *texture) override
+              nack_texture *texture) override
     {
         nack__glr_draw(vertices, vertex_count, mode, texture);
     }

@@ -30,7 +30,7 @@ static uint8_t *nack__image_fail(const char **error, const char *fmt, ...)
     va_end(args);
     if (error)
         *error = nack__image_error;
-    return NULL;
+    return nullptr;
 }
 
 uint8_t *nack__image_decode(const void *data, size_t size, int *width,
@@ -40,7 +40,7 @@ uint8_t *nack__image_decode(const void *data, size_t size, int *width,
     int w = 0, h = 0, channels = 0;
 
     if (error)
-        *error = NULL;
+        *error = nullptr;
     if (!data || size == 0)
         return nack__image_fail(error, "the image is empty");
     if (size > (size_t)INT_MAX)

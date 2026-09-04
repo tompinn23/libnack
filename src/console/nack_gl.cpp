@@ -8,7 +8,7 @@ NACK_GL_FUNCTIONS(NACK_GL_DEFINE)
 
 bool nack__gl_load(const char **error)
 {
-    const char *missing = NULL;
+    const char *missing = nullptr;
 
 #define NACK_GL_RESOLVE(ret, name, args)                                     \
     nack_gl##name = (nack_pfn_gl##name)state.gl_get_proc_address("gl" #name); \

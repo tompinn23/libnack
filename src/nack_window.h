@@ -121,18 +121,18 @@ struct nack_gl_context;
 
 /*
  * Window-level input, in pixels. The console layer turns this into the public
- * cell-based struct nack_event.
+ * cell-based nack_event.
  */
 struct nack_win_event {
-    enum nack_win_event_type type;
-    struct nack_window *window;
+    nack_win_event_type type;
+    nack_window *window;
     uint64_t time_ns;
     union {
         struct { int width, height, fb_width, fb_height; } size;
         struct { int x, y; } move;
         struct { float scale; } scale;
         struct {
-            enum nack_key key;
+            nack_key key;
             uint32_t scancode;
             uint32_t mods;
             bool repeat;
@@ -161,7 +161,7 @@ struct nack_win_event {
 struct nack_win_init_desc {
     /* Preferred backend, or NACK_BACKEND_NONE to auto-detect. On Unix the
      * NACK_BACKEND environment variable ("wayland"/"x11") overrides this. */
-    enum nack_backend backend = NACK_BACKEND_NONE;
+    nack_backend backend = NACK_BACKEND_NONE;
     /* Application identifier: Wayland xdg app-id and X11 WM_CLASS. */
     const char *app_id = nullptr;
     /* Optional diagnostic sink; receives NUL-terminated messages. */
@@ -196,33 +196,33 @@ struct nack_window_desc {
     bool maximized = false;
     bool transparent = false;
     bool high_dpi = true;         /* opt in to a framebuffer at native DPI   */
-    struct nack_framebuffer_desc framebuffer;
+    nack_framebuffer_desc framebuffer;
     void *user_data = nullptr;
 };
 
 /* Context attributes. The framebuffer format comes from the window. */
 struct nack__gl_desc {
     int major = 3, minor = 3;     /* 0 = "any", library picks a sane default */
-    enum nack__gl_profile profile = NACK__GL_PROFILE_CORE;
+    nack__gl_profile profile = NACK__GL_PROFILE_CORE;
     bool debug = false;
     bool forward_compatible = false;
     bool robust = false;
-    struct nack_gl_context *share = nullptr;
+    nack_gl_context *share = nullptr;
 };
 
 /* -------------------------------------------------------------------------- */
 /* Free-standing utilities                                                    */
 /*                                                                             */
 /* Everything else - window lifetime, events, GL, clipboard - is a method on  */
-/* struct nack_window or struct nack_state, declared in nack_internal.h. What */
+/* nack_window or nack_state, declared in nack_internal.h. What */
 /* is left here has no natural receiver: a backend-name lookup, a key-name    */
 /* lookup, and the OS clock, none of which touch any library state.          */
 /* -------------------------------------------------------------------------- */
 
-const char *nack__win_backend_name(enum nack_backend backend);
-const char *nack_key_get_name(enum nack_key key);
+const char *nack__win_backend_name(nack_backend backend);
+const char *nack_key_get_name(nack_key key);
 
-/* Safe from any thread, unlike everything that touches struct nack_state. */
+/* Safe from any thread, unlike everything that touches nack_state. */
 uint64_t nack__win_time_ns(void);
 double   nack__win_time_seconds(void);
 
@@ -231,7 +231,7 @@ double   nack__win_time_seconds(void);
 /* -------------------------------------------------------------------------- */
 
 struct nack_native_window {
-    enum nack_backend backend;
+    nack_backend backend;
     void *display;      /* Display* / wl_display* / NULL                     */
     void *surface;      /* wl_surface* / NSWindow* / HWND                    */
     void *view;         /* NSView*, which is what a CAMetalLayer attaches to */

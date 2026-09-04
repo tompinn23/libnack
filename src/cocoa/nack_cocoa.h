@@ -28,13 +28,13 @@ struct nack_cocoa_state {
     bool finished_launching;
     std::optional<std::string> clipboard_text;
     NSInteger clipboard_change_count;
-    enum nack_key keycodes[256];
+    nack_key keycodes[256];
     /* Modifier state has to be tracked by hand: macOS reports modifiers as a
      * flags word, not as press and release events. */
     uint32_t modifier_flags;
 };
 
-extern struct nack_cocoa_state nack__cocoa;
+extern nack_cocoa_state nack__cocoa;
 
 /*
  * Instance variables carry a nack prefix rather than the obvious _window and
@@ -43,37 +43,37 @@ extern struct nack_cocoa_state nack__cocoa;
  */
 @interface NackWindowDelegate : NSObject <NSWindowDelegate>
 {
-    struct nack_window *_nackWindow;
+    nack_window *_nackWindow;
 }
-- (instancetype)initWithWindow:(struct nack_window *)window;
+- (instancetype)initWithWindow:(nack_window *)window;
 @end
 
 @interface NackContentView : NSView <NSTextInputClient>
 {
-    struct nack_window *_nackWindow;
+    nack_window *_nackWindow;
     NSTrackingArea *_nackTrackingArea;
     NSMutableAttributedString *_nackMarkedText;
 }
-- (instancetype)initWithWindow:(struct nack_window *)window;
+- (instancetype)initWithWindow:(nack_window *)window;
 @end
 
-static inline struct nack_cocoa_window *nack__cocoa_win(struct nack_window *w)
+static inline nack_cocoa_window *nack__cocoa_win(nack_window *w)
 {
-    return (struct nack_cocoa_window *)w->native;
+    return (nack_cocoa_window *)w->native;
 }
 
 /* nack_nsgl.m */
-struct nack_gl_context *nack__nsgl_create_context(struct nack_window *w, const struct nack__gl_desc *desc,
+nack_gl_context *nack__nsgl_create_context(nack_window *w, const nack__gl_desc *desc,
                                            nack_backend_vt *vt);
-void  nack__nsgl_destroy_context(struct nack_gl_context *ctx);
-bool  nack__nsgl_make_current(struct nack_window *w, struct nack_gl_context *ctx);
-void  nack__nsgl_swap_buffers(struct nack_window *w);
+void  nack__nsgl_destroy_context(nack_gl_context *ctx);
+bool  nack__nsgl_make_current(nack_window *w, nack_gl_context *ctx);
+void  nack__nsgl_swap_buffers(nack_window *w);
 void  nack__nsgl_set_swap_interval(int interval);
 void *nack__nsgl_get_proc_address(const char *name);
-void  nack__nsgl_update(struct nack_window *w);
+void  nack__nsgl_update(nack_window *w);
 void  nack__nsgl_terminate(void);
 
 /* nack_cocoa.m */
-void nack__cocoa_update_size(struct nack_window *w);
+void nack__cocoa_update_size(nack_window *w);
 
 #endif /* NACK_COCOA_H_INCLUDED */

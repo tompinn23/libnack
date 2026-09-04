@@ -72,7 +72,7 @@ struct nack_window {
     bool decorated = true;
     bool transparent = false;
     bool high_dpi = true;
-    struct nack_framebuffer_desc framebuffer;
+    nack_framebuffer_desc framebuffer;
     bool visible = false;
     bool focused = false;
     bool minimized = false;
@@ -81,8 +81,8 @@ struct nack_window {
     bool should_close = false;
     bool destroyed = false;
 
-    enum nack_cursor_mode cursor_mode = NACK_CURSOR_MODE_NORMAL;
-    enum nack_cursor_shape cursor_shape = NACK_CURSOR_ARROW;
+    nack_cursor_mode cursor_mode = NACK_CURSOR_MODE_NORMAL;
+    nack_cursor_shape cursor_shape = NACK_CURSOR_ARROW;
 
     double mouse_x = 0.0, mouse_y = 0.0;
 
@@ -101,9 +101,9 @@ struct nack_window {
      * the library commits a blank frame and retires it on the first
      * gl_swap_buffers.
      */
-    static struct nack_window *create(const struct nack_window_desc *desc);
+    static nack_window *create(const nack_window_desc *desc);
     /* Tolerant of NULL, and safe to call more than once on the same window. */
-    static void destroy(struct nack_window *window);
+    static void destroy(nack_window *window);
 
     void register_self();
     void unregister_self();
@@ -124,18 +124,18 @@ struct nack_window {
     void set_size_increments(int dw, int dh);
     void set_fullscreen(bool fullscreen);
     void set_should_close(bool value);
-    void set_cursor_shape(enum nack_cursor_shape shape);
-    void set_cursor_mode(enum nack_cursor_mode mode);
+    void set_cursor_shape(nack_cursor_shape shape);
+    void set_cursor_mode(nack_cursor_mode mode);
     /* Marks the whole window as needing a repaint; produces a WINDOW_EXPOSE. */
     void request_redraw();
-    void get_native(struct nack_native_window *out) const;
+    void get_native(nack_native_window *out) const;
 
     /* Convenience emitters used by backends */
-    void emit_simple(enum nack_win_event_type type);
+    void emit_simple(nack_win_event_type type);
     void emit_resize(int width, int height, int fb_width, int fb_height);
     void emit_scale(float scale);
     void emit_focus(bool focused);
-    void emit_key(enum nack_key key, uint32_t scancode, uint32_t mods,
+    void emit_key(nack_key key, uint32_t scancode, uint32_t mods,
                  bool down, bool repeat);
     void emit_text(const char *utf8);
     void emit_mouse_move(double x, double y, uint32_t mods);
@@ -147,11 +147,11 @@ struct nack_window {
 struct nack_gl_context {
     nack_backend_vt *vt = nullptr;
     void *native = nullptr;
-    struct nack_window *owner = nullptr;   /* window whose pixel format the context matches */
+    nack_window *owner = nullptr;   /* window whose pixel format the context matches */
 
-    static struct nack_gl_context *create(struct nack_window *window,
-                                          const struct nack__gl_desc *desc);
-    static void destroy(struct nack_gl_context *context);
+    static nack_gl_context *create(nack_window *window,
+                                          const nack__gl_desc *desc);
+    static void destroy(nack_gl_context *context);
 };
 
 /*
@@ -174,54 +174,54 @@ public:
     virtual ~nack_backend_vt() = default;
 
     virtual const char *name() const = 0;
-    virtual enum nack_backend id() const = 0;
+    virtual nack_backend id() const = 0;
 
-    virtual bool init(const struct nack_win_init_desc *desc) = 0;
+    virtual bool init(const nack_win_init_desc *desc) = 0;
     virtual void shutdown() = 0;
 
-    virtual bool window_create(struct nack_window *w,
-                               const struct nack_window_desc *desc) = 0;
-    virtual void window_destroy(struct nack_window *w) = 0;
-    virtual void window_show(struct nack_window *w, bool show) = 0;
-    virtual void window_set_title(struct nack_window *w, const char *title) = 0;
-    virtual void window_set_size(struct nack_window *w, int width,
+    virtual bool window_create(nack_window *w,
+                               const nack_window_desc *desc) = 0;
+    virtual void window_destroy(nack_window *w) = 0;
+    virtual void window_show(nack_window *w, bool show) = 0;
+    virtual void window_set_title(nack_window *w, const char *title) = 0;
+    virtual void window_set_size(nack_window *w, int width,
                                  int height) = 0;
-    virtual void window_apply_size_hints(struct nack_window *w) = 0;
-    virtual void window_set_fullscreen(struct nack_window *w,
+    virtual void window_apply_size_hints(nack_window *w) = 0;
+    virtual void window_set_fullscreen(nack_window *w,
                                        bool fullscreen) = 0;
-    virtual void window_minimize(struct nack_window *w) = 0;
-    virtual void window_maximize(struct nack_window *w) = 0;
-    virtual void window_restore(struct nack_window *w) = 0;
-    virtual void window_request_redraw(struct nack_window *w) = 0;
-    virtual void window_set_cursor_shape(struct nack_window *w,
-                                         enum nack_cursor_shape shape) = 0;
-    virtual void window_set_cursor_mode(struct nack_window *w,
-                                        enum nack_cursor_mode mode) = 0;
-    virtual void window_get_native(const struct nack_window *w,
-                                   struct nack_native_window *out) = 0;
+    virtual void window_minimize(nack_window *w) = 0;
+    virtual void window_maximize(nack_window *w) = 0;
+    virtual void window_restore(nack_window *w) = 0;
+    virtual void window_request_redraw(nack_window *w) = 0;
+    virtual void window_set_cursor_shape(nack_window *w,
+                                         nack_cursor_shape shape) = 0;
+    virtual void window_set_cursor_mode(nack_window *w,
+                                        nack_cursor_mode mode) = 0;
+    virtual void window_get_native(const nack_window *w,
+                                   nack_native_window *out) = 0;
 
     /*
      * Not every windowing system offers these. Declining is what the default
      * means; it is not the same as forgetting, which no longer compiles.
      */
-    virtual void window_focus(struct nack_window *w) { (void)w; }
-    virtual void window_set_position(struct nack_window *w, int x, int y)
+    virtual void window_focus(nack_window *w) { (void)w; }
+    virtual void window_set_position(nack_window *w, int x, int y)
     {
         (void)w; (void)x; (void)y;
     }
-    virtual void window_request_attention(struct nack_window *w) { (void)w; }
+    virtual void window_request_attention(nack_window *w) { (void)w; }
 
     /* Pump platform events into the queue. timeout < 0 blocks indefinitely,
      * 0 polls, > 0 waits at most that many seconds. */
     virtual void pump_events(double timeout) = 0;
     virtual void wakeup() = 0;
 
-    virtual struct nack_gl_context *gl_create(struct nack_window *w,
-                                              const struct nack__gl_desc *desc) = 0;
-    virtual void gl_destroy(struct nack_gl_context *ctx) = 0;
-    virtual bool gl_make_current(struct nack_window *w,
-                                 struct nack_gl_context *ctx) = 0;
-    virtual void gl_swap_buffers(struct nack_window *w) = 0;
+    virtual nack_gl_context *gl_create(nack_window *w,
+                                              const nack__gl_desc *desc) = 0;
+    virtual void gl_destroy(nack_gl_context *ctx) = 0;
+    virtual bool gl_make_current(nack_window *w,
+                                 nack_gl_context *ctx) = 0;
+    virtual void gl_swap_buffers(nack_window *w) = 0;
     virtual void gl_set_swap_interval(int interval) = 0;
     virtual void *gl_get_proc_address(const char *name) = 0;
 
@@ -255,53 +255,53 @@ struct nack_state {
      * needs no cap. The ring buffer it replaces had one, and dropped the
      * oldest event to stay within it.
      */
-    std::deque<struct nack_win_event> queue;
+    std::deque<nack_win_event> queue;
 
-    std::vector<struct nack_window *> windows;
+    std::vector<nack_window *> windows;
 
     std::array<bool, NACK_KEY_COUNT> keys{};
     std::array<bool, NACK_MOUSE_BUTTON_COUNT> mouse_buttons{};
     uint32_t mods = 0;
 
-    struct nack_gl_context *current_context = nullptr;
-    struct nack_window *current_window = nullptr;
+    nack_gl_context *current_context = nullptr;
+    nack_window *current_window = nullptr;
     int swap_interval = 0;
 
-    enum nack_result error_code = NACK_OK;
+    nack_result error_code = NACK_OK;
     std::string error_message;
 
-    bool init(const struct nack_win_init_desc *desc);
+    bool init(const nack_win_init_desc *desc);
     void shutdown();
-    enum nack_backend backend() const;
+    nack_backend backend() const;
 
     /* Last error for the calling thread; valid until the next failing call. */
-    enum nack_result last_error(const char **message) const;
-    bool fail(enum nack_result code, const char *fmt, ...);
+    nack_result last_error(const char **message) const;
+    bool fail(nack_result code, const char *fmt, ...);
 
     /* Event queue */
-    void push_event(const struct nack_win_event *ev);
-    struct nack_win_event *event_begin(enum nack_win_event_type type,
-                                       struct nack_window *w);
+    void push_event(const nack_win_event *ev);
+    nack_win_event *event_begin(nack_win_event_type type,
+                                       nack_window *w);
     /* For events - QUIT, WAKEUP - with no window to be a method on. */
-    void emit_global(enum nack_win_event_type type);
+    void emit_global(nack_win_event_type type);
 
     /* Non-blocking: returns false when the queue is empty. */
-    bool poll_event(struct nack_win_event *event);
+    bool poll_event(nack_win_event *event);
     /* Blocks until at least one event is available. */
-    bool wait_event(struct nack_win_event *event);
+    bool wait_event(nack_win_event *event);
     /* Blocks for at most `timeout` seconds; returns false on timeout. */
-    bool wait_event_timeout(struct nack_win_event *event, double timeout);
+    bool wait_event_timeout(nack_win_event *event, double timeout);
     /* Thread-safe: unblocks a waiting wait_event* and queues NACK_WIN_EVENT_WAKEUP. */
     void wakeup();
 
     /* Instantaneous input state, updated as events are generated. */
-    bool key_is_down(enum nack_key key) const;
+    bool key_is_down(nack_key key) const;
     uint32_t get_mods() const;
     bool mouse_button_is_down(int button) const;
 
-    bool gl_make_current(struct nack_window *window,
-                         struct nack_gl_context *context);
-    void gl_swap_buffers(struct nack_window *window);
+    bool gl_make_current(nack_window *window,
+                         nack_gl_context *context);
+    void gl_swap_buffers(nack_window *window);
     void gl_set_swap_interval(int interval);
     /*
      * Resolves an OpenGL entry point. Suitable as the loader callback for
@@ -326,7 +326,7 @@ struct nack_state {
     const char *primary_get();
 };
 
-extern struct nack_state state;
+extern nack_state state;
 
 /* Diagnostics */
 void nack_log(const char *fmt, ...);

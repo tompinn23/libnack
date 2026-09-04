@@ -37,7 +37,7 @@ struct nack__mtl_texture {
 };
 
 struct nack_metal_backend {
-    struct nack_window *window;
+    nack_window *window;
     NSView *view;
     CAMetalLayer *layer;
 
@@ -63,7 +63,7 @@ struct nack_metal_backend {
     bool vsync;
 };
 
-static struct nack_metal_backend nack__mtl;
+static nack_metal_backend nack__mtl;
 
 /*
  * Matches the interleaved float layout the console produces: position, uv,
@@ -129,10 +129,10 @@ struct nack_uniforms {
     int padding;         /* keep the struct 16-byte aligned for Metal */
 };
 
-static bool nack__mtl_init(struct nack_window *window)
+static bool nack__mtl_init(nack_window *window)
 {
     @autoreleasepool {
-        struct nack_native_window native;
+        nack_native_window native;
         MTLRenderPipelineDescriptor *descriptor;
         MTLSamplerDescriptor *sampler_descriptor;
         MTLCompileOptions *options;
@@ -248,13 +248,13 @@ static void nack__mtl_shutdown(void)
     }
 }
 
-static struct nack_texture *nack__mtl_texture_create(const uint8_t *rgba,
+static nack_texture *nack__mtl_texture_create(const uint8_t *rgba,
                                                      int width, int height)
 {
     @autoreleasepool {
         MTLTextureDescriptor *descriptor;
 
-        std::unique_ptr<struct nack__mtl_texture> texture(
+        std::unique_ptr<nack__mtl_texture> texture(
             new nack__mtl_texture{});
 
         descriptor = [MTLTextureDescriptor
@@ -275,13 +275,13 @@ static struct nack_texture *nack__mtl_texture_create(const uint8_t *rgba,
                             mipmapLevel:0
                               withBytes:rgba
                             bytesPerRow:(NSUInteger)width * 4];
-        return (struct nack_texture *)texture.release();
+        return (nack_texture *)texture.release();
     }
 }
 
-static void nack__mtl_texture_destroy(struct nack_texture *handle)
+static void nack__mtl_texture_destroy(nack_texture *handle)
 {
-    struct nack__mtl_texture *texture = (struct nack__mtl_texture *)handle;
+    nack__mtl_texture *texture = (nack__mtl_texture *)handle;
 
     if (!texture)
         return;
@@ -289,7 +289,7 @@ static void nack__mtl_texture_destroy(struct nack_texture *handle)
     delete texture;
 }
 
-static void nack__mtl_begin_frame(struct nack_color clear, int fb_width,
+static void nack__mtl_begin_frame(nack_color clear, int fb_width,
                                   int fb_height, int viewport_x,
                                   int viewport_y, int viewport_w,
                                   int viewport_h)
@@ -339,7 +339,7 @@ static void nack__mtl_begin_frame(struct nack_color clear, int fb_width,
         [nack__mtl.encoder setFragmentSamplerState:nack__mtl.sampler atIndex:0];
 
         {
-            struct nack_uniforms uniforms;
+            nack_uniforms uniforms;
             memset(&uniforms, 0, sizeof uniforms);
             uniforms.viewport[0] = (float)viewport_w;
             uniforms.viewport[1] = (float)viewport_h;
@@ -375,10 +375,10 @@ static bool nack__reserve(size_t vertex_count)
 }
 
 static void nack__mtl_draw(const float *vertices, size_t vertex_count,
-                           int mode, struct nack_texture *handle)
+                           int mode, nack_texture *handle)
 {
-    struct nack__mtl_texture *texture = (struct nack__mtl_texture *)handle;
-    struct nack_uniforms uniforms;
+    nack__mtl_texture *texture = (nack__mtl_texture *)handle;
+    nack_uniforms uniforms;
 
     if (!nack__mtl.encoder || vertex_count == 0)
         return;
@@ -514,23 +514,23 @@ class metal_backend final : public nack_gfx_backend {
 public:
     const char *name() const override { return "metal"; }
 
-    bool init(struct nack_window *window) override
+    bool init(nack_window *window) override
     {
         return nack__mtl_init(window);
     }
     void shutdown() override { nack__mtl_shutdown(); }
 
-    struct nack_texture *texture_create(const uint8_t *rgba, int width,
+    nack_texture *texture_create(const uint8_t *rgba, int width,
                                         int height) override
     {
         return nack__mtl_texture_create(rgba, width, height);
     }
-    void texture_destroy(struct nack_texture *texture) override
+    void texture_destroy(nack_texture *texture) override
     {
         nack__mtl_texture_destroy(texture);
     }
 
-    void begin_frame(struct nack_color clear, int fb_width, int fb_height,
+    void begin_frame(nack_color clear, int fb_width, int fb_height,
                      int viewport_x, int viewport_y, int viewport_w,
                      int viewport_h) override
     {
@@ -538,7 +538,7 @@ public:
                               viewport_y, viewport_w, viewport_h);
     }
     void draw(const float *vertices, size_t vertex_count, int mode,
-              struct nack_texture *texture) override
+              nack_texture *texture) override
     {
         nack__mtl_draw(vertices, vertex_count, mode, texture);
     }

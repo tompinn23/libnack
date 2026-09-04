@@ -57,18 +57,18 @@ public:
 
     virtual const char *name() const = 0;
 
-    virtual bool init(struct nack_window *window) = 0;
+    virtual bool init(nack_window *window) = 0;
     virtual void shutdown() = 0;
 
-    virtual struct nack_texture *texture_create(const uint8_t *rgba, int width,
+    virtual nack_texture *texture_create(const uint8_t *rgba, int width,
                                                 int height) = 0;
-    virtual void texture_destroy(struct nack_texture *texture) = 0;
+    virtual void texture_destroy(nack_texture *texture) = 0;
 
-    virtual void begin_frame(struct nack_color clear, int fb_width,
+    virtual void begin_frame(nack_color clear, int fb_width,
                              int fb_height, int viewport_x, int viewport_y,
                              int viewport_w, int viewport_h) = 0;
     virtual void draw(const float *vertices, size_t vertex_count, int mode,
-                      struct nack_texture *texture) = 0;
+                      nack_texture *texture) = 0;
     virtual void end_frame() = 0;
 
     virtual void resize(int fb_width, int fb_height) = 0;
@@ -99,20 +99,20 @@ extern "C" {
  * has already been created; on the OpenGL path a context is made current here,
  * and on the Metal path a CAMetalLayer is attached.
  */
-bool nack__gfx_init(struct nack_window *window);
+bool nack__gfx_init(nack_window *window);
 void nack__gfx_shutdown(void);
 
 /* Uploads an RGBA8 atlas. Returns NULL and sets the error on failure. */
-struct nack_texture *nack__gfx_texture_create(const uint8_t *rgba, int width,
+nack_texture *nack__gfx_texture_create(const uint8_t *rgba, int width,
                                               int height);
-void nack__gfx_texture_destroy(struct nack_texture *texture);
+void nack__gfx_texture_destroy(nack_texture *texture);
 
 /*
  * A frame is: begin, then any number of draws, then end. The clear colour
  * fills the whole framebuffer, so it is what shows in the letterbox; the
  * viewport is where the console itself goes, in framebuffer pixels.
  */
-void nack__gfx_begin_frame(struct nack_color clear, int fb_width, int fb_height,
+void nack__gfx_begin_frame(nack_color clear, int fb_width, int fb_height,
                            int viewport_x, int viewport_y,
                            int viewport_w, int viewport_h);
 
@@ -122,7 +122,7 @@ void nack__gfx_begin_frame(struct nack_color clear, int fb_width, int fb_height,
  * samples the texture and tints it by the foreground.
  */
 void nack__gfx_draw(const float *vertices, size_t vertex_count, int mode,
-                    struct nack_texture *texture);
+                    nack_texture *texture);
 
 void nack__gfx_end_frame(void);
 

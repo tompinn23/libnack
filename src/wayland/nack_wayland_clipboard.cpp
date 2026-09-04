@@ -106,7 +106,7 @@ static void data_device_data_offer(void *data, struct wl_data_device *device,
 {
     (void)data; (void)device;
     nack__wl.offer_has_text = false;
-    wl_data_offer_add_listener(offer, &nack__wl_data_offer_listener, NULL);
+    wl_data_offer_add_listener(offer, &nack__wl_data_offer_listener, nullptr);
 }
 
 static void data_device_selection(void *data, struct wl_data_device *device,
@@ -127,7 +127,7 @@ static void data_device_enter(void *data, struct wl_data_device *device, uint32_
     (void)data; (void)device; (void)serial; (void)surface; (void)x; (void)y;
     /* Drag and drop is not implemented; decline the offer politely. */
     if (offer)
-        wl_data_offer_accept(offer, serial, NULL);
+        wl_data_offer_accept(offer, serial, nullptr);
 }
 
 static void data_device_leave(void *data, struct wl_data_device *device)
@@ -219,11 +219,11 @@ static void data_source_send(void *data, struct wl_data_source *source,
     if (masked) {
         if (!was_pending) {
             struct timespec immediately = { 0, 0 };
-            while (sigtimedwait(&pipe_only, NULL, &immediately) == -1 &&
+            while (sigtimedwait(&pipe_only, nullptr, &immediately) == -1 &&
                    errno == EINTR)
                 ;
         }
-        pthread_sigmask(SIG_SETMASK, &previous, NULL);
+        pthread_sigmask(SIG_SETMASK, &previous, nullptr);
     }
     close(fd);
 }
@@ -233,7 +233,7 @@ static void data_source_cancelled(void *data, struct wl_data_source *source)
     (void)data;
     if (nack__wl.data_source == source) {
         wl_data_source_destroy(source);
-        nack__wl.data_source = NULL;
+        nack__wl.data_source = nullptr;
         nack__wl.clipboard_offered.reset();
     }
 }
@@ -290,7 +290,7 @@ static void primary_device_data_offer(void *data,
     (void)data; (void)device;
     nack__wl.primary_offer_has_text = false;
     zwp_primary_selection_offer_v1_add_listener(offer,
-                                                &nack__wl_primary_offer_listener, NULL);
+                                                &nack__wl_primary_offer_listener, nullptr);
 }
 
 static void primary_device_selection(void *data,
@@ -315,7 +315,7 @@ static void primary_source_send(void *data,
                                 const char *mime_type, int32_t fd)
 {
     (void)source;
-    data_source_send(data, NULL, mime_type, fd);
+    data_source_send(data, nullptr, mime_type, fd);
 }
 
 static void primary_source_cancelled(void *data,
@@ -324,7 +324,7 @@ static void primary_source_cancelled(void *data,
     (void)data;
     if (nack__wl.primary_source == source) {
         zwp_primary_selection_source_v1_destroy(source);
-        nack__wl.primary_source = NULL;
+        nack__wl.primary_source = nullptr;
         nack__wl.primary_offered.reset();
     }
 }
@@ -344,14 +344,14 @@ void nack__wl_data_device_bind(void)
         nack__wl.data_device = wl_data_device_manager_get_data_device(
             nack__wl.data_device_manager, nack__wl.seat);
         wl_data_device_add_listener(nack__wl.data_device,
-                                    &nack__wl_data_device_listener, NULL);
+                                    &nack__wl_data_device_listener, nullptr);
     }
     if (nack__wl.primary_manager && nack__wl.seat && !nack__wl.primary_device) {
         nack__wl.primary_device =
             zwp_primary_selection_device_manager_v1_get_device(
                 nack__wl.primary_manager, nack__wl.seat);
         zwp_primary_selection_device_v1_add_listener(
-            nack__wl.primary_device, &nack__wl_primary_device_listener, NULL);
+            nack__wl.primary_device, &nack__wl_primary_device_listener, nullptr);
     }
 }
 
@@ -403,11 +403,11 @@ const char *nack__wl_clipboard_get(void)
     }
 
     if (!nack__wl.pending_offer || !nack__wl.offer_has_text)
-        return NULL;
+        return nullptr;
 
     int fds[2];
     if (pipe(fds) != 0)
-        return NULL;
+        return nullptr;
 
     wl_data_offer_receive(nack__wl.pending_offer, NACK_WL_MIME_UTF8, fds[1]);
     close(fds[1]);
@@ -415,7 +415,7 @@ const char *nack__wl_clipboard_get(void)
     wl_display_roundtrip(nack__wl.display);
 
     nack__wl.clipboard_text = nack__wl_read_pipe(fds[0]);
-    return nack__wl.clipboard_text ? nack__wl.clipboard_text->c_str() : NULL;
+    return nack__wl.clipboard_text ? nack__wl.clipboard_text->c_str() : nullptr;
 }
 
 bool nack__wl_primary_set(const char *utf8)
@@ -456,11 +456,11 @@ const char *nack__wl_primary_get(void)
     }
 
     if (!nack__wl.pending_primary_offer || !nack__wl.primary_offer_has_text)
-        return NULL;
+        return nullptr;
 
     int fds[2];
     if (pipe(fds) != 0)
-        return NULL;
+        return nullptr;
 
     zwp_primary_selection_offer_v1_receive(nack__wl.pending_primary_offer,
                                            NACK_WL_MIME_UTF8, fds[1]);
@@ -468,7 +468,7 @@ const char *nack__wl_primary_get(void)
     wl_display_roundtrip(nack__wl.display);
 
     nack__wl.primary_text = nack__wl_read_pipe(fds[0]);
-    return nack__wl.primary_text ? nack__wl.primary_text->c_str() : NULL;
+    return nack__wl.primary_text ? nack__wl.primary_text->c_str() : nullptr;
 }
 
 void nack__wl_clipboard_shutdown(void)
@@ -487,14 +487,14 @@ void nack__wl_clipboard_shutdown(void)
     if (nack__wl.primary_manager)
         zwp_primary_selection_device_manager_v1_destroy(nack__wl.primary_manager);
 
-    nack__wl.data_source = NULL;
-    nack__wl.primary_source = NULL;
-    nack__wl.pending_offer = NULL;
-    nack__wl.pending_primary_offer = NULL;
-    nack__wl.data_device = NULL;
-    nack__wl.primary_device = NULL;
-    nack__wl.data_device_manager = NULL;
-    nack__wl.primary_manager = NULL;
+    nack__wl.data_source = nullptr;
+    nack__wl.primary_source = nullptr;
+    nack__wl.pending_offer = nullptr;
+    nack__wl.pending_primary_offer = nullptr;
+    nack__wl.data_device = nullptr;
+    nack__wl.primary_device = nullptr;
+    nack__wl.data_device_manager = nullptr;
+    nack__wl.primary_manager = nullptr;
     nack__wl.clipboard_text.reset();
     nack__wl.primary_text.reset();
     nack__wl.clipboard_offered.reset();

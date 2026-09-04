@@ -2,7 +2,7 @@
  * Which windowing system is underneath.
  *
  * Its own header because it is the one part of the window layer that outlives
- * the C/C++ split: nack_window.h is C++ (struct nack_window holds a
+ * the C/C++ split: nack_window.h is C++ (nack_window holds a
  * std::string), but a C caller still has to be able to name a backend, and a
  * second copy of the enumeration would be a second thing to keep correct.
  */

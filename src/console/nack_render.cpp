@@ -26,7 +26,7 @@ static bool nack__reserve_vertices(size_t cells)
 
 static void nack__emit_quad(float **cursor, float x0, float y0, float x1,
                             float y1, float u0, float v0, float u1, float v1,
-                            struct nack_color fg, struct nack_color bg)
+                            nack_color fg, nack_color bg)
 {
     const float fr = fg.r / 255.0f, fg_ = fg.g / 255.0f;
     const float fb = fg.b / 255.0f, fa = fg.a / 255.0f;
@@ -61,8 +61,8 @@ static void nack__emit_quad(float **cursor, float x0, float y0, float x1,
  */
 void nack__render_update_viewport(void)
 {
-    const struct nack_console *console = nack__c.root;
-    const struct nack_tileset *font = nack__c.font;
+    const nack_console *console = nack__c.root;
+    const nack_tileset *font = nack__c.font;
     int console_w, console_h;
 
     if (!console || !font)
@@ -108,9 +108,9 @@ void nack__render_update_viewport(void)
     }
 }
 
-void nack__render_console(const struct nack_console *console)
+void nack__render_console(const nack_console *console)
 {
-    const struct nack_tileset *font = nack__c.font;
+    const nack_tileset *font = nack__c.font;
     float cell_w, cell_h;
     size_t cell_count, pass;
     int x, y;
@@ -130,7 +130,7 @@ void nack__render_console(const struct nack_console *console)
         float *cursor = nack__c.vertices.data();
         for (y = 0; y < console->rows; ++y) {
             for (x = 0; x < console->columns; ++x) {
-                const struct nack_cell *cell =
+                const nack_cell *cell =
                     &console->cells[(size_t)y * console->columns + x];
                 if (cell->bg.a == 0)
                     continue;
@@ -142,12 +142,12 @@ void nack__render_console(const struct nack_console *console)
         nack__gfx_draw(nack__c.vertices.data(),
                        (size_t)(cursor - nack__c.vertices.data()) /
                            NACK_FLOATS_PER_VERTEX,
-                       0, NULL);
+                       0, nullptr);
     }
 
     /* Then one pass per atlas, so mixed glyph and tile consoles stay cheap. */
     for (pass = 0; pass < nack__c.tilesets.size(); ++pass) {
-        struct nack_tileset *atlas = nack__c.tilesets[pass];
+        nack_tileset *atlas = nack__c.tilesets[pass];
         float *cursor = nack__c.vertices.data();
         float du, dv;
 
@@ -158,9 +158,9 @@ void nack__render_console(const struct nack_console *console)
 
         for (y = 0; y < console->rows; ++y) {
             for (x = 0; x < console->columns; ++x) {
-                const struct nack_cell *cell =
+                const nack_cell *cell =
                     &console->cells[(size_t)y * console->columns + x];
-                const struct nack_tileset *source =
+                const nack_tileset *source =
                     cell->tileset ? cell->tileset : font;
                 int index;
                 float u0, v0;

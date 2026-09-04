@@ -3,8 +3,8 @@
  *
  * <nack/nack.hpp> only ever declares nack::app/console_view/console/tileset;
  * it cannot define their methods inline, because a definition would need to
- * see the engine's own vocabulary (struct nack_config, struct nack_event,
- * enum nack_key from src/nack_core.h) and that header is not installed - a
+ * see the engine's own vocabulary (nack_config, nack_event,
+ * nack_key from src/nack_core.h) and that header is not installed - a
  * caller including only <nack/nack.hpp> would fail to find it. So the
  * declarations live in the public header and the bodies live here, in the
  * one file that includes both worlds and converts between them at the
@@ -57,20 +57,20 @@ void fail(const std::string &what)
 /* Type conversion at the seam                                               */
 /* ------------------------------------------------------------------------ */
 
-static struct nack_color to_core(color c) { return { c.r, c.g, c.b, c.a }; }
-static color from_core(struct nack_color c) { return { c.r, c.g, c.b, c.a }; }
+static nack_color to_core(color c) { return { c.r, c.g, c.b, c.a }; }
+static color from_core(nack_color c) { return { c.r, c.g, c.b, c.a }; }
 
-static struct nack_config to_core(const config &c)
+static nack_config to_core(const config &c)
 {
-    struct nack_config out;
+    nack_config out;
     out.title = c.title;
     out.columns = c.columns;
     out.rows = c.rows;
     out.tileset = c.tileset;
     out.tile_width = c.tile_width;
     out.tile_height = c.tile_height;
-    out.tileset_layout = static_cast<enum nack_tileset_layout>(c.tileset_layout);
-    out.scaling = static_cast<enum nack_scaling>(c.scaling);
+    out.tileset_layout = static_cast<nack_tileset_layout>(c.tileset_layout);
+    out.scaling = static_cast<nack_scaling>(c.scaling);
     out.letterbox = to_core(c.letterbox);
     out.vsync = c.vsync;
     out.resizable = c.resizable;
@@ -98,7 +98,7 @@ namespace detail {
  * directly, without that requiring a public place in <nack/nack.hpp> for
  * something no real caller ever constructs.
  */
-std::optional<event> to_event(const struct nack_event &ev)
+std::optional<event> to_event(const nack_event &ev)
 {
     switch (ev.type) {
     case NACK_EVENT_QUIT:
@@ -182,7 +182,7 @@ static bool is_terminated(std::string_view text)
 
 std::string_view key_name(key which)
 {
-    return nack__key_name(static_cast<enum nack_key>(which));
+    return nack__key_name(static_cast<nack_key>(which));
 }
 
 /* ------------------------------------------------------------------------ */
@@ -230,7 +230,7 @@ void console_view::set_bg(int x, int y, color bg) const
 
 cell console_view::at(int x, int y) const
 {
-    struct nack_cell c = handle->get(x, y);
+    nack_cell c = handle->get(x, y);
     return cell{ c.glyph, c.tileset, from_core(c.fg), from_core(c.bg) };
 }
 
@@ -320,7 +320,7 @@ tileset::tileset(const char *path, int tile_width, int tile_height,
 {
     handle = nack_tileset::load(
         path, tile_width, tile_height,
-        static_cast<enum nack_tileset_layout>(arrangement));
+        static_cast<nack_tileset_layout>(arrangement));
     if (!handle)
         detail::fail(last_error_or("cannot load a tileset"));
 }
@@ -330,7 +330,7 @@ tileset::tileset(const void *data, std::size_t size, int tile_width,
 {
     handle = nack_tileset::load_memory(
         data, size, tile_width, tile_height,
-        static_cast<enum nack_tileset_layout>(arrangement));
+        static_cast<nack_tileset_layout>(arrangement));
     if (!handle)
         detail::fail(last_error_or("cannot load a tileset"));
 }
@@ -370,7 +370,7 @@ console_view root() { return console_view(nack__c.root); }
 
 app::app(const config &settings)
 {
-    struct nack_config cfg = to_core(settings);
+    nack_config cfg = to_core(settings);
     if (!nack__c.init(&cfg))
         detail::fail(last_error_or("cannot start libnack"));
     active = true;
@@ -378,7 +378,7 @@ app::app(const config &settings)
 
 std::optional<app> app::try_create(const config &settings)
 {
-    struct nack_config cfg = to_core(settings);
+    nack_config cfg = to_core(settings);
     if (!nack__c.init(&cfg))
         return std::nullopt;
     return app(adopt{});
@@ -414,7 +414,7 @@ double app::delta_time() const { return nack__c.delta_time(); }
 
 std::optional<event> app::poll() const
 {
-    struct nack_event ev;
+    nack_event ev;
     while (nack__c.poll_event(&ev)) {
         if (auto out = detail::to_event(ev))
             return out;
@@ -424,7 +424,7 @@ std::optional<event> app::poll() const
 
 std::optional<event> app::wait() const
 {
-    struct nack_event ev;
+    nack_event ev;
     while (nack__c.wait_event(&ev)) {
         if (auto out = detail::to_event(ev))
             return out;
@@ -434,7 +434,7 @@ std::optional<event> app::wait() const
 
 std::optional<event> app::wait_for(double seconds) const
 {
-    struct nack_event ev;
+    nack_event ev;
     while (nack__c.wait_event_timeout(&ev, seconds)) {
         if (auto out = detail::to_event(ev))
             return out;
@@ -446,7 +446,7 @@ void app::wake() const { nack__c.wakeup(); }
 
 bool app::key_down(nack::key which) const
 {
-    return nack__c.key_down(static_cast<enum nack_key>(which));
+    return nack__c.key_down(static_cast<nack_key>(which));
 }
 
 nack::mod app::mods() const

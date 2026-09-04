@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 
-struct nack_cocoa_state nack__cocoa;
+nack_cocoa_state nack__cocoa;
 
 /* ------------------------------------------------------------------ */
 /* Key mapping                                                        */
@@ -149,7 +149,7 @@ static uint32_t nack__cocoa_mods(NSEventModifierFlags flags)
     return mods;
 }
 
-static enum nack_key nack__cocoa_key(unsigned short keycode)
+static nack_key nack__cocoa_key(unsigned short keycode)
 {
     return keycode < 256 ? nack__cocoa.keycodes[keycode] : NACK_KEY_UNKNOWN;
 }
@@ -158,9 +158,9 @@ static enum nack_key nack__cocoa_key(unsigned short keycode)
 /* Geometry                                                           */
 /* ------------------------------------------------------------------ */
 
-void nack__cocoa_update_size(struct nack_window *w)
+void nack__cocoa_update_size(nack_window *w)
 {
-    struct nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = nack__cocoa_win(w);
     if (!cw || !cw->view)
         return;
 
@@ -183,7 +183,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 
 @implementation NackWindowDelegate
 
-- (instancetype)initWithWindow:(struct nack_window *)window
+- (instancetype)initWithWindow:(nack_window *)window
 {
     self = [super init];
     if (self)
@@ -210,7 +210,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (void)windowDidMove:(NSNotification *)notification
 {
     (void)notification;
-    struct nack_cocoa_window *cw = nack__cocoa_win(_nackWindow);
+    nack_cocoa_window *cw = nack__cocoa_win(_nackWindow);
     const NSRect frame = [cw->window frame];
     const NSRect content = [cw->window contentRectForFrameRect:frame];
     /* Cocoa's origin is bottom-left; report top-left like everywhere else. */
@@ -221,7 +221,7 @@ void nack__cocoa_update_size(struct nack_window *w)
     if (x != _nackWindow->pos_x || y != _nackWindow->pos_y) {
         _nackWindow->pos_x = x;
         _nackWindow->pos_y = y;
-        struct nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_WINDOW_MOVE, _nackWindow);
+        nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_WINDOW_MOVE, _nackWindow);
         ev->data.move.x = x;
         ev->data.move.y = y;
         state.push_event(ev);
@@ -281,7 +281,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 
 @implementation NackContentView
 
-- (instancetype)initWithWindow:(struct nack_window *)window
+- (instancetype)initWithWindow:(nack_window *)window
 {
     self = [super initWithFrame:NSMakeRect(0, 0, window->width, window->height)];
     if (self) {
@@ -372,7 +372,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 
 - (void)nackHandleMouseMove:(NSEvent *)event
 {
-    struct nack_cocoa_window *cw = nack__cocoa_win(_nackWindow);
+    nack_cocoa_window *cw = nack__cocoa_win(_nackWindow);
 
     if (_nackWindow->cursor_mode == NACK_CURSOR_MODE_CAPTURED) {
         /* In captured mode the deltas are authoritative; the pointer itself
@@ -382,7 +382,7 @@ void nack__cocoa_update_size(struct nack_window *w)
         cw->virtual_x += dx;
         cw->virtual_y += dy;
 
-        struct nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_MOUSE_MOVE, _nackWindow);
+        nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_MOUSE_MOVE, _nackWindow);
         ev->data.motion.x = cw->virtual_x;
         ev->data.motion.y = cw->virtual_y;
         ev->data.motion.dx = dx;
@@ -417,7 +417,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (void)cursorUpdate:(NSEvent *)event
 {
     (void)event;
-    struct nack_cocoa_window *cw = nack__cocoa_win(_nackWindow);
+    nack_cocoa_window *cw = nack__cocoa_win(_nackWindow);
     if (cw->cursor)
         [cw->cursor set];
 }
@@ -443,7 +443,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 
 - (void)keyDown:(NSEvent *)event
 {
-    const enum nack_key key = nack__cocoa_key([event keyCode]);
+    const nack_key key = nack__cocoa_key([event keyCode]);
     const uint32_t mods = nack__cocoa_mods([event modifierFlags]);
 
     _nackWindow->emit_key(key, [event keyCode], mods, true, [event isARepeat]);
@@ -470,7 +470,7 @@ void nack__cocoa_update_size(struct nack_window *w)
      * against the previous state.
      */
     const uint32_t mods = nack__cocoa_mods([event modifierFlags]);
-    const enum nack_key key = nack__cocoa_key([event keyCode]);
+    const nack_key key = nack__cocoa_key([event keyCode]);
 
     if (key == NACK_KEY_UNKNOWN)
         return;
@@ -634,11 +634,11 @@ void nack__cocoa_update_size(struct nack_window *w)
 /* Window management                                                  */
 /* ------------------------------------------------------------------ */
 
-static bool nack__cocoa_window_create(struct nack_window *w,
-                                      const struct nack_window_desc *desc)
+static bool nack__cocoa_window_create(nack_window *w,
+                                      const nack_window_desc *desc)
 {
     (void)desc;
-    struct nack_cocoa_window *cw = new nack_cocoa_window{};
+    nack_cocoa_window *cw = new nack_cocoa_window{};
     w->native = cw;
 
     NSWindowStyleMask style = 0;
@@ -715,9 +715,9 @@ static bool nack__cocoa_window_create(struct nack_window *w,
     return true;
 }
 
-static void nack__cocoa_window_destroy(struct nack_window *w)
+static void nack__cocoa_window_destroy(nack_window *w)
 {
-    struct nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = nack__cocoa_win(w);
     if (!cw)
         return;
 
@@ -737,9 +737,9 @@ static void nack__cocoa_window_destroy(struct nack_window *w)
     w->native = NULL;
 }
 
-static void nack__cocoa_window_show(struct nack_window *w, bool show)
+static void nack__cocoa_window_show(nack_window *w, bool show)
 {
-    struct nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = nack__cocoa_win(w);
     if (show) {
         [cw->window orderFront:nil];
         nack__cocoa_update_size(w);
@@ -748,27 +748,27 @@ static void nack__cocoa_window_show(struct nack_window *w, bool show)
     }
 }
 
-static void nack__cocoa_window_focus(struct nack_window *w)
+static void nack__cocoa_window_focus(nack_window *w)
 {
     [NSApp activateIgnoringOtherApps:YES];
     [nack__cocoa_win(w)->window makeKeyAndOrderFront:nil];
 }
 
-static void nack__cocoa_window_set_title(struct nack_window *w, const char *title)
+static void nack__cocoa_window_set_title(nack_window *w, const char *title)
 {
     NSString *string = [NSString stringWithUTF8String:title];
     if (string)
         [nack__cocoa_win(w)->window setTitle:string];
 }
 
-static void nack__cocoa_window_set_size(struct nack_window *w, int width, int height)
+static void nack__cocoa_window_set_size(nack_window *w, int width, int height)
 {
     [nack__cocoa_win(w)->window setContentSize:NSMakeSize(width, height)];
 }
 
-static void nack__cocoa_window_set_position(struct nack_window *w, int x, int y)
+static void nack__cocoa_window_set_position(nack_window *w, int x, int y)
 {
-    struct nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = nack__cocoa_win(w);
     const NSRect content = [cw->window contentRectForFrameRect:[cw->window frame]];
     const CGFloat screen_height = [[cw->window screen] frame].size.height;
     /* Convert our top-left origin back to Cocoa's bottom-left one. */
@@ -778,9 +778,9 @@ static void nack__cocoa_window_set_position(struct nack_window *w, int x, int y)
         [cw->window frameRectForContentRect:target].origin];
 }
 
-static void nack__cocoa_apply_size_hints(struct nack_window *w)
+static void nack__cocoa_apply_size_hints(nack_window *w)
 {
-    struct nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = nack__cocoa_win(w);
     [cw->window setContentMinSize:
         NSMakeSize(w->min_width > 0 ? w->min_width : 1,
                    w->min_height > 0 ? w->min_height : 1)];
@@ -792,51 +792,51 @@ static void nack__cocoa_apply_size_hints(struct nack_window *w)
                    w->inc_height > 0 ? w->inc_height : 1)];
 }
 
-static void nack__cocoa_window_set_fullscreen(struct nack_window *w, bool fullscreen)
+static void nack__cocoa_window_set_fullscreen(nack_window *w, bool fullscreen)
 {
-    struct nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = nack__cocoa_win(w);
     const bool is_fullscreen =
         ([cw->window styleMask] & NSWindowStyleMaskFullScreen) != 0;
     if (fullscreen != is_fullscreen)
         [cw->window toggleFullScreen:nil];
 }
 
-static void nack__cocoa_window_minimize(struct nack_window *w)
+static void nack__cocoa_window_minimize(nack_window *w)
 {
     [nack__cocoa_win(w)->window miniaturize:nil];
 }
 
-static void nack__cocoa_window_maximize(struct nack_window *w)
+static void nack__cocoa_window_maximize(nack_window *w)
 {
-    struct nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = nack__cocoa_win(w);
     if (![cw->window isZoomed])
         [cw->window zoom:nil];
 }
 
-static void nack__cocoa_window_restore(struct nack_window *w)
+static void nack__cocoa_window_restore(nack_window *w)
 {
-    struct nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = nack__cocoa_win(w);
     if ([cw->window isMiniaturized])
         [cw->window deminiaturize:nil];
     else if ([cw->window isZoomed])
         [cw->window zoom:nil];
 }
 
-static void nack__cocoa_window_request_attention(struct nack_window *w)
+static void nack__cocoa_window_request_attention(nack_window *w)
 {
     (void)w;
     [NSApp requestUserAttention:NSInformationalRequest];
 }
 
-static void nack__cocoa_window_request_redraw(struct nack_window *w)
+static void nack__cocoa_window_request_redraw(nack_window *w)
 {
     [nack__cocoa_win(w)->view setNeedsDisplay:YES];
 }
 
-static void nack__cocoa_window_get_native(const struct nack_window *w,
-                                          struct nack_native_window *out)
+static void nack__cocoa_window_get_native(const nack_window *w,
+                                          nack_native_window *out)
 {
-    struct nack_cocoa_window *cw = (struct nack_cocoa_window *)w->native;
+    nack_cocoa_window *cw = (nack_cocoa_window *)w->native;
     out->display = NULL;
     out->surface = cw ? (void *)cw->window : NULL;
     out->view = cw ? (void *)cw->view : NULL;
@@ -847,7 +847,7 @@ static void nack__cocoa_window_get_native(const struct nack_window *w,
 /* Cursor                                                             */
 /* ------------------------------------------------------------------ */
 
-static NSCursor *nack__cocoa_cursor_for(enum nack_cursor_shape shape)
+static NSCursor *nack__cocoa_cursor_for(nack_cursor_shape shape)
 {
     switch (shape) {
     case NACK_CURSOR_IBEAM:        return [NSCursor IBeamCursor];
@@ -867,19 +867,19 @@ static NSCursor *nack__cocoa_cursor_for(enum nack_cursor_shape shape)
     }
 }
 
-static void nack__cocoa_set_cursor_shape(struct nack_window *w,
-                                         enum nack_cursor_shape shape)
+static void nack__cocoa_set_cursor_shape(nack_window *w,
+                                         nack_cursor_shape shape)
 {
-    struct nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = nack__cocoa_win(w);
     cw->cursor = nack__cocoa_cursor_for(shape);
     if (w->cursor_mode == NACK_CURSOR_MODE_NORMAL && w->focused)
         [cw->cursor set];
 }
 
-static void nack__cocoa_set_cursor_mode(struct nack_window *w,
-                                        enum nack_cursor_mode mode)
+static void nack__cocoa_set_cursor_mode(nack_window *w,
+                                        nack_cursor_mode mode)
 {
-    struct nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = nack__cocoa_win(w);
 
     const bool should_hide = (mode != NACK_CURSOR_MODE_NORMAL);
     if (should_hide != cw->cursor_hidden) {
@@ -1052,7 +1052,7 @@ static void nack__cocoa_create_menu_bar(void)
     [bar release];
 }
 
-static bool nack__cocoa_init(const struct nack_win_init_desc *desc)
+static bool nack__cocoa_init(const nack_win_init_desc *desc)
 {
     (void)desc;
     nack__cocoa = nack_cocoa_state{};
@@ -1100,9 +1100,9 @@ namespace {
 class cocoa_backend final : public nack_backend_vt {
 public:
     const char *name() const override { return "cocoa"; }
-    enum nack_backend id() const override { return NACK_BACKEND_COCOA; }
+    nack_backend id() const override { return NACK_BACKEND_COCOA; }
 
-    bool init(const struct nack_win_init_desc *desc) override
+    bool init(const nack_win_init_desc *desc) override
     {
         return nack__cocoa_init(desc);
     }
@@ -1110,71 +1110,71 @@ public:
     {
         nack__cocoa_shutdown();
     }
-    bool window_create(struct nack_window *w, const struct nack_window_desc *desc) override
+    bool window_create(nack_window *w, const nack_window_desc *desc) override
     {
         return nack__cocoa_window_create(w, desc);
     }
-    void window_destroy(struct nack_window *w) override
+    void window_destroy(nack_window *w) override
     {
         nack__cocoa_window_destroy(w);
     }
-    void window_show(struct nack_window *w, bool show) override
+    void window_show(nack_window *w, bool show) override
     {
         nack__cocoa_window_show(w, show);
     }
-    void window_set_title(struct nack_window *w, const char *title) override
+    void window_set_title(nack_window *w, const char *title) override
     {
         nack__cocoa_window_set_title(w, title);
     }
-    void window_set_size(struct nack_window *w, int width, int height) override
+    void window_set_size(nack_window *w, int width, int height) override
     {
         nack__cocoa_window_set_size(w, width, height);
     }
-    void window_apply_size_hints(struct nack_window *w) override
+    void window_apply_size_hints(nack_window *w) override
     {
         nack__cocoa_apply_size_hints(w);
     }
-    void window_set_fullscreen(struct nack_window *w, bool fullscreen) override
+    void window_set_fullscreen(nack_window *w, bool fullscreen) override
     {
         nack__cocoa_window_set_fullscreen(w, fullscreen);
     }
-    void window_minimize(struct nack_window *w) override
+    void window_minimize(nack_window *w) override
     {
         nack__cocoa_window_minimize(w);
     }
-    void window_maximize(struct nack_window *w) override
+    void window_maximize(nack_window *w) override
     {
         nack__cocoa_window_maximize(w);
     }
-    void window_restore(struct nack_window *w) override
+    void window_restore(nack_window *w) override
     {
         nack__cocoa_window_restore(w);
     }
-    void window_request_redraw(struct nack_window *w) override
+    void window_request_redraw(nack_window *w) override
     {
         nack__cocoa_window_request_redraw(w);
     }
-    void window_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape) override
+    void window_set_cursor_shape(nack_window *w, nack_cursor_shape shape) override
     {
         nack__cocoa_set_cursor_shape(w, shape);
     }
-    void window_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode) override
+    void window_set_cursor_mode(nack_window *w, nack_cursor_mode mode) override
     {
         nack__cocoa_set_cursor_mode(w, mode);
     }
-    void window_get_native(const struct nack_window *w, struct nack_native_window *out) override
+    void window_get_native(const nack_window *w, nack_native_window *out) override
     {
         nack__cocoa_window_get_native(w, out);
     }
-    void window_focus(struct nack_window *w) override
+    void window_focus(nack_window *w) override
     {
         nack__cocoa_window_focus(w);
     }
-    void window_set_position(struct nack_window *w, int x, int y) override
+    void window_set_position(nack_window *w, int x, int y) override
     {
         nack__cocoa_window_set_position(w, x, y);
     }
-    void window_request_attention(struct nack_window *w) override
+    void window_request_attention(nack_window *w) override
     {
         nack__cocoa_window_request_attention(w);
     }
@@ -1186,20 +1186,20 @@ public:
     {
         nack__cocoa_wakeup();
     }
-    struct nack_gl_context *gl_create(struct nack_window *w,
-                                      const struct nack__gl_desc *desc) override
+    nack_gl_context *gl_create(nack_window *w,
+                                      const nack__gl_desc *desc) override
     {
         return nack__nsgl_create_context(w, desc, this);
     }
-    void gl_destroy(struct nack_gl_context *ctx) override
+    void gl_destroy(nack_gl_context *ctx) override
     {
         nack__nsgl_destroy_context(ctx);
     }
-    bool gl_make_current(struct nack_window *w, struct nack_gl_context *ctx) override
+    bool gl_make_current(nack_window *w, nack_gl_context *ctx) override
     {
         return nack__nsgl_make_current(w, ctx);
     }
-    void gl_swap_buffers(struct nack_window *w) override
+    void gl_swap_buffers(nack_window *w) override
     {
         nack__nsgl_swap_buffers(w);
     }

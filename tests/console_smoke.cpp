@@ -162,7 +162,7 @@ int main()
     check(columns == 40 && rows == 20, "root console has the requested size");
 
     {
-        struct nack_tileset *font = nack__c.font;
+        nack_tileset *font = nack__c.font;
         check(font->tile_width == 8 && font->tile_height == 8 &&
               font->count == 256,
               "built-in font is 256 8x8 tiles");
@@ -219,7 +219,7 @@ int main()
      * relies on rather than an exception unwinding somewhere unexpected.
      */
     {
-        struct nack_console *huge = nack_console::create(INT_MAX, INT_MAX);
+        nack_console *huge = nack_console::create(INT_MAX, INT_MAX);
         check(huge == NULL, "an impossible console size is refused");
         check(!nack::last_error().empty(),
               "and says why rather than terminating");
@@ -275,7 +275,7 @@ int main()
         uint8_t sheet[16 * 16 * 4];
         std::memset(sheet, 0, sizeof sheet);
         nack__debug_fail_next_textures(1);
-        struct nack_tileset *doomed = nack_tileset::from_rgba(
+        nack_tileset *doomed = nack_tileset::from_rgba(
             sheet, 16, 16, 8, 8, NACK_LAYOUT_CP437);
         check(doomed == NULL, "a tileset with no texture is not handed out");
         nack_tileset::destroy(doomed);
@@ -289,7 +289,7 @@ int main()
      */
     {
         std::vector<uint8_t> big(2048u * 2048u * 4, 0);
-        struct nack_tileset *wide = nack_tileset::from_rgba(
+        nack_tileset *wide = nack_tileset::from_rgba(
             big.data(), 2048, 2048, 8, 8, NACK_LAYOUT_ROW_MAJOR);
         check(wide != NULL, "a 65536 tile sheet loads");
         if (wide) {
@@ -351,7 +351,7 @@ int main()
     {
         uint8_t plain[16 * 16 * 4];
         uint8_t red[16 * 16 * 4];
-        struct nack_tileset *many[20];
+        nack_tileset *many[20];
         uint8_t pixel[4] = { 0, 0, 0, 0 };
         int made = 0;
 

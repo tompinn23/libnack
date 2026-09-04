@@ -1,7 +1,7 @@
 /* Human-readable key names and generic GL helpers. */
 #include "nack_internal.h"
 
-static const struct { enum nack_key key; const char *name; } nack__key_names[] = {
+static const struct { nack_key key; const char *name; } nack__key_names[] = {
     { NACK_KEY_A, "A" }, { NACK_KEY_B, "B" }, { NACK_KEY_C, "C" },
     { NACK_KEY_D, "D" }, { NACK_KEY_E, "E" }, { NACK_KEY_F, "F" },
     { NACK_KEY_G, "G" }, { NACK_KEY_H, "H" }, { NACK_KEY_I, "I" },
@@ -83,7 +83,7 @@ static const struct { enum nack_key key; const char *name; } nack__key_names[] =
     { NACK_KEY_RIGHT_SUPER, "RightSuper" },
 };
 
-const char *nack_key_get_name(enum nack_key key)
+const char *nack_key_get_name(nack_key key)
 {
     static const char *table[NACK_KEY_COUNT];
     static bool built = false;
@@ -106,9 +106,9 @@ const char *nack_key_get_name(enum nack_key key)
 
 /* Function pointer types for the entry points resolved below; GLenum is
  * unsigned int in every OpenGL ABI. */
-typedef const unsigned char *(*nack__pfn_get_string)(unsigned int);
-typedef const unsigned char *(*nack__pfn_get_stringi)(unsigned int, unsigned int);
-typedef void (*nack__pfn_get_integerv)(unsigned int, int *);
+using nack__pfn_get_string = const unsigned char *(*)(unsigned int);
+using nack__pfn_get_stringi = const unsigned char *(*)(unsigned int, unsigned int);
+using nack__pfn_get_integerv = void (*)(unsigned int, int *);
 
 static bool nack__token_in_list(const char *list, const char *name)
 {

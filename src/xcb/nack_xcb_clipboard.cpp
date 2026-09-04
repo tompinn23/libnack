@@ -48,7 +48,7 @@ static std::optional<std::string> *nack__xcb_owned_slot(xcb_atom_t selection)
         return &nack__xcb.clipboard_owned;
     if (selection == XCB_ATOM_PRIMARY)
         return &nack__xcb.primary_owned;
-    return NULL;
+    return nullptr;
 }
 
 /* ------------------------------------------------------------------ */
@@ -83,9 +83,9 @@ struct nack_incr_send {
     bool active;
 };
 
-static struct nack_incr_send nack__incr_sends[NACK_INCR_SENDS];
+static nack_incr_send nack__incr_sends[NACK_INCR_SENDS];
 
-static void nack__xcb_incr_end(struct nack_incr_send *send)
+static void nack__xcb_incr_end(nack_incr_send *send)
 {
     if (!send->active)
         return;
@@ -104,13 +104,13 @@ static void nack__xcb_incr_end(struct nack_incr_send *send)
 }
 
 /* A free slot, first retiring any transfer whose requestor has stopped asking. */
-static struct nack_incr_send *nack__xcb_incr_slot(void)
+static nack_incr_send *nack__xcb_incr_slot(void)
 {
     double now = nack__win_time_seconds();
-    struct nack_incr_send *available = NULL;
+    nack_incr_send *available = nullptr;
 
     for (int i = 0; i < NACK_INCR_SENDS; ++i) {
-        struct nack_incr_send *send = &nack__incr_sends[i];
+        nack_incr_send *send = &nack__incr_sends[i];
         if (send->active && now > send->deadline)
             nack__xcb_incr_end(send);
         if (!send->active && !available)
@@ -129,7 +129,7 @@ bool nack__xcb_handle_property_notify(xcb_property_notify_event_t *event)
         return false;
 
     for (int i = 0; i < NACK_INCR_SENDS; ++i) {
-        struct nack_incr_send *send = &nack__incr_sends[i];
+        nack_incr_send *send = &nack__incr_sends[i];
         size_t chunk;
 
         if (!send->active || send->requestor != event->window ||
@@ -182,7 +182,7 @@ static xcb_atom_t nack__xcb_write_target(xcb_selection_request_event_t *request,
         size_t len = owned->value().size();
 
         if (len > NACK_INCR_THRESHOLD) {
-            struct nack_incr_send *send = nack__xcb_incr_slot();
+            nack_incr_send *send = nack__xcb_incr_slot();
             uint32_t total = (uint32_t)len;
 
             if (!send)
@@ -235,7 +235,7 @@ bool nack__xcb_handle_selection_request(xcb_selection_request_event_t *request)
             xcb_get_property(nack__xcb.connection, 0, request->requestor, property,
                              nack__xcb.atom.ATOM_PAIR, 0, 1024);
         xcb_get_property_reply_t *pairs_reply =
-            xcb_get_property_reply(nack__xcb.connection, cookie, NULL);
+            xcb_get_property_reply(nack__xcb.connection, cookie, nullptr);
         if (pairs_reply) {
             xcb_atom_t *pairs = (xcb_atom_t *)xcb_get_property_value(pairs_reply);
             int count = xcb_get_property_value_length(pairs_reply) /
@@ -280,7 +280,7 @@ static bool nack__xcb_own_selection(xcb_atom_t selection, const char *utf8)
     xcb_get_selection_owner_cookie_t cookie =
         xcb_get_selection_owner(nack__xcb.connection, selection);
     nack::c_ptr<xcb_get_selection_owner_reply_t> reply(
-        xcb_get_selection_owner_reply(nack__xcb.connection, cookie, NULL));
+        xcb_get_selection_owner_reply(nack__xcb.connection, cookie, nullptr));
     bool ok = reply && reply->owner == nack__xcb.helper;
 
     if (!ok)
@@ -300,7 +300,7 @@ static xcb_generic_event_t *nack__xcb_wait_for(uint8_t wanted, double deadline)
 {
     for (;;) {
         xcb_generic_event_t *event;
-        while ((event = xcb_poll_for_event(nack__xcb.connection)) != NULL) {
+        while ((event = xcb_poll_for_event(nack__xcb.connection)) != nullptr) {
             if (event->response_type == 0) {   /* error reply */
                 free(event);
                 continue;
@@ -312,7 +312,7 @@ static xcb_generic_event_t *nack__xcb_wait_for(uint8_t wanted, double deadline)
         }
 
         if (nack__win_time_seconds() >= deadline)
-            return NULL;
+            return nullptr;
 
         xcb_flush(nack__xcb.connection);
         struct pollfd pfd = { xcb_get_file_descriptor(nack__xcb.connection), POLLIN, 0 };
@@ -361,7 +361,7 @@ static std::optional<std::string> nack__xcb_read_incr(void)
                              nack__xcb.atom.NACK_SELECTION, XCB_GET_PROPERTY_TYPE_ANY,
                              0, UINT32_MAX / 4);
         nack::c_ptr<xcb_get_property_reply_t> reply(
-            xcb_get_property_reply(nack__xcb.connection, cookie, NULL));
+            xcb_get_property_reply(nack__xcb.connection, cookie, nullptr));
         if (!reply)
             return std::nullopt;
 
@@ -390,7 +390,7 @@ static std::optional<std::string> nack__xcb_read_selection(xcb_atom_t selection)
     xcb_get_selection_owner_cookie_t owner_cookie =
         xcb_get_selection_owner(nack__xcb.connection, selection);
     nack::c_ptr<xcb_get_selection_owner_reply_t> owner(
-        xcb_get_selection_owner_reply(nack__xcb.connection, owner_cookie, NULL));
+        xcb_get_selection_owner_reply(nack__xcb.connection, owner_cookie, nullptr));
 
     if (owner && owner->owner == nack__xcb.helper) {
         std::optional<std::string> *owned = nack__xcb_owned_slot(selection);
@@ -424,7 +424,7 @@ static std::optional<std::string> nack__xcb_read_selection(xcb_atom_t selection)
                              nack__xcb.atom.NACK_SELECTION, XCB_GET_PROPERTY_TYPE_ANY,
                              0, UINT32_MAX / 4);
         nack::c_ptr<xcb_get_property_reply_t> reply(
-            xcb_get_property_reply(nack__xcb.connection, cookie, NULL));
+            xcb_get_property_reply(nack__xcb.connection, cookie, nullptr));
         if (!reply)
             continue;
 
@@ -466,7 +466,7 @@ bool nack__xcb_clipboard_set(const char *utf8)
 const char *nack__xcb_clipboard_get(void)
 {
     nack__xcb.clipboard_received = nack__xcb_read_selection(nack__xcb.atom.CLIPBOARD);
-    return nack__xcb.clipboard_received ? nack__xcb.clipboard_received->c_str() : NULL;
+    return nack__xcb.clipboard_received ? nack__xcb.clipboard_received->c_str() : nullptr;
 }
 
 bool nack__xcb_primary_set(const char *utf8)
@@ -477,7 +477,7 @@ bool nack__xcb_primary_set(const char *utf8)
 const char *nack__xcb_primary_get(void)
 {
     nack__xcb.primary_received = nack__xcb_read_selection(XCB_ATOM_PRIMARY);
-    return nack__xcb.primary_received ? nack__xcb.primary_received->c_str() : NULL;
+    return nack__xcb.primary_received ? nack__xcb.primary_received->c_str() : nullptr;
 }
 
 void nack__xcb_clipboard_shutdown(void)

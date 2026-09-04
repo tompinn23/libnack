@@ -5,7 +5,7 @@
 
 #include <stdio.h>
 
-struct nack_win32_state nack__win32;
+nack_win32_state nack__win32;
 
 #define NACK_DEFAULT_DPI 96
 
@@ -50,7 +50,7 @@ std::optional<std::string> nack__win32_wide_to_utf8(const WCHAR *wide)
  * not the active layout. Extended keys (the 0xE0 prefix) are resolved
  * separately in nack__win32_key_from_message.
  */
-static enum nack_key nack__win32_scancodes[512];
+static nack_key nack__win32_scancodes[512];
 
 static void nack__win32_build_keycodes(void)
 {
@@ -181,7 +181,7 @@ static void nack__win32_build_keycodes(void)
     nack__win32_scancodes[0x100 + 0x30] = NACK_KEY_VOLUME_UP;
 }
 
-static enum nack_key nack__win32_key_from_message(WPARAM wparam, LPARAM lparam)
+static nack_key nack__win32_key_from_message(WPARAM wparam, LPARAM lparam)
 {
     UINT scancode = (UINT)((lparam >> 16) & 0x1FF);   /* includes the 0x100 bit */
 
@@ -236,7 +236,7 @@ static UINT nack__win32_dpi_for_window(HWND hwnd)
     return dpi ? dpi : NACK_DEFAULT_DPI;
 }
 
-static void nack__win32_adjust_rect(struct nack_window *w, RECT *rect, DWORD style,
+static void nack__win32_adjust_rect(nack_window *w, RECT *rect, DWORD style,
                                     DWORD ex_style, UINT dpi)
 {
     (void)w;
@@ -246,7 +246,7 @@ static void nack__win32_adjust_rect(struct nack_window *w, RECT *rect, DWORD sty
         AdjustWindowRectEx(rect, style, FALSE, ex_style);
 }
 
-static DWORD nack__win32_style(const struct nack_window *w)
+static DWORD nack__win32_style(const nack_window *w)
 {
     DWORD style = WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
     if (!w->decorated)
@@ -257,7 +257,7 @@ static DWORD nack__win32_style(const struct nack_window *w)
     return style;
 }
 
-static DWORD nack__win32_ex_style(const struct nack_window *w)
+static DWORD nack__win32_ex_style(const nack_window *w)
 {
     DWORD ex_style = WS_EX_APPWINDOW;
     if (w->transparent)
@@ -275,7 +275,7 @@ static const LPCWSTR nack__win32_cursor_ids[NACK_CURSOR_SHAPE_COUNT] = {
     IDC_SIZEALL, IDC_NO, IDC_WAIT,
 };
 
-static HCURSOR nack__win32_get_cursor(enum nack_cursor_shape shape)
+static HCURSOR nack__win32_get_cursor(nack_cursor_shape shape)
 {
     if (!nack__win32.cursors_loaded[shape]) {
         nack__win32.cursors[shape] =
@@ -285,7 +285,7 @@ static HCURSOR nack__win32_get_cursor(enum nack_cursor_shape shape)
     return nack__win32.cursors[shape];
 }
 
-static void nack__win32_apply_cursor(struct nack_window *w)
+static void nack__win32_apply_cursor(nack_window *w)
 {
     if (w->cursor_mode == NACK_CURSOR_MODE_NORMAL)
         SetCursor(nack__win32_get_cursor(w->cursor_shape));
@@ -293,9 +293,9 @@ static void nack__win32_apply_cursor(struct nack_window *w)
         SetCursor(NULL);
 }
 
-static void nack__win32_clip_cursor(struct nack_window *w, bool clip)
+static void nack__win32_clip_cursor(nack_window *w, bool clip)
 {
-    struct nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = nack__win32_win(w);
     if (clip) {
         RECT rect;
         GetClientRect(ww->hwnd, &rect);
@@ -312,15 +312,15 @@ static void nack__win32_clip_cursor(struct nack_window *w, bool clip)
     }
 }
 
-static void nack__win32_set_cursor_mode(struct nack_window *w,
-                                        enum nack_cursor_mode mode)
+static void nack__win32_set_cursor_mode(nack_window *w,
+                                        nack_cursor_mode mode)
 {
     nack__win32_clip_cursor(w, mode == NACK_CURSOR_MODE_CAPTURED);
     nack__win32_apply_cursor(w);
 }
 
-static void nack__win32_set_cursor_shape(struct nack_window *w,
-                                         enum nack_cursor_shape shape)
+static void nack__win32_set_cursor_shape(nack_window *w,
+                                         nack_cursor_shape shape)
 {
     (void)shape;
     nack__win32_apply_cursor(w);
@@ -330,9 +330,9 @@ static void nack__win32_set_cursor_shape(struct nack_window *w,
 /* Window procedure                                                   */
 /* ------------------------------------------------------------------ */
 
-static void nack__win32_track_mouse_leave(struct nack_window *w)
+static void nack__win32_track_mouse_leave(nack_window *w)
 {
-    struct nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = nack__win32_win(w);
     if (ww->cursor_tracked)
         return;
     TRACKMOUSEEVENT track;
@@ -344,9 +344,9 @@ static void nack__win32_track_mouse_leave(struct nack_window *w)
     ww->cursor_tracked = true;
 }
 
-static void nack__win32_update_size(struct nack_window *w)
+static void nack__win32_update_size(nack_window *w)
 {
-    struct nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = nack__win32_win(w);
     RECT rect;
     GetClientRect(ww->hwnd, &rect);
     int width = rect.right - rect.left;
@@ -359,7 +359,7 @@ static void nack__win32_update_size(struct nack_window *w)
 static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
                                             LPARAM lparam)
 {
-    struct nack_window *w = (struct nack_window *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+    nack_window *w = (nack_window *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
     if (!w) {
         if (msg == WM_NCCREATE) {
             /* Opt the non-client area into per-monitor DPI scaling before the
@@ -370,7 +370,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
         return DefWindowProcW(hwnd, msg, wparam, lparam);
     }
 
-    struct nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = nack__win32_win(w);
 
     switch (msg) {
     case WM_CLOSE:
@@ -436,7 +436,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
         if (x != w->pos_x || y != w->pos_y) {
             w->pos_x = x;
             w->pos_y = y;
-            struct nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_WINDOW_MOVE, w);
+            nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_WINDOW_MOVE, w);
             ev->data.move.x = x;
             ev->data.move.y = y;
             state.push_event(ev);
@@ -563,7 +563,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
     case WM_SYSKEYUP: {
         bool down = (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN);
         bool repeat = down && ((lparam >> 30) & 1) != 0;
-        enum nack_key key = nack__win32_key_from_message(wparam, lparam);
+        nack_key key = nack__win32_key_from_message(wparam, lparam);
         UINT scancode = (UINT)((lparam >> 16) & 0x1FF);
 
         if (wparam == VK_SHIFT && !down) {
@@ -651,7 +651,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
             if (dx == 0 && dy == 0)
                 return 0;   /* this is the recentring move, not user input */
 
-            struct nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_MOUSE_MOVE, w);
+            nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_MOUSE_MOVE, w);
             w->mouse_x += dx;
             w->mouse_y += dy;
             ev->data.motion.x = w->mouse_x;
@@ -760,11 +760,11 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 /* Window management                                                  */
 /* ------------------------------------------------------------------ */
 
-static bool nack__win32_window_create(struct nack_window *w,
-                                      const struct nack_window_desc *desc)
+static bool nack__win32_window_create(nack_window *w,
+                                      const nack_window_desc *desc)
 {
     (void)desc;
-    struct nack_win32_window *ww = new nack_win32_window{};
+    nack_win32_window *ww = new nack_win32_window{};
     ww->dpi = NACK_DEFAULT_DPI;
     w->native = ww;
 
@@ -839,9 +839,9 @@ static bool nack__win32_window_create(struct nack_window *w,
     return true;
 }
 
-static void nack__win32_window_destroy(struct nack_window *w)
+static void nack__win32_window_destroy(nack_window *w)
 {
-    struct nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = nack__win32_win(w);
     if (!ww)
         return;
     if (ww->cursor_clipped)
@@ -856,29 +856,29 @@ static void nack__win32_window_destroy(struct nack_window *w)
     w->native = NULL;
 }
 
-static void nack__win32_window_show(struct nack_window *w, bool show)
+static void nack__win32_window_show(nack_window *w, bool show)
 {
     ShowWindow(nack__win32_win(w)->hwnd, show ? SW_SHOWNA : SW_HIDE);
 }
 
-static void nack__win32_window_focus(struct nack_window *w)
+static void nack__win32_window_focus(nack_window *w)
 {
-    struct nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = nack__win32_win(w);
     BringWindowToTop(ww->hwnd);
     SetForegroundWindow(ww->hwnd);
     SetFocus(ww->hwnd);
 }
 
-static void nack__win32_window_set_title(struct nack_window *w, const char *title)
+static void nack__win32_window_set_title(nack_window *w, const char *title)
 {
     std::optional<std::wstring> wide = nack__win32_utf8_to_wide(title);
     if (wide)
         SetWindowTextW(nack__win32_win(w)->hwnd, wide->c_str());
 }
 
-static void nack__win32_window_set_size(struct nack_window *w, int width, int height)
+static void nack__win32_window_set_size(nack_window *w, int width, int height)
 {
-    struct nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = nack__win32_win(w);
     RECT rect = { 0, 0, width, height };
     nack__win32_adjust_rect(w, &rect, nack__win32_style(w),
                             nack__win32_ex_style(w), ww->dpi);
@@ -887,9 +887,9 @@ static void nack__win32_window_set_size(struct nack_window *w, int width, int he
                  SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOMOVE | SWP_NOZORDER);
 }
 
-static void nack__win32_window_set_position(struct nack_window *w, int x, int y)
+static void nack__win32_window_set_position(nack_window *w, int x, int y)
 {
-    struct nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = nack__win32_win(w);
     RECT rect = { x, y, x, y };
     nack__win32_adjust_rect(w, &rect, nack__win32_style(w),
                             nack__win32_ex_style(w), ww->dpi);
@@ -897,11 +897,11 @@ static void nack__win32_window_set_position(struct nack_window *w, int x, int y)
                  SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOSIZE);
 }
 
-static void nack__win32_apply_size_hints(struct nack_window *w)
+static void nack__win32_apply_size_hints(nack_window *w)
 {
     /* Limits are enforced from WM_GETMINMAXINFO and WM_SIZING; nudge the
      * window manager into asking again. */
-    struct nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = nack__win32_win(w);
     RECT rect;
     GetWindowRect(ww->hwnd, &rect);
     SetWindowPos(ww->hwnd, NULL, rect.left, rect.top,
@@ -909,9 +909,9 @@ static void nack__win32_apply_size_hints(struct nack_window *w)
                  SWP_NOACTIVATE | SWP_NOZORDER | SWP_FRAMECHANGED);
 }
 
-static void nack__win32_window_set_fullscreen(struct nack_window *w, bool fullscreen)
+static void nack__win32_window_set_fullscreen(nack_window *w, bool fullscreen)
 {
-    struct nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = nack__win32_win(w);
 
     if (fullscreen && !w->fullscreen) {
         ww->restore_style = (DWORD)GetWindowLongPtrW(ww->hwnd, GWL_STYLE);
@@ -946,24 +946,24 @@ static void nack__win32_window_set_fullscreen(struct nack_window *w, bool fullsc
     }
 }
 
-static void nack__win32_window_minimize(struct nack_window *w)
+static void nack__win32_window_minimize(nack_window *w)
 {
     ShowWindow(nack__win32_win(w)->hwnd, SW_MINIMIZE);
 }
 
-static void nack__win32_window_maximize(struct nack_window *w)
+static void nack__win32_window_maximize(nack_window *w)
 {
     ShowWindow(nack__win32_win(w)->hwnd, SW_MAXIMIZE);
 }
 
-static void nack__win32_window_restore(struct nack_window *w)
+static void nack__win32_window_restore(nack_window *w)
 {
     if (w->fullscreen)
         nack__win32_window_set_fullscreen(w, false);
     ShowWindow(nack__win32_win(w)->hwnd, SW_RESTORE);
 }
 
-static void nack__win32_window_request_attention(struct nack_window *w)
+static void nack__win32_window_request_attention(nack_window *w)
 {
     FLASHWINFO flash;
     memset(&flash, 0, sizeof flash);
@@ -974,15 +974,15 @@ static void nack__win32_window_request_attention(struct nack_window *w)
     FlashWindowEx(&flash);
 }
 
-static void nack__win32_window_request_redraw(struct nack_window *w)
+static void nack__win32_window_request_redraw(nack_window *w)
 {
     InvalidateRect(nack__win32_win(w)->hwnd, NULL, FALSE);
 }
 
-static void nack__win32_window_get_native(const struct nack_window *w,
-                                          struct nack_native_window *out)
+static void nack__win32_window_get_native(const nack_window *w,
+                                          nack_native_window *out)
 {
-    struct nack_win32_window *ww = (struct nack_win32_window *)w->native;
+    nack_win32_window *ww = (nack_win32_window *)w->native;
     out->display = NULL;
     out->surface = ww ? (void *)ww->hwnd : NULL;
     out->handle = ww ? (uintptr_t)ww->hwnd : 0;
@@ -1049,7 +1049,7 @@ static void nack__win32_wakeup(void)
 static HWND nack__win32_any_window(void)
 {
     for (size_t i = 0; i < state.windows.size(); ++i) {
-        struct nack_win32_window *ww = (struct nack_win32_window *)state.windows[i]->native;
+        nack_win32_window *ww = (nack_win32_window *)state.windows[i]->native;
         if (ww && ww->hwnd)
             return ww->hwnd;
     }
@@ -1153,7 +1153,7 @@ static void nack__win32_load_dpi_functions(void)
     }
 }
 
-static bool nack__win32_init(const struct nack_win_init_desc *desc)
+static bool nack__win32_init(const nack_win_init_desc *desc)
 {
     (void)desc;
     nack__win32 = nack_win32_state{};
@@ -1208,9 +1208,9 @@ namespace {
 class win32_backend final : public nack_backend_vt {
 public:
     const char *name() const override { return "win32"; }
-    enum nack_backend id() const override { return NACK_BACKEND_WIN32; }
+    nack_backend id() const override { return NACK_BACKEND_WIN32; }
 
-    bool init(const struct nack_win_init_desc *desc) override
+    bool init(const nack_win_init_desc *desc) override
     {
         return nack__win32_init(desc);
     }
@@ -1218,71 +1218,71 @@ public:
     {
         nack__win32_shutdown();
     }
-    bool window_create(struct nack_window *w, const struct nack_window_desc *desc) override
+    bool window_create(nack_window *w, const nack_window_desc *desc) override
     {
         return nack__win32_window_create(w, desc);
     }
-    void window_destroy(struct nack_window *w) override
+    void window_destroy(nack_window *w) override
     {
         nack__win32_window_destroy(w);
     }
-    void window_show(struct nack_window *w, bool show) override
+    void window_show(nack_window *w, bool show) override
     {
         nack__win32_window_show(w, show);
     }
-    void window_set_title(struct nack_window *w, const char *title) override
+    void window_set_title(nack_window *w, const char *title) override
     {
         nack__win32_window_set_title(w, title);
     }
-    void window_set_size(struct nack_window *w, int width, int height) override
+    void window_set_size(nack_window *w, int width, int height) override
     {
         nack__win32_window_set_size(w, width, height);
     }
-    void window_apply_size_hints(struct nack_window *w) override
+    void window_apply_size_hints(nack_window *w) override
     {
         nack__win32_apply_size_hints(w);
     }
-    void window_set_fullscreen(struct nack_window *w, bool fullscreen) override
+    void window_set_fullscreen(nack_window *w, bool fullscreen) override
     {
         nack__win32_window_set_fullscreen(w, fullscreen);
     }
-    void window_minimize(struct nack_window *w) override
+    void window_minimize(nack_window *w) override
     {
         nack__win32_window_minimize(w);
     }
-    void window_maximize(struct nack_window *w) override
+    void window_maximize(nack_window *w) override
     {
         nack__win32_window_maximize(w);
     }
-    void window_restore(struct nack_window *w) override
+    void window_restore(nack_window *w) override
     {
         nack__win32_window_restore(w);
     }
-    void window_request_redraw(struct nack_window *w) override
+    void window_request_redraw(nack_window *w) override
     {
         nack__win32_window_request_redraw(w);
     }
-    void window_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape) override
+    void window_set_cursor_shape(nack_window *w, nack_cursor_shape shape) override
     {
         nack__win32_set_cursor_shape(w, shape);
     }
-    void window_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode) override
+    void window_set_cursor_mode(nack_window *w, nack_cursor_mode mode) override
     {
         nack__win32_set_cursor_mode(w, mode);
     }
-    void window_get_native(const struct nack_window *w, struct nack_native_window *out) override
+    void window_get_native(const nack_window *w, nack_native_window *out) override
     {
         nack__win32_window_get_native(w, out);
     }
-    void window_focus(struct nack_window *w) override
+    void window_focus(nack_window *w) override
     {
         nack__win32_window_focus(w);
     }
-    void window_set_position(struct nack_window *w, int x, int y) override
+    void window_set_position(nack_window *w, int x, int y) override
     {
         nack__win32_window_set_position(w, x, y);
     }
-    void window_request_attention(struct nack_window *w) override
+    void window_request_attention(nack_window *w) override
     {
         nack__win32_window_request_attention(w);
     }
@@ -1294,20 +1294,20 @@ public:
     {
         nack__win32_wakeup();
     }
-    struct nack_gl_context *gl_create(struct nack_window *w,
-                                      const struct nack__gl_desc *desc) override
+    nack_gl_context *gl_create(nack_window *w,
+                                      const nack__gl_desc *desc) override
     {
         return nack__wgl_create_context(w, desc, this);
     }
-    void gl_destroy(struct nack_gl_context *ctx) override
+    void gl_destroy(nack_gl_context *ctx) override
     {
         nack__wgl_destroy_context(ctx);
     }
-    bool gl_make_current(struct nack_window *w, struct nack_gl_context *ctx) override
+    bool gl_make_current(nack_window *w, nack_gl_context *ctx) override
     {
         return nack__wgl_make_current(w, ctx);
     }
-    void gl_swap_buffers(struct nack_window *w) override
+    void gl_swap_buffers(nack_window *w) override
     {
         nack__wgl_swap_buffers(w);
     }

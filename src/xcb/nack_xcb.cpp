@@ -15,7 +15,7 @@
 #  include <X11/Xlib-xcb.h>
 #endif
 
-struct nack_xcb_state nack__xcb;
+nack_xcb_state nack__xcb;
 
 /* ICCCM WM_NORMAL_HINTS flag bits (ICCCM 4.1.2.3). */
 #define NACK_HINT_US_POSITION  (1u << 0)
@@ -67,11 +67,11 @@ static void nack__xcb_release_keymap(void)
 {
     if (nack__xcb.xkb_state) {
         xkb_state_unref(nack__xcb.xkb_state);
-        nack__xcb.xkb_state = NULL;
+        nack__xcb.xkb_state = nullptr;
     }
     if (nack__xcb.xkb_keymap) {
         xkb_keymap_unref(nack__xcb.xkb_keymap);
-        nack__xcb.xkb_keymap = NULL;
+        nack__xcb.xkb_keymap = nullptr;
     }
 }
 
@@ -106,7 +106,7 @@ static bool nack__xcb_init_xkb(void)
     uint16_t minor = XKB_X11_MIN_MINOR_XKB_VERSION;
     if (!xkb_x11_setup_xkb_extension(nack__xcb.connection, major, minor,
                                      XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS,
-                                     NULL, NULL, &nack__xcb.xkb_event_base, NULL))
+                                     nullptr, nullptr, &nack__xcb.xkb_event_base, nullptr))
         return state.fail(NACK_ERROR_PLATFORM, "server has no usable XKB extension");
 
     nack__xcb.xkb_device_id = xkb_x11_get_core_keyboard_device_id(nack__xcb.connection);
@@ -127,7 +127,7 @@ static bool nack__xcb_init_xkb(void)
         XCB_XKB_EVENT_TYPE_STATE_NOTIFY;
 
     xcb_xkb_select_events(nack__xcb.connection, (xcb_xkb_device_spec_t)nack__xcb.xkb_device_id,
-                          events, 0, events, required, required, NULL);
+                          events, 0, events, required, required, nullptr);
 
     /* Detectable auto-repeat turns held keys into press/press instead of the
      * press/release/press pairs a terminal would have to filter itself. */
@@ -162,7 +162,7 @@ static xcb_atom_t nack__xcb_intern(const char *name)
     xcb_intern_atom_cookie_t cookie =
         xcb_intern_atom(nack__xcb.connection, 0, (uint16_t)strlen(name), name);
     xcb_intern_atom_reply_t *reply =
-        xcb_intern_atom_reply(nack__xcb.connection, cookie, NULL);
+        xcb_intern_atom_reply(nack__xcb.connection, cookie, nullptr);
     /* XCB_ATOM_NONE is an enumerator and reply->atom is an xcb_atom_t, which
      * C++ will not merge into one conditional type on its own. */
     xcb_atom_t atom = reply ? reply->atom : (xcb_atom_t)XCB_ATOM_NONE;
@@ -208,7 +208,7 @@ static bool nack__xcb_wm_supports(xcb_atom_t atom)
         xcb_get_property(nack__xcb.connection, 0, nack__xcb.root,
                          nack__xcb.atom.NET_SUPPORTED, XCB_ATOM_ATOM, 0, 1024);
     xcb_get_property_reply_t *reply =
-        xcb_get_property_reply(nack__xcb.connection, cookie, NULL);
+        xcb_get_property_reply(nack__xcb.connection, cookie, nullptr);
     if (!reply)
         return false;
     bool found = false;
@@ -225,15 +225,15 @@ static bool nack__xcb_wm_supports(xcb_atom_t atom)
 /* Window lookup                                                      */
 /* ------------------------------------------------------------------ */
 
-static struct nack_window *nack__xcb_lookup(xcb_window_t handle)
+static nack_window *nack__xcb_lookup(xcb_window_t handle)
 {
     for (size_t i = 0; i < state.windows.size(); ++i) {
-        struct nack_window *w = state.windows[i];
-        struct nack_xcb_window *xw = (struct nack_xcb_window *)w->native;
+        nack_window *w = state.windows[i];
+        nack_xcb_window *xw = (nack_xcb_window *)w->native;
         if (xw && xw->handle == handle)
             return w;
     }
-    return NULL;
+    return nullptr;
 }
 
 /* ------------------------------------------------------------------ */
@@ -256,7 +256,7 @@ static float nack__xcb_query_scale(void)
         xcb_get_property(nack__xcb.connection, 0, nack__xcb.root,
                          XCB_ATOM_RESOURCE_MANAGER, XCB_ATOM_STRING, 0, 16 * 1024);
     xcb_get_property_reply_t *reply =
-        xcb_get_property_reply(nack__xcb.connection, cookie, NULL);
+        xcb_get_property_reply(nack__xcb.connection, cookie, nullptr);
     if (reply) {
         int len = xcb_get_property_value_length(reply);
         const char *data = (const char *)xcb_get_property_value(reply);
@@ -292,9 +292,9 @@ static float nack__xcb_query_scale(void)
 /* Size hints                                                         */
 /* ------------------------------------------------------------------ */
 
-static void nack__xcb_apply_size_hints(struct nack_window *w)
+static void nack__xcb_apply_size_hints(nack_window *w)
 {
-    struct nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = nack__xcb_win(w);
     /* WM_NORMAL_HINTS is 18 CARD32s in the order fixed by ICCCM 4.1.2.3. */
     uint32_t hints[18];
     memset(hints, 0, sizeof hints);
@@ -335,7 +335,7 @@ static void nack__xcb_apply_size_hints(struct nack_window *w)
     xcb_flush(nack__xcb.connection);
 }
 
-static void nack__xcb_send_wm_state(struct nack_window *w, uint32_t action,
+static void nack__xcb_send_wm_state(nack_window *w, uint32_t action,
                                     xcb_atom_t first, xcb_atom_t second)
 {
     xcb_client_message_event_t event;
@@ -362,20 +362,20 @@ static void nack__xcb_send_wm_state(struct nack_window *w, uint32_t action,
 /* ------------------------------------------------------------------ */
 
 static const char *const nack__xcb_cursor_names[NACK_CURSOR_SHAPE_COUNT][3] = {
-    { "default", "left_ptr", NULL },
-    { "text", "xterm", NULL },
-    { "crosshair", "cross", NULL },
-    { "pointer", "hand2", NULL },
-    { "ew-resize", "sb_h_double_arrow", NULL },
-    { "ns-resize", "sb_v_double_arrow", NULL },
-    { "nwse-resize", "size_fdiag", NULL },
-    { "nesw-resize", "size_bdiag", NULL },
-    { "all-scroll", "fleur", NULL },
-    { "not-allowed", "crossed_circle", NULL },
-    { "wait", "watch", NULL },
+    { "default", "left_ptr", nullptr },
+    { "text", "xterm", nullptr },
+    { "crosshair", "cross", nullptr },
+    { "pointer", "hand2", nullptr },
+    { "ew-resize", "sb_h_double_arrow", nullptr },
+    { "ns-resize", "sb_v_double_arrow", nullptr },
+    { "nwse-resize", "size_fdiag", nullptr },
+    { "nesw-resize", "size_bdiag", nullptr },
+    { "all-scroll", "fleur", nullptr },
+    { "not-allowed", "crossed_circle", nullptr },
+    { "wait", "watch", nullptr },
 };
 
-static xcb_cursor_t nack__xcb_get_cursor(enum nack_cursor_shape shape)
+static xcb_cursor_t nack__xcb_get_cursor(nack_cursor_shape shape)
 {
     if (nack__xcb.cursors_loaded[shape])
         return nack__xcb.cursors[shape];
@@ -417,9 +417,9 @@ static xcb_cursor_t nack__xcb_blank_cursor(void)
     return cursor;
 }
 
-static void nack__xcb_update_cursor(struct nack_window *w)
+static void nack__xcb_update_cursor(nack_window *w)
 {
-    struct nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = nack__xcb_win(w);
     xcb_cursor_t cursor = (w->cursor_mode == NACK_CURSOR_MODE_NORMAL)
                               ? nack__xcb_get_cursor(w->cursor_shape)
                               : nack__xcb_blank_cursor();
@@ -428,25 +428,25 @@ static void nack__xcb_update_cursor(struct nack_window *w)
     xcb_flush(nack__xcb.connection);
 }
 
-static void nack__xcb_set_cursor_shape(struct nack_window *w,
-                                       enum nack_cursor_shape shape)
+static void nack__xcb_set_cursor_shape(nack_window *w,
+                                       nack_cursor_shape shape)
 {
     (void)shape;
     nack__xcb_update_cursor(w);
 }
 
-static void nack__xcb_center_pointer(struct nack_window *w)
+static void nack__xcb_center_pointer(nack_window *w)
 {
-    struct nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = nack__xcb_win(w);
     xw->warp_pending = true;
     xcb_warp_pointer(nack__xcb.connection, XCB_NONE, xw->handle, 0, 0, 0, 0,
                      (int16_t)(w->width / 2), (int16_t)(w->height / 2));
     xcb_flush(nack__xcb.connection);
 }
 
-static void nack__xcb_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode)
+static void nack__xcb_set_cursor_mode(nack_window *w, nack_cursor_mode mode)
 {
-    struct nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = nack__xcb_win(w);
     if (mode == NACK_CURSOR_MODE_CAPTURED) {
         xw->virtual_x = w->mouse_x;
         xw->virtual_y = w->mouse_y;
@@ -456,7 +456,7 @@ static void nack__xcb_set_cursor_mode(struct nack_window *w, enum nack_cursor_mo
                 XCB_EVENT_MASK_POINTER_MOTION,
             XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, xw->handle,
             nack__xcb_blank_cursor(), XCB_CURRENT_TIME);
-        free(xcb_grab_pointer_reply(nack__xcb.connection, cookie, NULL));
+        free(xcb_grab_pointer_reply(nack__xcb.connection, cookie, nullptr));
         nack__xcb_center_pointer(w);
     } else {
         xcb_ungrab_pointer(nack__xcb.connection, XCB_CURRENT_TIME);
@@ -468,9 +468,9 @@ static void nack__xcb_set_cursor_mode(struct nack_window *w, enum nack_cursor_mo
 /* Keyboard events                                                    */
 /* ------------------------------------------------------------------ */
 
-static void nack__xcb_handle_key(struct nack_window *w, xcb_keycode_t keycode, bool down)
+static void nack__xcb_handle_key(nack_window *w, xcb_keycode_t keycode, bool down)
 {
-    enum nack_key key = nack__xcb.keycodes[keycode];
+    nack_key key = nack__xcb.keycodes[keycode];
     uint32_t mods = nack__xcb_mods_from_state();
 
     /* With detectable auto-repeat a held key repeats as consecutive presses. */
@@ -537,8 +537,8 @@ static void nack__xcb_handle_xkb_event(xcb_generic_event_t *generic)
         uint8_t device_id;
     };
 
-    const struct nack_xkb_any_event *any =
-        (const struct nack_xkb_any_event *)generic;
+    const nack_xkb_any_event *any =
+        (const nack_xkb_any_event *)generic;
     if (any->device_id != (uint8_t)nack__xcb.xkb_device_id)
         return;
 
@@ -590,7 +590,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
     switch (type) {
     case XCB_CLIENT_MESSAGE: {
         xcb_client_message_event_t *event = (xcb_client_message_event_t *)generic;
-        struct nack_window *w = nack__xcb_lookup(event->window);
+        nack_window *w = nack__xcb_lookup(event->window);
         if (!w)
             break;
         if (event->type == nack__xcb.atom.WM_PROTOCOLS) {
@@ -614,14 +614,14 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_CONFIGURE_NOTIFY: {
         xcb_configure_notify_event_t *event = (xcb_configure_notify_event_t *)generic;
-        struct nack_window *w = nack__xcb_lookup(event->window);
+        nack_window *w = nack__xcb_lookup(event->window);
         if (!w)
             break;
         w->emit_resize(event->width, event->height, event->width, event->height);
         if (event->x != w->pos_x || event->y != w->pos_y) {
             w->pos_x = event->x;
             w->pos_y = event->y;
-            struct nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_WINDOW_MOVE, w);
+            nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_WINDOW_MOVE, w);
             ev->data.move.x = event->x;
             ev->data.move.y = event->y;
             state.push_event(ev);
@@ -633,7 +633,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
         xcb_expose_event_t *event = (xcb_expose_event_t *)generic;
         if (event->count != 0)
             break;
-        struct nack_window *w = nack__xcb_lookup(event->window);
+        nack_window *w = nack__xcb_lookup(event->window);
         if (w)
             w->emit_simple(NACK_WIN_EVENT_WINDOW_EXPOSE);
         break;
@@ -644,7 +644,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
         if (event->mode == XCB_NOTIFY_MODE_GRAB ||
             event->mode == XCB_NOTIFY_MODE_UNGRAB)
             break;
-        struct nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = nack__xcb_lookup(event->event);
         if (!w)
             break;
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED)
@@ -658,7 +658,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
         if (event->mode == XCB_NOTIFY_MODE_GRAB ||
             event->mode == XCB_NOTIFY_MODE_UNGRAB)
             break;
-        struct nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = nack__xcb_lookup(event->event);
         if (!w)
             break;
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED)
@@ -671,7 +671,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_ENTER_NOTIFY: {
         xcb_enter_notify_event_t *event = (xcb_enter_notify_event_t *)generic;
-        struct nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = nack__xcb_lookup(event->event);
         if (!w)
             break;
         w->mouse_x = event->event_x;
@@ -682,7 +682,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_LEAVE_NOTIFY: {
         xcb_leave_notify_event_t *event = (xcb_leave_notify_event_t *)generic;
-        struct nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = nack__xcb_lookup(event->event);
         if (w)
             w->emit_simple(NACK_WIN_EVENT_MOUSE_LEAVE);
         break;
@@ -690,10 +690,10 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_MOTION_NOTIFY: {
         xcb_motion_notify_event_t *event = (xcb_motion_notify_event_t *)generic;
-        struct nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = nack__xcb_lookup(event->event);
         if (!w)
             break;
-        struct nack_xcb_window *xw = nack__xcb_win(w);
+        nack_xcb_window *xw = nack__xcb_win(w);
         int x = event->event_x, y = event->event_y;
 
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED) {
@@ -710,7 +710,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
             w->mouse_x = x;
             w->mouse_y = y;
 
-            struct nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_MOUSE_MOVE, w);
+            nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_MOUSE_MOVE, w);
             ev->data.motion.x = xw->virtual_x;
             ev->data.motion.y = xw->virtual_y;
             ev->data.motion.dx = dx;
@@ -730,7 +730,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
     case XCB_BUTTON_PRESS:
     case XCB_BUTTON_RELEASE: {
         xcb_button_press_event_t *event = (xcb_button_press_event_t *)generic;
-        struct nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = nack__xcb_lookup(event->event);
         if (!w)
             break;
         bool down = (type == XCB_BUTTON_PRESS);
@@ -767,7 +767,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_KEY_PRESS: {
         xcb_key_press_event_t *event = (xcb_key_press_event_t *)generic;
-        struct nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = nack__xcb_lookup(event->event);
         if (w)
             nack__xcb_handle_key(w, event->detail, true);
         break;
@@ -775,7 +775,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_KEY_RELEASE: {
         xcb_key_release_event_t *event = (xcb_key_release_event_t *)generic;
-        struct nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = nack__xcb_lookup(event->event);
         if (w)
             nack__xcb_handle_key(w, event->detail, false);
         break;
@@ -783,7 +783,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_PROPERTY_NOTIFY: {
         xcb_property_notify_event_t *event = (xcb_property_notify_event_t *)generic;
-        struct nack_window *w;
+        nack_window *w;
 
         /* A requestor deleting a property is asking for the next chunk of a
          * selection we are serving, and arrives on its window, not ours. */
@@ -798,7 +798,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
             xcb_get_property(nack__xcb.connection, 0, event->window,
                              nack__xcb.atom.NET_WM_STATE, XCB_ATOM_ATOM, 0, 128);
         xcb_get_property_reply_t *reply =
-            xcb_get_property_reply(nack__xcb.connection, cookie, NULL);
+            xcb_get_property_reply(nack__xcb.connection, cookie, nullptr);
         if (!reply)
             break;
 
@@ -830,7 +830,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_MAP_NOTIFY: {
         xcb_map_notify_event_t *event = (xcb_map_notify_event_t *)generic;
-        struct nack_window *w = nack__xcb_lookup(event->window);
+        nack_window *w = nack__xcb_lookup(event->window);
         if (w)
             w->visible = true;
         break;
@@ -838,7 +838,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_UNMAP_NOTIFY: {
         xcb_unmap_notify_event_t *event = (xcb_unmap_notify_event_t *)generic;
-        struct nack_window *w = nack__xcb_lookup(event->window);
+        nack_window *w = nack__xcb_lookup(event->window);
         if (w)
             w->visible = false;
         break;
@@ -852,7 +852,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 static void nack__xcb_drain(void)
 {
     xcb_generic_event_t *event;
-    while ((event = xcb_poll_for_event(nack__xcb.connection)) != NULL) {
+    while ((event = xcb_poll_for_event(nack__xcb.connection)) != nullptr) {
         if (event->response_type != 0)     /* 0 = error reply, ignore */
             nack__xcb_dispatch(event);
         free(event);
@@ -911,9 +911,9 @@ static void nack__xcb_wakeup(void)
 /* Window management                                                  */
 /* ------------------------------------------------------------------ */
 
-static void nack__xcb_set_title(struct nack_window *w, const char *title)
+static void nack__xcb_set_title(nack_window *w, const char *title)
 {
-    struct nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = nack__xcb_win(w);
     uint32_t len = (uint32_t)strlen(title);
     xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
                         nack__xcb.atom.NET_WM_NAME, nack__xcb.atom.UTF8_STRING,
@@ -927,7 +927,7 @@ static void nack__xcb_set_title(struct nack_window *w, const char *title)
     xcb_flush(nack__xcb.connection);
 }
 
-static void nack__xcb_set_decorated(struct nack_window *w, bool decorated)
+static void nack__xcb_set_decorated(nack_window *w, bool decorated)
 {
     if (decorated)
         return;
@@ -954,10 +954,10 @@ static bool nack__xcb_find_visual(xcb_visualid_t visual_id, uint8_t *out_depth)
     return false;
 }
 
-static bool nack__xcb_window_create(struct nack_window *w,
-                                    const struct nack_window_desc *desc)
+static bool nack__xcb_window_create(nack_window *w,
+                                    const nack_window_desc *desc)
 {
-    struct nack_xcb_window *xw = new nack_xcb_window{};
+    nack_xcb_window *xw = new nack_xcb_window{};
     xw->surface = EGL_NO_SURFACE;
     w->native = xw;
 
@@ -1012,7 +1012,7 @@ static bool nack__xcb_window_create(struct nack_window *w,
     if (error) {
         uint8_t code = error->error_code;
         delete xw;
-        w->native = NULL;
+        w->native = nullptr;
         return state.fail(NACK_ERROR_PLATFORM, "xcb_create_window failed (code %u)",
                           (unsigned)code);
     }
@@ -1051,9 +1051,9 @@ static bool nack__xcb_window_create(struct nack_window *w,
     return true;
 }
 
-static void nack__xcb_window_destroy(struct nack_window *w)
+static void nack__xcb_window_destroy(nack_window *w)
 {
-    struct nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = nack__xcb_win(w);
     if (!xw)
         return;
     if (xw->surface != EGL_NO_SURFACE)
@@ -1066,12 +1066,12 @@ static void nack__xcb_window_destroy(struct nack_window *w)
         xcb_free_colormap(nack__xcb.connection, xw->colormap);
     xcb_flush(nack__xcb.connection);
     delete xw;
-    w->native = NULL;
+    w->native = nullptr;
 }
 
-static void nack__xcb_window_show(struct nack_window *w, bool show)
+static void nack__xcb_window_show(nack_window *w, bool show)
 {
-    struct nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = nack__xcb_win(w);
     if (show)
         xcb_map_window(nack__xcb.connection, xw->handle);
     else
@@ -1079,9 +1079,9 @@ static void nack__xcb_window_show(struct nack_window *w, bool show)
     xcb_flush(nack__xcb.connection);
 }
 
-static void nack__xcb_window_focus(struct nack_window *w)
+static void nack__xcb_window_focus(nack_window *w)
 {
-    struct nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = nack__xcb_win(w);
     if (nack__xcb_wm_supports(nack__xcb.atom.NET_ACTIVE_WINDOW)) {
         xcb_client_message_event_t event;
         memset(&event, 0, sizeof event);
@@ -1105,7 +1105,7 @@ static void nack__xcb_window_focus(struct nack_window *w)
     xcb_flush(nack__xcb.connection);
 }
 
-static void nack__xcb_window_set_size(struct nack_window *w, int width, int height)
+static void nack__xcb_window_set_size(nack_window *w, int width, int height)
 {
     if (!w->resizable) {
         w->width = width;
@@ -1118,7 +1118,7 @@ static void nack__xcb_window_set_size(struct nack_window *w, int width, int heig
     xcb_flush(nack__xcb.connection);
 }
 
-static void nack__xcb_window_set_position(struct nack_window *w, int x, int y)
+static void nack__xcb_window_set_position(nack_window *w, int x, int y)
 {
     uint32_t values[2] = { (uint32_t)x, (uint32_t)y };
     xcb_configure_window(nack__xcb.connection, nack__xcb_win(w)->handle,
@@ -1126,13 +1126,13 @@ static void nack__xcb_window_set_position(struct nack_window *w, int x, int y)
     xcb_flush(nack__xcb.connection);
 }
 
-static void nack__xcb_window_set_fullscreen(struct nack_window *w, bool fullscreen)
+static void nack__xcb_window_set_fullscreen(nack_window *w, bool fullscreen)
 {
     if (!nack__xcb_wm_supports(nack__xcb.atom.NET_WM_STATE_FULLSCREEN)) {
         state.fail(NACK_ERROR_UNSUPPORTED, "window manager has no fullscreen support");
         return;
     }
-    struct nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = nack__xcb_win(w);
     if (fullscreen && !w->fullscreen) {
         xw->restore_x = w->pos_x;
         xw->restore_y = w->pos_y;
@@ -1145,7 +1145,7 @@ static void nack__xcb_window_set_fullscreen(struct nack_window *w, bool fullscre
     w->fullscreen = fullscreen;
 }
 
-static void nack__xcb_window_minimize(struct nack_window *w)
+static void nack__xcb_window_minimize(nack_window *w)
 {
     /* ICCCM: iconify by sending WM_CHANGE_STATE with IconicState. */
     xcb_client_message_event_t event;
@@ -1162,14 +1162,14 @@ static void nack__xcb_window_minimize(struct nack_window *w)
     xcb_flush(nack__xcb.connection);
 }
 
-static void nack__xcb_window_maximize(struct nack_window *w)
+static void nack__xcb_window_maximize(nack_window *w)
 {
     nack__xcb_send_wm_state(w, NACK_NET_WM_STATE_ADD,
                             nack__xcb.atom.NET_WM_STATE_MAXIMIZED_VERT,
                             nack__xcb.atom.NET_WM_STATE_MAXIMIZED_HORZ);
 }
 
-static void nack__xcb_window_restore(struct nack_window *w)
+static void nack__xcb_window_restore(nack_window *w)
 {
     if (w->fullscreen)
         nack__xcb_window_set_fullscreen(w, false);
@@ -1182,14 +1182,14 @@ static void nack__xcb_window_restore(struct nack_window *w)
     xcb_flush(nack__xcb.connection);
 }
 
-static void nack__xcb_window_request_attention(struct nack_window *w)
+static void nack__xcb_window_request_attention(nack_window *w)
 {
     nack__xcb_send_wm_state(w, NACK_NET_WM_STATE_ADD,
                             nack__xcb.atom.NET_WM_STATE_DEMANDS_ATTENTION,
                             XCB_ATOM_NONE);
 }
 
-static void nack__xcb_window_request_redraw(struct nack_window *w)
+static void nack__xcb_window_request_redraw(nack_window *w)
 {
     xcb_expose_event_t event;
     memset(&event, 0, sizeof event);
@@ -1203,10 +1203,10 @@ static void nack__xcb_window_request_redraw(struct nack_window *w)
     xcb_flush(nack__xcb.connection);
 }
 
-static void nack__xcb_window_get_native(const struct nack_window *w,
-                                        struct nack_native_window *out)
+static void nack__xcb_window_get_native(const nack_window *w,
+                                        nack_native_window *out)
 {
-    struct nack_xcb_window *xw = (struct nack_xcb_window *)w->native;
+    nack_xcb_window *xw = (nack_xcb_window *)w->native;
     out->display = nack__xcb.connection;
     out->surface = nack__xcb.xlib_display;   /* NULL on the pure-XCB path */
     out->handle = xw ? (uintptr_t)xw->handle : 0;
@@ -1217,16 +1217,16 @@ static void nack__xcb_window_get_native(const struct nack_window *w,
 /* ------------------------------------------------------------------ */
 
 
-static bool nack__xcb_ensure_surface(struct nack_window *w, EGLConfig config)
+static bool nack__xcb_ensure_surface(nack_window *w, EGLConfig config)
 {
-    struct nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = nack__xcb_win(w);
     if (xw->surface != EGL_NO_SURFACE)
         return true;
 
     /* With EGL_EXT_platform_xcb the native window is a *pointer* to an
      * xcb_window_t; the legacy entry point takes the id by value. */
-    bool use_pointer = (nack__xcb.xlib_display == NULL) &&
-                       nack__egl.create_platform_window_surface != NULL;
+    bool use_pointer = (nack__xcb.xlib_display == nullptr) &&
+                       nack__egl.create_platform_window_surface != nullptr;
     void *native = use_pointer ? (void *)&xw->egl_native
                                : (void *)(uintptr_t)xw->handle;
 
@@ -1235,45 +1235,45 @@ static bool nack__xcb_ensure_surface(struct nack_window *w, EGLConfig config)
     return xw->surface != EGL_NO_SURFACE;
 }
 
-static struct nack_gl_context *nack__xcb_gl_create(nack_backend_vt *vt,
-                                                  struct nack_window *w,
-                                                   const struct nack__gl_desc *desc)
+static nack_gl_context *nack__xcb_gl_create(nack_backend_vt *vt,
+                                                  nack_window *w,
+                                                   const nack__gl_desc *desc)
 {
     if (!nack__egl.initialized) {
         state.fail(NACK_ERROR_UNSUPPORTED, "EGL is not available");
-        return NULL;
+        return nullptr;
     }
-    struct nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = nack__xcb_win(w);
     if (!xw->has_config) {
         state.fail(NACK_ERROR_NO_PIXEL_FORMAT,
                    "window was created without a usable EGL config");
-        return NULL;
+        return nullptr;
     }
     if (!nack__xcb_ensure_surface(w, xw->config))
-        return NULL;
+        return nullptr;
     return nack__egl_create_context(w, desc, xw->config, vt);
 }
 
-static void nack__xcb_gl_destroy(struct nack_gl_context *ctx)
+static void nack__xcb_gl_destroy(nack_gl_context *ctx)
 {
     nack__egl_destroy_context(ctx);
 }
 
-static bool nack__xcb_gl_make_current(struct nack_window *w, struct nack_gl_context *ctx)
+static bool nack__xcb_gl_make_current(nack_window *w, nack_gl_context *ctx)
 {
     if (!ctx)
-        return nack__egl_make_current(EGL_NO_SURFACE, NULL);
+        return nack__egl_make_current(EGL_NO_SURFACE, nullptr);
     if (!w)
         return state.fail(NACK_ERROR_INVALID_ARGUMENT,
                           "gl_make_current needs a window for this context");
-    struct nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = nack__xcb_win(w);
     if (xw->surface == EGL_NO_SURFACE &&
-        !nack__xcb_ensure_surface(w, ((struct nack_egl_context *)ctx->native)->config))
+        !nack__xcb_ensure_surface(w, ((nack_egl_context *)ctx->native)->config))
         return false;
     return nack__egl_make_current(xw->surface, ctx);
 }
 
-static void nack__xcb_gl_swap_buffers(struct nack_window *w)
+static void nack__xcb_gl_swap_buffers(nack_window *w)
 {
     nack__egl_swap_buffers(nack__xcb_win(w)->surface);
 }
@@ -1289,7 +1289,7 @@ static bool nack__xcb_egl_client_has(const char *name)
         return false;
     size_t len = strlen(name);
     const char *p = exts;
-    while ((p = strstr(p, name)) != NULL) {
+    while ((p = strstr(p, name)) != nullptr) {
         char after = p[len];
         if ((p == exts || p[-1] == ' ') && (after == ' ' || after == '\0'))
             return true;
@@ -1309,7 +1309,7 @@ static bool nack__xcb_connect(void)
 
 #if defined(NACK_XCB_XLIB_FALLBACK)
     if (!want_xcb_platform) {
-        Display *display = XOpenDisplay(NULL);
+        Display *display = XOpenDisplay(nullptr);
         if (display) {
             nack__xcb.xlib_display = display;
             nack__xcb.connection = XGetXCBConnection(display);
@@ -1320,25 +1320,25 @@ static bool nack__xcb_connect(void)
                 return true;
             }
             XCloseDisplay(display);
-            nack__xcb.xlib_display = NULL;
+            nack__xcb.xlib_display = nullptr;
         }
     }
 #else
     (void)want_xcb_platform;
 #endif
 
-    nack__xcb.connection = xcb_connect(NULL, &nack__xcb.screen_number);
+    nack__xcb.connection = xcb_connect(nullptr, &nack__xcb.screen_number);
     if (!nack__xcb.connection || xcb_connection_has_error(nack__xcb.connection)) {
         if (nack__xcb.connection) {
             xcb_disconnect(nack__xcb.connection);
-            nack__xcb.connection = NULL;
+            nack__xcb.connection = nullptr;
         }
         return false;
     }
     return true;
 }
 
-static bool nack__xcb_init(const struct nack_win_init_desc *desc)
+static bool nack__xcb_init(const nack_win_init_desc *desc)
 {
     (void)desc;
     nack__xcb = nack_xcb_state{};
@@ -1357,7 +1357,7 @@ static bool nack__xcb_init(const struct nack_win_init_desc *desc)
         xcb_screen_next(&iter);
     if (!iter.rem) {
         xcb_disconnect(nack__xcb.connection);
-        nack__xcb.connection = NULL;
+        nack__xcb.connection = nullptr;
         return state.fail(NACK_ERROR_NO_BACKEND, "X screen %d does not exist",
                           nack__xcb.screen_number);
     }
@@ -1366,7 +1366,7 @@ static bool nack__xcb_init(const struct nack_win_init_desc *desc)
 
     if (pipe(nack__xcb.wakeup_pipe) != 0) {
         xcb_disconnect(nack__xcb.connection);
-        nack__xcb.connection = NULL;
+        nack__xcb.connection = nullptr;
         return state.fail(NACK_ERROR_PLATFORM, "pipe() failed: %s", strerror(errno));
     }
     for (int i = 0; i < 2; ++i) {
@@ -1384,7 +1384,7 @@ static bool nack__xcb_init(const struct nack_win_init_desc *desc)
 
     if (xcb_cursor_context_new(nack__xcb.connection, nack__xcb.screen,
                                &nack__xcb.cursor_context) < 0)
-        nack__xcb.cursor_context = NULL;
+        nack__xcb.cursor_context = nullptr;
 
     /* Unmapped InputOnly window that holds selection ownership, so clipboard
      * contents outlive any particular application window. */
@@ -1402,7 +1402,7 @@ static bool nack__xcb_init(const struct nack_win_init_desc *desc)
         egl_ok = nack__egl_init(EGL_PLATFORM_XCB_EXT, nack__xcb.connection, attribs);
     }
     if (!egl_ok && nack__xcb.xlib_display)
-        egl_ok = nack__egl_init(EGL_PLATFORM_X11_KHR, nack__xcb.xlib_display, NULL);
+        egl_ok = nack__egl_init(EGL_PLATFORM_X11_KHR, nack__xcb.xlib_display, nullptr);
     if (!egl_ok)
         nack_log("nack: EGL unavailable; windows will have no OpenGL support");
 
@@ -1457,9 +1457,9 @@ namespace {
 class xcb_backend final : public nack_backend_vt {
 public:
     const char *name() const override { return "xcb"; }
-    enum nack_backend id() const override { return NACK_BACKEND_X11; }
+    nack_backend id() const override { return NACK_BACKEND_X11; }
 
-    bool init(const struct nack_win_init_desc *desc) override
+    bool init(const nack_win_init_desc *desc) override
     {
         return nack__xcb_init(desc);
     }
@@ -1467,71 +1467,71 @@ public:
     {
         nack__xcb_shutdown();
     }
-    bool window_create(struct nack_window *w, const struct nack_window_desc *desc) override
+    bool window_create(nack_window *w, const nack_window_desc *desc) override
     {
         return nack__xcb_window_create(w, desc);
     }
-    void window_destroy(struct nack_window *w) override
+    void window_destroy(nack_window *w) override
     {
         nack__xcb_window_destroy(w);
     }
-    void window_show(struct nack_window *w, bool show) override
+    void window_show(nack_window *w, bool show) override
     {
         nack__xcb_window_show(w, show);
     }
-    void window_set_title(struct nack_window *w, const char *title) override
+    void window_set_title(nack_window *w, const char *title) override
     {
         nack__xcb_set_title(w, title);
     }
-    void window_set_size(struct nack_window *w, int width, int height) override
+    void window_set_size(nack_window *w, int width, int height) override
     {
         nack__xcb_window_set_size(w, width, height);
     }
-    void window_apply_size_hints(struct nack_window *w) override
+    void window_apply_size_hints(nack_window *w) override
     {
         nack__xcb_apply_size_hints(w);
     }
-    void window_set_fullscreen(struct nack_window *w, bool fullscreen) override
+    void window_set_fullscreen(nack_window *w, bool fullscreen) override
     {
         nack__xcb_window_set_fullscreen(w, fullscreen);
     }
-    void window_minimize(struct nack_window *w) override
+    void window_minimize(nack_window *w) override
     {
         nack__xcb_window_minimize(w);
     }
-    void window_maximize(struct nack_window *w) override
+    void window_maximize(nack_window *w) override
     {
         nack__xcb_window_maximize(w);
     }
-    void window_restore(struct nack_window *w) override
+    void window_restore(nack_window *w) override
     {
         nack__xcb_window_restore(w);
     }
-    void window_request_redraw(struct nack_window *w) override
+    void window_request_redraw(nack_window *w) override
     {
         nack__xcb_window_request_redraw(w);
     }
-    void window_set_cursor_shape(struct nack_window *w, enum nack_cursor_shape shape) override
+    void window_set_cursor_shape(nack_window *w, nack_cursor_shape shape) override
     {
         nack__xcb_set_cursor_shape(w, shape);
     }
-    void window_set_cursor_mode(struct nack_window *w, enum nack_cursor_mode mode) override
+    void window_set_cursor_mode(nack_window *w, nack_cursor_mode mode) override
     {
         nack__xcb_set_cursor_mode(w, mode);
     }
-    void window_get_native(const struct nack_window *w, struct nack_native_window *out) override
+    void window_get_native(const nack_window *w, nack_native_window *out) override
     {
         nack__xcb_window_get_native(w, out);
     }
-    void window_focus(struct nack_window *w) override
+    void window_focus(nack_window *w) override
     {
         nack__xcb_window_focus(w);
     }
-    void window_set_position(struct nack_window *w, int x, int y) override
+    void window_set_position(nack_window *w, int x, int y) override
     {
         nack__xcb_window_set_position(w, x, y);
     }
-    void window_request_attention(struct nack_window *w) override
+    void window_request_attention(nack_window *w) override
     {
         nack__xcb_window_request_attention(w);
     }
@@ -1543,19 +1543,19 @@ public:
     {
         nack__xcb_wakeup();
     }
-    struct nack_gl_context *gl_create(struct nack_window *w, const struct nack__gl_desc *desc) override
+    nack_gl_context *gl_create(nack_window *w, const nack__gl_desc *desc) override
     {
         return nack__xcb_gl_create(this, w, desc);
     }
-    void gl_destroy(struct nack_gl_context *ctx) override
+    void gl_destroy(nack_gl_context *ctx) override
     {
         nack__xcb_gl_destroy(ctx);
     }
-    bool gl_make_current(struct nack_window *w, struct nack_gl_context *ctx) override
+    bool gl_make_current(nack_window *w, nack_gl_context *ctx) override
     {
         return nack__xcb_gl_make_current(w, ctx);
     }
-    void gl_swap_buffers(struct nack_window *w) override
+    void gl_swap_buffers(nack_window *w) override
     {
         nack__xcb_gl_swap_buffers(w);
     }

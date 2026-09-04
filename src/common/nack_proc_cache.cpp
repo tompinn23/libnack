@@ -22,7 +22,7 @@ struct nack_proc_entry {
     bool used;
 };
 
-static struct nack_proc_entry nack__proc_cache[NACK_PROC_CACHE_SIZE];
+static nack_proc_entry nack__proc_cache[NACK_PROC_CACHE_SIZE];
 static size_t nack__proc_cache_used;
 
 static uint32_t nack__proc_hash(const char *s)
@@ -45,7 +45,7 @@ void nack__proc_cache_clear(void)
 void *nack__proc_cache_get(const char *name, void *(*resolve)(const char *))
 {
     if (!name || !*name || !resolve)
-        return NULL;
+        return nullptr;
 
     size_t len = strlen(name);
     if (len > NACK_PROC_NAME_MAX)
@@ -53,7 +53,7 @@ void *nack__proc_cache_get(const char *name, void *(*resolve)(const char *))
 
     uint32_t index = nack__proc_hash(name) & NACK_PROC_CACHE_MASK;
     for (uint32_t probe = 0; probe < NACK_PROC_CACHE_SIZE; ++probe) {
-        struct nack_proc_entry *entry = &nack__proc_cache[(index + probe) & NACK_PROC_CACHE_MASK];
+        nack_proc_entry *entry = &nack__proc_cache[(index + probe) & NACK_PROC_CACHE_MASK];
         if (!entry->used) {
             /* Keep a slot free so lookups always terminate on a miss. */
             if (nack__proc_cache_used + 1 >= NACK_PROC_CACHE_SIZE)

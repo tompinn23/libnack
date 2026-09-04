@@ -70,7 +70,7 @@ struct nack_xcb_state {
     int screen_number;
     xcb_window_t root;
     xcb_window_t helper;          /* owns selections, never mapped */
-    struct nack_xcb_atoms atom;
+    nack_xcb_atoms atom;
     float scale;
 
     /* Only non-NULL when the EGL implementation lacks EGL_EXT_platform_xcb
@@ -89,7 +89,7 @@ struct nack_xcb_state {
     uint8_t xkb_event_base;
     bool xkb_available;
 
-    enum nack_key keycodes[256];
+    nack_key keycodes[256];
 
     xcb_cursor_context_t *cursor_context;
     xcb_cursor_t cursors[NACK_CURSOR_SHAPE_COUNT];
@@ -102,11 +102,11 @@ struct nack_xcb_state {
     std::optional<std::string> primary_received;
 };
 
-extern struct nack_xcb_state nack__xcb;
+extern nack_xcb_state nack__xcb;
 
-static inline struct nack_xcb_window *nack__xcb_win(struct nack_window *w)
+static inline nack_xcb_window *nack__xcb_win(nack_window *w)
 {
-    return (struct nack_xcb_window *)w->native;
+    return (nack_xcb_window *)w->native;
 }
 
 /* Selection handling lives in nack_xcb_clipboard.c. */

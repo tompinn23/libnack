@@ -9,7 +9,7 @@
  * NACK_API decoration that existed for that caller's benefit.
  *
  * What it did not lose is the spelling. Every backend's keymap table still
- * says NACK_KEY_A, every renderer still takes a struct nack_color: renaming
+ * says NACK_KEY_A, every renderer still takes a nack_color: renaming
  * several hundred internal call sites across four platforms to an
  * nack::key::a style would touch a lot of code nobody outside the library
  * ever sees the result of, for no behavioural gain. <nack/nack.hpp> is the
@@ -150,7 +150,7 @@ enum nack_mouse_button {
     NACK_MOUSE_BUTTON_COUNT = 8
 };
 
-const char *nack__key_name(enum nack_key key);
+const char *nack__key_name(nack_key key);
 
 /* -------------------------------------------------------------------------- */
 /* Events                                                                     */
@@ -173,10 +173,10 @@ enum nack_event_type {
 };
 
 struct nack_event {
-    enum nack_event_type type;
+    nack_event_type type;
     union {
         struct {
-            enum nack_key key;
+            nack_key key;
             uint32_t mods;
             bool repeat;
         } key;
@@ -240,10 +240,10 @@ struct nack_config {
      * start without shipping any assets. */
     const char *tileset = nullptr;
     int tile_width = 0, tile_height = 0;
-    enum nack_tileset_layout tileset_layout = NACK_LAYOUT_CP437;
+    nack_tileset_layout tileset_layout = NACK_LAYOUT_CP437;
 
-    enum nack_scaling scaling = NACK_SCALE_INTEGER;
-    struct nack_color letterbox = NACK_BLACK;   /* colour of the bars around the console */
+    nack_scaling scaling = NACK_SCALE_INTEGER;
+    nack_color letterbox = NACK_BLACK;   /* colour of the bars around the console */
 
     bool vsync = true;
     bool resizable = true;
@@ -269,8 +269,8 @@ struct nack_console;
 
 struct nack_cell {
     uint32_t glyph;                 /* codepoint, or tile index when tiled */
-    struct nack_tileset *tileset;   /* NULL means the font                 */
-    struct nack_color fg, bg;
+    nack_tileset *tileset;   /* NULL means the font                 */
+    nack_color fg, bg;
 };
 
 #endif /* NACK_CORE_H_INCLUDED */

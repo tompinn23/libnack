@@ -10,7 +10,7 @@
  */
 #include "nack_xkb_keys.h"
 
-static const struct { const char *name; enum nack_key key; } nack__xkb_names[] = {
+static const struct { const char *name; nack_key key; } nack__xkb_names[] = {
     { "TLDE", NACK_KEY_GRAVE },      { "AE01", NACK_KEY_1 },
     { "AE02", NACK_KEY_2 },          { "AE03", NACK_KEY_3 },
     { "AE04", NACK_KEY_4 },          { "AE05", NACK_KEY_5 },
@@ -68,10 +68,10 @@ static const struct { const char *name; enum nack_key key; } nack__xkb_names[] =
     { "KP0",  NACK_KEY_KP_0 }, { "KPDL", NACK_KEY_KP_DECIMAL },
     { "MUTE", NACK_KEY_MUTE }, { "VOL-", NACK_KEY_VOLUME_DOWN },
     { "VOL+", NACK_KEY_VOLUME_UP },
-    { NULL, NACK_KEY_UNKNOWN }
+    { nullptr, NACK_KEY_UNKNOWN }
 };
 
-enum nack_key nack__key_from_keysym(uint32_t sym)
+nack_key nack__key_from_keysym(uint32_t sym)
 {
     switch (sym) {
     case XKB_KEY_Escape:        return NACK_KEY_ESCAPE;
@@ -127,28 +127,28 @@ enum nack_key nack__key_from_keysym(uint32_t sym)
     }
 
     if (sym >= XKB_KEY_a && sym <= XKB_KEY_z)
-        return (enum nack_key)(NACK_KEY_A + (sym - XKB_KEY_a));
+        return (nack_key)(NACK_KEY_A + (sym - XKB_KEY_a));
     if (sym >= XKB_KEY_A && sym <= XKB_KEY_Z)
-        return (enum nack_key)(NACK_KEY_A + (sym - XKB_KEY_A));
+        return (nack_key)(NACK_KEY_A + (sym - XKB_KEY_A));
     if (sym == XKB_KEY_0)
         return NACK_KEY_0;
     if (sym >= XKB_KEY_1 && sym <= XKB_KEY_9)
-        return (enum nack_key)(NACK_KEY_1 + (sym - XKB_KEY_1));
+        return (nack_key)(NACK_KEY_1 + (sym - XKB_KEY_1));
     if (sym >= XKB_KEY_KP_0 && sym <= XKB_KEY_KP_9)
         return sym == XKB_KEY_KP_0 ? NACK_KEY_KP_0
-                                   : (enum nack_key)(NACK_KEY_KP_1 + (sym - XKB_KEY_KP_1));
+                                   : (nack_key)(NACK_KEY_KP_1 + (sym - XKB_KEY_KP_1));
     /* F1-F12 are contiguous; F13 onwards restarts elsewhere in the HID page. */
     if (sym >= XKB_KEY_F1 && sym <= XKB_KEY_F12)
-        return (enum nack_key)(NACK_KEY_F1 + (sym - XKB_KEY_F1));
+        return (nack_key)(NACK_KEY_F1 + (sym - XKB_KEY_F1));
     if (sym >= XKB_KEY_F13 && sym <= XKB_KEY_F24)
-        return (enum nack_key)(NACK_KEY_F13 + (sym - XKB_KEY_F13));
+        return (nack_key)(NACK_KEY_F13 + (sym - XKB_KEY_F13));
 
     return NACK_KEY_UNKNOWN;
 }
 
-void nack__xkb_build_keycodes(struct xkb_keymap *keymap, enum nack_key out[256])
+void nack__xkb_build_keycodes(struct xkb_keymap *keymap, nack_key out[256])
 {
-    memset(out, 0, sizeof(enum nack_key) * 256);
+    memset(out, 0, sizeof(nack_key) * 256);
     if (!keymap)
         return;
 
@@ -176,7 +176,7 @@ void nack__xkb_build_keycodes(struct xkb_keymap *keymap, enum nack_key out[256])
          * beats no key at all, and keymaps without names are synthetic ones
          * where the layout is whatever the sender chose anyway.
          */
-        const xkb_keysym_t *syms = NULL;
+        const xkb_keysym_t *syms = nullptr;
         int count = xkb_keymap_key_get_syms_by_level(keymap, kc, 0, 0, &syms);
         if (count > 0 && syms)
             out[kc] = nack__key_from_keysym(syms[0]);

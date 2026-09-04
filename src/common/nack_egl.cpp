@@ -6,7 +6,7 @@
 #include <memory>
 #include <vector>
 
-struct nack_egl_state nack__egl;
+nack_egl_state nack__egl;
 
 const char *nack__egl_error_string(EGLint error)
 {
@@ -36,7 +36,7 @@ static bool nack__egl_has_extension(const char *list, const char *name)
         return false;
     size_t len = strlen(name);
     const char *p = list;
-    while ((p = strstr(p, name)) != NULL) {
+    while ((p = strstr(p, name)) != nullptr) {
         char after = p[len];
         if ((p == list || p[-1] == ' ') && (after == ' ' || after == '\0'))
             return true;
@@ -67,7 +67,7 @@ bool nack__egl_init(EGLenum platform, void *native_display, const EGLAttrib *att
     if (nack__egl.get_platform_display) {
         /* eglGetPlatformDisplayEXT takes EGLint attributes, not EGLAttrib. */
         EGLint int_attribs[9];
-        EGLint *ptr = NULL;
+        EGLint *ptr = nullptr;
         if (attribs) {
             size_t i = 0;
             for (; attribs[i] != EGL_NONE && i < 8; ++i)
@@ -129,7 +129,7 @@ void nack__egl_terminate(void)
     memset(&nack__egl, 0, sizeof nack__egl);
 }
 
-bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack__gl_profile profile,
+bool nack__egl_choose_config(const nack_framebuffer_desc *fb, nack__gl_profile profile,
                              int gl_major, EGLConfig *out_config,
                              EGLint *out_visual_id)
 {
@@ -151,7 +151,7 @@ bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack__
     };
 
     EGLint count = 0;
-    if (!eglChooseConfig(nack__egl.display, attribs, NULL, 0, &count) || count == 0)
+    if (!eglChooseConfig(nack__egl.display, attribs, nullptr, 0, &count) || count == 0)
         return state.fail(NACK_ERROR_NO_PIXEL_FORMAT,
                           "no EGL config matches the requested framebuffer");
 
@@ -184,7 +184,7 @@ bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack__
     return true;
 }
 
-struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const struct nack__gl_desc *desc,
+nack_gl_context *nack__egl_create_context(nack_window *w, const nack__gl_desc *desc,
                                           EGLConfig config, nack_backend_vt *vt)
 {
     EGLenum api = (desc->profile == NACK__GL_PROFILE_ES) ? EGL_OPENGL_ES_API
@@ -192,7 +192,7 @@ struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const st
     if (!eglBindAPI(api)) {
         state.fail(NACK_ERROR_CONTEXT_CREATION, "eglBindAPI failed: %s",
                    nack__egl_error_string(eglGetError()));
-        return NULL;
+        return nullptr;
     }
 
     EGLint attribs[16];
@@ -232,7 +232,7 @@ struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const st
 
     EGLContext share = EGL_NO_CONTEXT;
     if (desc->share && desc->share->native)
-        share = ((struct nack_egl_context *)desc->share->native)->context;
+        share = ((nack_egl_context *)desc->share->native)->context;
 
     EGLContext egl_ctx = eglCreateContext(nack__egl.display, config, share, attribs);
     if (egl_ctx == EGL_NO_CONTEXT) {
@@ -242,11 +242,11 @@ struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const st
                    desc->profile == NACK__GL_PROFILE_CORE ? "core"
                        : desc->profile == NACK__GL_PROFILE_ES ? "es" : "compat",
                    nack__egl_error_string(eglGetError()));
-        return NULL;
+        return nullptr;
     }
 
-    auto ctx = std::make_unique<struct nack_gl_context>();
-    auto native = std::make_unique<struct nack_egl_context>();
+    auto ctx = std::make_unique<nack_gl_context>();
+    auto native = std::make_unique<nack_egl_context>();
 
     native->context = egl_ctx;
     native->config = config;
@@ -259,11 +259,11 @@ struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const st
     return ctx.release();
 }
 
-void nack__egl_destroy_context(struct nack_gl_context *ctx)
+void nack__egl_destroy_context(nack_gl_context *ctx)
 {
     if (!ctx)
         return;
-    struct nack_egl_context *native = (struct nack_egl_context *)ctx->native;
+    nack_egl_context *native = (nack_egl_context *)ctx->native;
     if (native) {
         if (native->context != EGL_NO_CONTEXT)
             eglDestroyContext(nack__egl.display, native->context);
@@ -299,14 +299,14 @@ EGLSurface nack__egl_create_window_surface(EGLConfig config, void *native_window
     return surface;
 }
 
-bool nack__egl_make_current(EGLSurface surface, struct nack_gl_context *ctx)
+bool nack__egl_make_current(EGLSurface surface, nack_gl_context *ctx)
 {
     if (!ctx) {
         eglMakeCurrent(nack__egl.display, EGL_NO_SURFACE, EGL_NO_SURFACE,
                        EGL_NO_CONTEXT);
         return true;
     }
-    struct nack_egl_context *native = (struct nack_egl_context *)ctx->native;
+    nack_egl_context *native = (nack_egl_context *)ctx->native;
     eglBindAPI(native->is_es ? EGL_OPENGL_ES_API : EGL_OPENGL_API);
     if (!eglMakeCurrent(nack__egl.display, surface, surface, native->context))
         return state.fail(NACK_ERROR_PLATFORM, "eglMakeCurrent failed: %s",

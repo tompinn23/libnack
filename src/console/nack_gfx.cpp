@@ -35,21 +35,21 @@ class failing_backend final : public nack_gfx_backend {
 public:
     const char *name() const override { return "test-fail"; }
 
-    bool init(struct nack_window *window) override
+    bool init(nack_window *window) override
     {
         (void)window;
         return nack__c.set_error("this renderer fails on purpose");
     }
     void shutdown() override {}
 
-    struct nack_texture *texture_create(const uint8_t *, int, int) override
+    nack_texture *texture_create(const uint8_t *, int, int) override
     {
         nack__c.set_error("the test-fail renderer draws nothing");
-        return NULL;
+        return nullptr;
     }
-    void texture_destroy(struct nack_texture *) override {}
-    void begin_frame(struct nack_color, int, int, int, int, int, int) override {}
-    void draw(const float *, size_t, int, struct nack_texture *) override {}
+    void texture_destroy(nack_texture *) override {}
+    void begin_frame(nack_color, int, int, int, int, int, int) override {}
+    void draw(const float *, size_t, int, nack_texture *) override {}
     void end_frame() override {}
     void resize(int, int) override {}
     void set_vsync(bool) override {}
@@ -59,7 +59,7 @@ failing_backend nack__gfx_fail_backend;
 
 }   /* namespace */
 
-bool nack__gfx_init(struct nack_window *window)
+bool nack__gfx_init(nack_window *window)
 {
     nack_gfx_backend *candidates[3];
     const char *preferred = getenv("NACK_RENDERER");
@@ -69,7 +69,7 @@ bool nack__gfx_init(struct nack_window *window)
     reason[0] = '\0';
 
     if (preferred && !*preferred)
-        preferred = NULL;
+        preferred = nullptr;
 
     if (preferred && strcmp(preferred, "test-fail") == 0)
         candidates[count++] = &nack__gfx_fail_backend;
@@ -126,7 +126,7 @@ bool nack__gfx_init(struct nack_window *window)
          * put the window back as it found it so the next one can have it.
          */
         nack__gfx->shutdown();
-        nack__gfx = NULL;
+        nack__gfx = nullptr;
     }
 
     return nack__c.set_error("no renderer could be started (%s)",
@@ -137,7 +137,7 @@ void nack__gfx_shutdown(void)
 {
     if (nack__gfx)
         nack__gfx->shutdown();
-    nack__gfx = NULL;
+    nack__gfx = nullptr;
 }
 
 const char *nack__gfx_name(void)
@@ -152,28 +152,28 @@ void nack__debug_fail_next_textures(int count)
     nack__gfx_failed_textures = count;
 }
 
-struct nack_texture *nack__gfx_texture_create(const uint8_t *rgba, int width,
+nack_texture *nack__gfx_texture_create(const uint8_t *rgba, int width,
                                               int height)
 {
     if (nack__gfx_failed_textures > 0) {
         --nack__gfx_failed_textures;
         nack__c.set_error("texture creation failed on purpose");
-        return NULL;
+        return nullptr;
     }
     if (!nack__gfx) {
         nack__c.set_error("no renderer is active");
-        return NULL;
+        return nullptr;
     }
     return nack__gfx->texture_create(rgba, width, height);
 }
 
-void nack__gfx_texture_destroy(struct nack_texture *texture)
+void nack__gfx_texture_destroy(nack_texture *texture)
 {
     if (nack__gfx && texture)
         nack__gfx->texture_destroy(texture);
 }
 
-void nack__gfx_begin_frame(struct nack_color clear, int fb_width, int fb_height,
+void nack__gfx_begin_frame(nack_color clear, int fb_width, int fb_height,
                            int viewport_x, int viewport_y, int viewport_w,
                            int viewport_h)
 {
@@ -183,7 +183,7 @@ void nack__gfx_begin_frame(struct nack_color clear, int fb_width, int fb_height,
 }
 
 void nack__gfx_draw(const float *vertices, size_t vertex_count, int mode,
-                    struct nack_texture *texture)
+                    nack_texture *texture)
 {
     if (nack__gfx)
         nack__gfx->draw(vertices, vertex_count, mode, texture);

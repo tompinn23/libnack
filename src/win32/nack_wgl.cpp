@@ -81,7 +81,7 @@ struct nack_wgl_context {
     HGLRC glrc;
 };
 
-static struct nack_wgl_state nack__wgl;
+static nack_wgl_state nack__wgl;
 
 /* ------------------------------------------------------------------ */
 /* Extension bootstrap                                                */
@@ -249,12 +249,12 @@ void nack__wgl_terminate(void)
 /* Pixel format                                                       */
 /* ------------------------------------------------------------------ */
 
-bool nack__wgl_choose_pixel_format(struct nack_window *w, HDC hdc, int *out_format)
+bool nack__wgl_choose_pixel_format(nack_window *w, HDC hdc, int *out_format)
 {
     if (!nack__wgl.initialized)
         return false;
 
-    const struct nack_framebuffer_desc *fb = &w->framebuffer;
+    const nack_framebuffer_desc *fb = &w->framebuffer;
 
     if (nack__wgl.ChoosePixelFormatARB) {
         int attribs[32];
@@ -315,7 +315,7 @@ bool nack__wgl_choose_pixel_format(struct nack_window *w, HDC hdc, int *out_form
 /* Contexts                                                           */
 /* ------------------------------------------------------------------ */
 
-struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const struct nack__gl_desc *desc,
+nack_gl_context *nack__wgl_create_context(nack_window *w, const nack__gl_desc *desc,
                                           nack_backend_vt *vt)
 {
     if (!nack__wgl.initialized) {
@@ -323,7 +323,7 @@ struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const st
         return NULL;
     }
 
-    struct nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = nack__win32_win(w);
     if (!ww || !ww->hdc) {
         state.fail(NACK_ERROR_INVALID_ARGUMENT, "window has no device context");
         return NULL;
@@ -338,7 +338,7 @@ struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const st
 
     HGLRC share = NULL;
     if (desc->share && desc->share->native)
-        share = ((struct nack_wgl_context *)desc->share->native)->glrc;
+        share = ((nack_wgl_context *)desc->share->native)->glrc;
 
     HGLRC glrc = NULL;
 
@@ -406,8 +406,8 @@ struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const st
         return NULL;
     }
 
-    auto ctx = std::make_unique<struct nack_gl_context>();
-    auto native = std::make_unique<struct nack_wgl_context>();
+    auto ctx = std::make_unique<nack_gl_context>();
+    auto native = std::make_unique<nack_wgl_context>();
 
     native->glrc = glrc;
     ctx->native = native.release();
@@ -416,11 +416,11 @@ struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const st
     return ctx.release();
 }
 
-void nack__wgl_destroy_context(struct nack_gl_context *ctx)
+void nack__wgl_destroy_context(nack_gl_context *ctx)
 {
     if (!ctx)
         return;
-    struct nack_wgl_context *native = (struct nack_wgl_context *)ctx->native;
+    nack_wgl_context *native = (nack_wgl_context *)ctx->native;
     if (native) {
         if (native->glrc) {
             if (wglGetCurrentContext() == native->glrc)
@@ -432,7 +432,7 @@ void nack__wgl_destroy_context(struct nack_gl_context *ctx)
     delete ctx;
 }
 
-bool nack__wgl_make_current(struct nack_window *w, struct nack_gl_context *ctx)
+bool nack__wgl_make_current(nack_window *w, nack_gl_context *ctx)
 {
     if (!ctx)
         return nack__wgl.MakeCurrent(NULL, NULL) != FALSE;
@@ -440,8 +440,8 @@ bool nack__wgl_make_current(struct nack_window *w, struct nack_gl_context *ctx)
         return state.fail(NACK_ERROR_INVALID_ARGUMENT,
                           "gl_make_current needs a window for this context");
 
-    struct nack_win32_window *ww = nack__win32_win(w);
-    struct nack_wgl_context *native = (struct nack_wgl_context *)ctx->native;
+    nack_win32_window *ww = nack__win32_win(w);
+    nack_wgl_context *native = (nack_wgl_context *)ctx->native;
     if (!nack__wgl.MakeCurrent(ww->hdc, native->glrc))
         return state.fail(NACK_ERROR_PLATFORM, "wglMakeCurrent failed (error %lu)",
                           GetLastError());
@@ -449,9 +449,9 @@ bool nack__wgl_make_current(struct nack_window *w, struct nack_gl_context *ctx)
     return true;
 }
 
-void nack__wgl_swap_buffers(struct nack_window *w)
+void nack__wgl_swap_buffers(nack_window *w)
 {
-    struct nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = nack__win32_win(w);
     if (ww && ww->hdc)
         SwapBuffers(ww->hdc);
 }

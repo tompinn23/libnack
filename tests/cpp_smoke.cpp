@@ -177,7 +177,7 @@ int main()
 
     {
         /* Built by hand rather than waited for: input cannot be synthesised. */
-        struct nack_event raw{};
+        nack_event raw{};
         raw.type = NACK_EVENT_KEY_DOWN;
         raw.data.key.key = NACK_KEY_ESCAPE;
         raw.data.key.mods = NACK_MOD_SHIFT | NACK_MOD_CTRL;
@@ -219,7 +219,7 @@ int main()
 
     /* Tilesets are handles too. The built-in font is not one we own. */
     {
-        struct nack_tileset *font = nack__c.font;
+        nack_tileset *font = nack__c.font;
         auto size = nack::tileset::dimensions{ font->tile_width,
                                                font->tile_height,
                                                font->count };
