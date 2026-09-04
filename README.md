@@ -173,6 +173,16 @@ Either Unix backend can be turned off with `-DNACK_ENABLE_XCB=OFF` or
 `-DNACK_ENABLE_WAYLAND=OFF`; `NACK_BACKEND=wayland` or `x11` in the environment
 overrides the run-time choice.
 
+{fmt} is vendored by default, so building libnack needs nothing installed.
+A project that embeds libnack via `add_subdirectory` and already has its own
+`fmt::fmt` target — its own `add_subdirectory` or `FetchContent`, added
+before it adds libnack — can point libnack at that one instead with
+`-DNACK_FMT_EXTERNAL=ON`, the same idea as spdlog's `SPDLOG_FMT_EXTERNAL`:
+one copy of {fmt} in the final binary rather than two. This is for the
+embedded case specifically; libnack skips its own `install()` rules when it
+is on, since a target the including project defined itself cannot be
+expressed in an installed package's exported targets file.
+
 ## Examples
 
 - `hello` — the smallest useful program.
