@@ -142,7 +142,7 @@ static bool nack__mtl_init(struct nack_window *window)
         memset(&nack__mtl, 0, sizeof nack__mtl);
         nack__mtl.window = window;
 
-        nack_window_get_native(window, &native);
+        window->get_native(&native);
         nack__mtl.view = (NSView *)native.view;
         if (!nack__mtl.view)
             return nack__c.set_error("the window has no view to attach Metal to");

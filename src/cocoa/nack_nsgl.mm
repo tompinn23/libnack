@@ -34,7 +34,7 @@ struct nack_gl_context *nack__nsgl_create_context(struct nack_window *w, const s
 {
     @autoreleasepool {
         if (desc->profile == NACK__GL_PROFILE_ES) {
-            nack__fail(NACK_ERROR_UNSUPPORTED,
+            state.fail(NACK_ERROR_UNSUPPORTED,
                        "macOS has no OpenGL ES; use ANGLE or a Metal backend");
             return NULL;
         }
@@ -47,7 +47,7 @@ struct nack_gl_context *nack__nsgl_create_context(struct nack_window *w, const s
         NSOpenGLPixelFormatAttribute profile;
         if (desc->profile == NACK__GL_PROFILE_COMPAT) {
             if (desc->major > 2) {
-                nack__fail(NACK_ERROR_UNSUPPORTED,
+                state.fail(NACK_ERROR_UNSUPPORTED,
                            "macOS offers no compatibility profile above 2.1; "
                            "request a core profile instead");
                 return NULL;
@@ -64,7 +64,7 @@ struct nack_gl_context *nack__nsgl_create_context(struct nack_window *w, const s
         }
 
         if (desc->major > 4 || (desc->major == 4 && desc->minor > 1)) {
-            nack__fail(NACK_ERROR_UNSUPPORTED,
+            state.fail(NACK_ERROR_UNSUPPORTED,
                        "macOS caps OpenGL at 4.1; %d.%d is not available",
                        desc->major, desc->minor);
             return NULL;
@@ -105,7 +105,7 @@ struct nack_gl_context *nack__nsgl_create_context(struct nack_window *w, const s
         NSOpenGLPixelFormat *pixel_format =
             [[NSOpenGLPixelFormat alloc] initWithAttributes:attribs];
         if (!pixel_format) {
-            nack__fail(NACK_ERROR_NO_PIXEL_FORMAT,
+            state.fail(NACK_ERROR_NO_PIXEL_FORMAT,
                        "no NSOpenGLPixelFormat matches the requested framebuffer");
             return NULL;
         }
@@ -118,7 +118,7 @@ struct nack_gl_context *nack__nsgl_create_context(struct nack_window *w, const s
             [[NSOpenGLContext alloc] initWithFormat:pixel_format shareContext:share];
         if (!context) {
             [pixel_format release];
-            nack__fail(NACK_ERROR_CONTEXT_CREATION, "failed to create NSOpenGLContext");
+            state.fail(NACK_ERROR_CONTEXT_CREATION, "failed to create NSOpenGLContext");
             return NULL;
         }
 

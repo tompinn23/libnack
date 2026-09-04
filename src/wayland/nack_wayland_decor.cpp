@@ -190,7 +190,7 @@ static void nack__wl_fill_rect(struct nack_wl_shm_buffer *buf, int scale,
 /*
  * A surface with no committed buffer is never mapped, so a window that has
  * not rendered yet does not appear at all - where X11 and Win32 would show an
- * empty one. Committing a blank frame makes nack_window_show() mean the same
+ * empty one. Committing a blank frame makes nack_window::show() mean the same
  * thing on every backend. The client's first real frame replaces it.
  */
 void nack__wl_present_placeholder(struct nack_window *w)
@@ -755,7 +755,7 @@ bool nack__wl_decor_pointer_button(struct nack_window *w, int button, bool down,
     switch (pressed) {
     case NACK_WL_BUTTON_CLOSE:
         w->should_close = true;
-        nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_CLOSE);
+        w->emit_simple(NACK_WIN_EVENT_WINDOW_CLOSE);
         return true;
     case NACK_WL_BUTTON_MINIMIZE:
         xdg_toplevel_set_minimized(ww->xdg_toplevel);

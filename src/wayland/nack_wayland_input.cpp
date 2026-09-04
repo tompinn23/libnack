@@ -67,7 +67,7 @@ static void nack__wl_emit_text_for(struct nack_window *w, xkb_keycode_t keycode,
                                                    sizeof buffer);
                 xkb_compose_state_reset(nack__wl.compose_state);
                 if (n > 0 && n < (int)sizeof buffer)
-                    nack__emit_text(w, buffer);
+                    w->emit_text(buffer);
                 return;
             }
             case XKB_COMPOSE_NOTHING:
@@ -89,7 +89,7 @@ static void nack__wl_emit_text_for(struct nack_window *w, xkb_keycode_t keycode,
     if (!nack__codepoint_is_text(codepoint))
         return;
 
-    nack__emit_text(w, buffer);
+    w->emit_text(buffer);
 }
 
 /* ------------------------------------------------------------------ */
@@ -144,7 +144,7 @@ void nack__wl_pump_key_repeat(void)
         enum nack_key key = keycode < 256 ? nack__wl.keycodes[keycode] : NACK_KEY_UNKNOWN;
         uint32_t mods = nack__wl_mods();
 
-        nack__emit_key(nack__wl.repeat_window, key, raw_key, mods, true, true);
+        nack__wl.repeat_window->emit_key(key, raw_key, mods, true, true);
         nack__wl_emit_text_for(nack__wl.repeat_window, keycode, mods);
 
         nack__wl.repeat_next_ns += interval;
@@ -208,7 +208,7 @@ static void keyboard_enter(void *data, struct wl_keyboard *keyboard, uint32_t se
         struct nack_wl_window *ww = nack__wl_win(w);
         if (ww && ww->surface == surface) {
             nack__wl.keyboard_focus = w;
-            nack__emit_focus(w, true);
+            w->emit_focus(true);
             /* The title bar is drawn differently when active. */
             nack__wl_decor_redraw(w);
             return;
@@ -227,7 +227,7 @@ static void keyboard_leave(void *data, struct wl_keyboard *keyboard, uint32_t se
     if (nack__wl.keyboard_focus) {
         struct nack_window *w = nack__wl.keyboard_focus;
         nack__wl.keyboard_focus = NULL;
-        nack__emit_focus(w, false);
+        w->emit_focus(false);
         nack__wl_decor_redraw(w);
     }
 }
@@ -247,7 +247,7 @@ static void keyboard_key(void *data, struct wl_keyboard *keyboard, uint32_t seri
     uint32_t mods = nack__wl_mods();
     bool down = (key_state == WL_KEYBOARD_KEY_STATE_PRESSED);
 
-    nack__emit_key(w, nkey, key, mods, down, false);
+    w->emit_key(nkey, key, mods, down, false);
 
     if (down) {
         nack__wl_emit_text_for(w, keycode, mods);
@@ -428,13 +428,13 @@ static void relative_pointer_motion(void *data,
     ww->virtual_x += ddx;
     ww->virtual_y += ddy;
 
-    struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_MOUSE_MOVE, w);
+    struct nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_MOUSE_MOVE, w);
     ev->data.motion.x = ww->virtual_x;
     ev->data.motion.y = ww->virtual_y;
     ev->data.motion.dx = ddx;
     ev->data.motion.dy = ddy;
     ev->data.motion.mods = nack__wl_mods();
-    nack__push_event(ev);
+    state.push_event(ev);
 }
 
 static const struct zwp_relative_pointer_v1_listener nack__wl_relative_listener = {
@@ -527,7 +527,7 @@ static void pointer_enter(void *data, struct wl_pointer *pointer, uint32_t seria
     w->mouse_x = wl_fixed_to_double(sx);
     w->mouse_y = wl_fixed_to_double(sy);
     nack__wl_update_cursor(w);
-    nack__emit_simple(w, NACK_WIN_EVENT_MOUSE_ENTER);
+    w->emit_simple(NACK_WIN_EVENT_MOUSE_ENTER);
 }
 
 static void pointer_leave(void *data, struct wl_pointer *pointer, uint32_t serial,
@@ -540,7 +540,7 @@ static void pointer_leave(void *data, struct wl_pointer *pointer, uint32_t seria
         nack__wl.decor_focus = NULL;
     }
     if (nack__wl.pointer_focus) {
-        nack__emit_simple(nack__wl.pointer_focus, NACK_WIN_EVENT_MOUSE_LEAVE);
+        nack__wl.pointer_focus->emit_simple(NACK_WIN_EVENT_MOUSE_LEAVE);
         nack__wl.pointer_focus = NULL;
     }
 }
@@ -559,8 +559,8 @@ static void pointer_motion(void *data, struct wl_pointer *pointer, uint32_t time
     struct nack_window *w = nack__wl.pointer_focus;
     if (!w || w->cursor_mode == NACK_CURSOR_MODE_CAPTURED)
         return;   /* captured motion arrives through the relative pointer */
-    nack__emit_mouse_move(w, wl_fixed_to_double(sx), wl_fixed_to_double(sy),
-                          nack__wl_mods());
+    w->emit_mouse_move(wl_fixed_to_double(sx), wl_fixed_to_double(sy),
+                      nack__wl_mods());
 }
 
 static void pointer_button(void *data, struct wl_pointer *pointer, uint32_t serial,
@@ -589,8 +589,8 @@ static void pointer_button(void *data, struct wl_pointer *pointer, uint32_t seri
          * title bar is recognised, then let the decorations act on it. */
         struct nack_window *decorated = nack__wl.decor_focus;
         if (down)
-            nack__emit_mouse_button(decorated, index, true, nack__wl.decor_x,
-                                    nack__wl.decor_y, nack__wl_mods());
+            decorated->emit_mouse_button(index, true, nack__wl.decor_x,
+                                         nack__wl.decor_y, nack__wl_mods());
         if (nack__wl_decor_pointer_button(decorated, index, down, serial))
             return;
         return;
@@ -599,7 +599,7 @@ static void pointer_button(void *data, struct wl_pointer *pointer, uint32_t seri
     if (!w)
         return;
 
-    nack__emit_mouse_button(w, index, down, w->mouse_x, w->mouse_y, nack__wl_mods());
+    w->emit_mouse_button(index, down, w->mouse_x, w->mouse_y, nack__wl_mods());
 }
 
 static void pointer_axis(void *data, struct wl_pointer *pointer, uint32_t time,
@@ -651,8 +651,8 @@ static void pointer_frame(void *data, struct wl_pointer *pointer)
     }
     struct nack_window *w = nack__wl.pointer_focus;
     if (w)
-        nack__emit_scroll(w, nack__wl.axis_x, nack__wl.axis_y, nack__wl_mods(),
-                          !nack__wl.axis_discrete);
+        w->emit_scroll(nack__wl.axis_x, nack__wl.axis_y, nack__wl_mods(),
+                      !nack__wl.axis_discrete);
     nack__wl.axis_x = 0.0;
     nack__wl.axis_y = 0.0;
     nack__wl.axis_pending = false;

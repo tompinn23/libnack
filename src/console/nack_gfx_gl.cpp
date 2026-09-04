@@ -105,19 +105,18 @@ static bool nack__glr_init(struct nack_window *window)
     nack__gl = nack_gl_backend{};
     nack__gl.window = window;
 
-    nack__gl_desc_defaults(&desc);
     desc.major = 3;
     desc.minor = 3;
     desc.profile = NACK__GL_PROFILE_CORE;
 
-    nack__gl.context = nack__gl_context_create(window, &desc);
+    nack__gl.context = nack_gl_context::create(window, &desc);
     if (!nack__gl.context) {
         const char *message = NULL;
-        nack__win_get_error(&message);
+        state.last_error(&message);
         return nack__c.set_error("cannot create an OpenGL 3.3 context: %s",
                            message ? message : "unknown");
     }
-    nack__gl_make_current(window, nack__gl.context);
+    state.gl_make_current(window, nack__gl.context);
 
     if (!nack__gl_load(&missing))
         return nack__c.set_error("this OpenGL driver is missing %s",
@@ -183,7 +182,7 @@ static void nack__glr_shutdown(void)
     if (nack__gl.vbo) glDeleteBuffers(1, &nack__gl.vbo);
     if (nack__gl.vao) glDeleteVertexArrays(1, &nack__gl.vao);
     if (nack__gl.program) glDeleteProgram(nack__gl.program);
-    if (nack__gl.context) nack__gl_context_destroy(nack__gl.context);
+    if (nack__gl.context) nack_gl_context::destroy(nack__gl.context);
     nack__gl = nack_gl_backend{};
 }
 
@@ -302,7 +301,7 @@ static void nack__glr_end_frame(void)
 {
     if (nack__gl.capture)
         nack__glr_capture_frame();
-    nack__gl_swap_buffers(nack__gl.window);
+    state.gl_swap_buffers(nack__gl.window);
 }
 
 static void nack__glr_resize(int fb_width, int fb_height)
@@ -313,7 +312,7 @@ static void nack__glr_resize(int fb_width, int fb_height)
 
 static void nack__glr_set_vsync(bool vsync)
 {
-    nack__gl_set_swap_interval(vsync ? 1 : 0);
+    state.gl_set_swap_interval(vsync ? 1 : 0);
 }
 
 static void nack__glr_set_capture(bool capture)

@@ -114,12 +114,12 @@ static bool nack__wgl_bootstrap(void)
                                 WS_OVERLAPPEDWINDOW, 0, 0, 1, 1,
                                 NULL, NULL, nack__win32.instance, NULL);
     if (!hwnd)
-        return nack__fail(NACK_ERROR_PLATFORM, "failed to create WGL helper window");
+        return state.fail(NACK_ERROR_PLATFORM, "failed to create WGL helper window");
 
     HDC hdc = GetDC(hwnd);
     if (!hdc) {
         DestroyWindow(hwnd);
-        return nack__fail(NACK_ERROR_PLATFORM, "GetDC failed for WGL helper window");
+        return state.fail(NACK_ERROR_PLATFORM, "GetDC failed for WGL helper window");
     }
 
     PIXELFORMATDESCRIPTOR pfd;
@@ -134,7 +134,7 @@ static bool nack__wgl_bootstrap(void)
     if (!format || !SetPixelFormat(hdc, format, &pfd)) {
         ReleaseDC(hwnd, hdc);
         DestroyWindow(hwnd);
-        return nack__fail(NACK_ERROR_NO_PIXEL_FORMAT,
+        return state.fail(NACK_ERROR_NO_PIXEL_FORMAT,
                           "no legacy pixel format available for WGL bootstrap");
     }
 
@@ -142,7 +142,7 @@ static bool nack__wgl_bootstrap(void)
     if (!glrc) {
         ReleaseDC(hwnd, hdc);
         DestroyWindow(hwnd);
-        return nack__fail(NACK_ERROR_CONTEXT_CREATION,
+        return state.fail(NACK_ERROR_CONTEXT_CREATION,
                           "failed to create WGL bootstrap context");
     }
 
@@ -153,7 +153,7 @@ static bool nack__wgl_bootstrap(void)
         nack__wgl.DeleteContext(glrc);
         ReleaseDC(hwnd, hdc);
         DestroyWindow(hwnd);
-        return nack__fail(NACK_ERROR_CONTEXT_CREATION,
+        return state.fail(NACK_ERROR_CONTEXT_CREATION,
                           "failed to make WGL bootstrap context current");
     }
 
@@ -212,14 +212,14 @@ bool nack__wgl_init(void)
 
     nack__wgl.opengl32 = LoadLibraryA("opengl32.dll");
     if (!nack__wgl.opengl32)
-        return nack__fail(NACK_ERROR_NO_BACKEND, "cannot load opengl32.dll");
+        return state.fail(NACK_ERROR_NO_BACKEND, "cannot load opengl32.dll");
 
 #define NACK_WGL_LOAD(field, name, type)                                       \
     nack__wgl.field = (type)(void *)GetProcAddress(nack__wgl.opengl32, name);  \
     if (!nack__wgl.field) {                                                    \
         FreeLibrary(nack__wgl.opengl32);                                       \
         nack__wgl.opengl32 = NULL;                                             \
-        return nack__fail(NACK_ERROR_NO_BACKEND, "opengl32.dll lacks %s", name); \
+        return state.fail(NACK_ERROR_NO_BACKEND, "opengl32.dll lacks %s", name); \
     }
     NACK_WGL_LOAD(CreateContext, "wglCreateContext", HGLRC (WINAPI *)(HDC))
     NACK_WGL_LOAD(DeleteContext, "wglDeleteContext", BOOL (WINAPI *)(HGLRC))
@@ -305,7 +305,7 @@ bool nack__wgl_choose_pixel_format(struct nack_window *w, HDC hdc, int *out_form
 
     int format = ChoosePixelFormat(hdc, &pfd);
     if (!format)
-        return nack__fail(NACK_ERROR_NO_PIXEL_FORMAT,
+        return state.fail(NACK_ERROR_NO_PIXEL_FORMAT,
                           "no pixel format matches the requested framebuffer");
     *out_format = format;
     return true;
@@ -319,18 +319,18 @@ struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const st
                                           nack_backend_vt *vt)
 {
     if (!nack__wgl.initialized) {
-        nack__fail(NACK_ERROR_UNSUPPORTED, "WGL is not available");
+        state.fail(NACK_ERROR_UNSUPPORTED, "WGL is not available");
         return NULL;
     }
 
     struct nack_win32_window *ww = nack__win32_win(w);
     if (!ww || !ww->hdc) {
-        nack__fail(NACK_ERROR_INVALID_ARGUMENT, "window has no device context");
+        state.fail(NACK_ERROR_INVALID_ARGUMENT, "window has no device context");
         return NULL;
     }
 
     if (desc->profile == NACK__GL_PROFILE_ES) {
-        nack__fail(NACK_ERROR_UNSUPPORTED,
+        state.fail(NACK_ERROR_UNSUPPORTED,
                    "OpenGL ES needs an EGL implementation such as ANGLE; "
                    "WGL provides desktop OpenGL only");
         return NULL;
@@ -393,14 +393,14 @@ struct nack_gl_context *nack__wgl_create_context(struct nack_window *w, const st
 
     if (!glrc) {
         if (desc->major > 0 && !nack__wgl.CreateContextAttribsARB)
-            nack__fail(NACK_ERROR_CONTEXT_CREATION,
+            state.fail(NACK_ERROR_CONTEXT_CREATION,
                        "this OpenGL driver has no WGL_ARB_create_context, so "
                        "no GL %d.%d context can be made; it is most likely "
                        "the software renderer Windows falls back to with no "
                        "graphics driver installed",
                        desc->major, desc->minor);
         else
-            nack__fail(NACK_ERROR_CONTEXT_CREATION,
+            state.fail(NACK_ERROR_CONTEXT_CREATION,
                        "failed to create a GL %d.%d context (error %lu)",
                        desc->major, desc->minor, GetLastError());
         return NULL;
@@ -437,13 +437,13 @@ bool nack__wgl_make_current(struct nack_window *w, struct nack_gl_context *ctx)
     if (!ctx)
         return nack__wgl.MakeCurrent(NULL, NULL) != FALSE;
     if (!w)
-        return nack__fail(NACK_ERROR_INVALID_ARGUMENT,
-                          "nack__gl_make_current needs a window for this context");
+        return state.fail(NACK_ERROR_INVALID_ARGUMENT,
+                          "gl_make_current needs a window for this context");
 
     struct nack_win32_window *ww = nack__win32_win(w);
     struct nack_wgl_context *native = (struct nack_wgl_context *)ctx->native;
     if (!nack__wgl.MakeCurrent(ww->hdc, native->glrc))
-        return nack__fail(NACK_ERROR_PLATFORM, "wglMakeCurrent failed (error %lu)",
+        return state.fail(NACK_ERROR_PLATFORM, "wglMakeCurrent failed (error %lu)",
                           GetLastError());
     ww->glrc = native->glrc;
     return true;

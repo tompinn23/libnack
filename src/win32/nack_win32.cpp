@@ -353,7 +353,7 @@ static void nack__win32_update_size(struct nack_window *w)
     int height = rect.bottom - rect.top;
     /* The client area is already in physical pixels, which is what the
      * framebuffer wants; the logical size is that divided by the scale. */
-    nack__emit_resize(w, width, height, width, height);
+    w->emit_resize(width, height, width, height);
 }
 
 static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
@@ -375,7 +375,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
     switch (msg) {
     case WM_CLOSE:
         w->should_close = true;
-        nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_CLOSE);
+        w->emit_simple(NACK_WIN_EVENT_WINDOW_CLOSE);
         return 0;   /* the application decides when to destroy the window */
 
     case WM_ERASEBKGND:
@@ -385,12 +385,12 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
         PAINTSTRUCT paint;
         BeginPaint(hwnd, &paint);
         EndPaint(hwnd, &paint);
-        nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_EXPOSE);
+        w->emit_simple(NACK_WIN_EVENT_WINDOW_EXPOSE);
         return 0;
     }
 
     case WM_SETFOCUS:
-        nack__emit_focus(w, true);
+        w->emit_focus(true);
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED)
             nack__win32_clip_cursor(w, true);
         return 0;
@@ -398,7 +398,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
     case WM_KILLFOCUS:
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED)
             nack__win32_clip_cursor(w, false);
-        nack__emit_focus(w, false);
+        w->emit_focus(false);
         return 0;
 
     case WM_SETCURSOR:
@@ -413,17 +413,17 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
         bool maximized = (wparam == SIZE_MAXIMIZED);
         if (minimized != w->minimized) {
             w->minimized = minimized;
-            nack__emit_simple(w, minimized ? NACK_WIN_EVENT_WINDOW_MINIMIZE
+            w->emit_simple(minimized ? NACK_WIN_EVENT_WINDOW_MINIMIZE
                                            : NACK_WIN_EVENT_WINDOW_RESTORE);
         }
         if (maximized != w->maximized) {
             w->maximized = maximized;
-            nack__emit_simple(w, maximized ? NACK_WIN_EVENT_WINDOW_MAXIMIZE
+            w->emit_simple(maximized ? NACK_WIN_EVENT_WINDOW_MAXIMIZE
                                            : NACK_WIN_EVENT_WINDOW_RESTORE);
         }
         if (!minimized) {
             int width = LOWORD(lparam), height = HIWORD(lparam);
-            nack__emit_resize(w, width, height, width, height);
+            w->emit_resize(width, height, width, height);
         }
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED)
             nack__win32_clip_cursor(w, true);
@@ -436,10 +436,10 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
         if (x != w->pos_x || y != w->pos_y) {
             w->pos_x = x;
             w->pos_y = y;
-            struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_WINDOW_MOVE, w);
+            struct nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_WINDOW_MOVE, w);
             ev->data.move.x = x;
             ev->data.move.y = y;
-            nack__push_event(ev);
+            state.push_event(ev);
         }
         return 0;
     }
@@ -462,7 +462,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
     case WM_TIMER:
         if (wparam == 1 && ww->in_size_move) {
             nack__win32_update_size(w);
-            nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_EXPOSE);
+            w->emit_simple(NACK_WIN_EVENT_WINDOW_EXPOSE);
         }
         return 0;
 
@@ -553,7 +553,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
                          suggested->bottom - suggested->top,
                          SWP_NOACTIVATE | SWP_NOZORDER);
         }
-        nack__emit_scale(w, (float)dpi / (float)NACK_DEFAULT_DPI);
+        w->emit_scale((float)dpi / (float)NACK_DEFAULT_DPI);
         return 0;
     }
 
@@ -573,16 +573,16 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
              */
             if (state.keys[NACK_KEY_LEFT_SHIFT] &&
                 !(GetKeyState(VK_LSHIFT) & 0x8000))
-                nack__emit_key(w, NACK_KEY_LEFT_SHIFT, scancode,
+                w->emit_key(NACK_KEY_LEFT_SHIFT, scancode,
                                nack__win32_mods(), false, false);
             if (state.keys[NACK_KEY_RIGHT_SHIFT] &&
                 !(GetKeyState(VK_RSHIFT) & 0x8000))
-                nack__emit_key(w, NACK_KEY_RIGHT_SHIFT, scancode,
+                w->emit_key(NACK_KEY_RIGHT_SHIFT, scancode,
                                nack__win32_mods(), false, false);
             return 0;
         }
 
-        nack__emit_key(w, key, scancode, nack__win32_mods(), down, repeat);
+        w->emit_key(key, scancode, nack__win32_mods(), down, repeat);
 
         /* Alt and F10 open the window menu unless we swallow them. */
         if (msg == WM_SYSKEYDOWN || msg == WM_SYSKEYUP)
@@ -617,7 +617,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
             nack__codepoint_is_text(codepoint)) {
             char utf8[5];
             nack__utf8_encode(codepoint, utf8);
-            nack__emit_text(w, utf8);
+            w->emit_text(utf8);
         }
         if (msg == WM_SYSCHAR)
             break;
@@ -630,7 +630,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
         if (nack__codepoint_is_text((uint32_t)wparam)) {
             char utf8[5];
             nack__utf8_encode((uint32_t)wparam, utf8);
-            nack__emit_text(w, utf8);
+            w->emit_text(utf8);
         }
         return 0;
 
@@ -640,7 +640,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 
         if (!ww->cursor_tracked) {
             nack__win32_track_mouse_leave(w);
-            nack__emit_simple(w, NACK_WIN_EVENT_MOUSE_ENTER);
+            w->emit_simple(NACK_WIN_EVENT_MOUSE_ENTER);
         }
 
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED) {
@@ -651,7 +651,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
             if (dx == 0 && dy == 0)
                 return 0;   /* this is the recentring move, not user input */
 
-            struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_MOUSE_MOVE, w);
+            struct nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_MOUSE_MOVE, w);
             w->mouse_x += dx;
             w->mouse_y += dy;
             ev->data.motion.x = w->mouse_x;
@@ -659,19 +659,19 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
             ev->data.motion.dx = dx;
             ev->data.motion.dy = dy;
             ev->data.motion.mods = nack__win32_mods();
-            nack__push_event(ev);
+            state.push_event(ev);
 
             SetCursorPos(ww->captured_center_x, ww->captured_center_y);
             return 0;
         }
 
-        nack__emit_mouse_move(w, x, y, nack__win32_mods());
+        w->emit_mouse_move(x, y, nack__win32_mods());
         return 0;
     }
 
     case WM_MOUSELEAVE:
         ww->cursor_tracked = false;
-        nack__emit_simple(w, NACK_WIN_EVENT_MOUSE_LEAVE);
+        w->emit_simple(NACK_WIN_EVENT_MOUSE_LEAVE);
         return 0;
 
     case WM_LBUTTONDOWN: case WM_LBUTTONUP:
@@ -703,7 +703,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
                 SetCapture(hwnd);
         }
 
-        nack__emit_mouse_button(w, button, down, GET_X_LPARAM(lparam),
+        w->emit_mouse_button(button, down, GET_X_LPARAM(lparam),
                                 GET_Y_LPARAM(lparam), nack__win32_mods());
 
         if (!down) {
@@ -719,16 +719,15 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
     }
 
     case WM_MOUSEWHEEL:
-        nack__emit_scroll(w, 0.0,
+        w->emit_scroll(0.0,
                           (double)GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA,
                           nack__win32_mods(), false);
         return 0;
 
     case WM_MOUSEHWHEEL:
         /* Windows reports horizontal wheel with the opposite sign to ours. */
-        nack__emit_scroll(w,
-                          -(double)GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA,
-                          0.0, nack__win32_mods(), false);
+        w->emit_scroll(-(double)GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA,
+                      0.0, nack__win32_mods(), false);
         return 0;
 
     case WM_SYSCOMMAND:
@@ -786,7 +785,7 @@ static bool nack__win32_window_create(struct nack_window *w,
     if (!ww->hwnd) {
         delete ww;
         w->native = NULL;
-        return nack__fail(NACK_ERROR_PLATFORM, "CreateWindowEx failed (error %lu)",
+        return state.fail(NACK_ERROR_PLATFORM, "CreateWindowEx failed (error %lu)",
                           GetLastError());
     }
 
@@ -797,7 +796,7 @@ static bool nack__win32_window_create(struct nack_window *w,
         DestroyWindow(ww->hwnd);
         delete ww;
         w->native = NULL;
-        return nack__fail(NACK_ERROR_PLATFORM, "GetDC failed");
+        return state.fail(NACK_ERROR_PLATFORM, "GetDC failed");
     }
 
     ww->dpi = nack__win32_dpi_for_window(ww->hwnd);
@@ -999,18 +998,18 @@ static void nack__win32_drain(void)
     while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
         if (msg.message == WM_QUIT) {
             size_t i;
-            nack__emit_simple(NULL, NACK_WIN_EVENT_QUIT);
+            state.emit_global(NACK_WIN_EVENT_QUIT);
             for (i = 0; i < state.windows.size(); ++i)
                 state.windows[i]->should_close = true;
             continue;
         }
         /*
-         * nack__win_wakeup posts a thread message, which has no target window.
-         * DispatchMessageW would silently drop it, so it has to become an
-         * event here rather than in the window procedure.
+         * nack_state::wakeup() posts a thread message, which has no target
+         * window. DispatchMessageW would silently drop it, so it has to
+         * become an event here rather than in the window procedure.
          */
         if (msg.message == NACK_WM_WAKEUP && msg.hwnd == NULL) {
-            nack__emit_simple(NULL, NACK_WIN_EVENT_WAKEUP);
+            state.emit_global(NACK_WIN_EVENT_WAKEUP);
             continue;
         }
         TranslateMessage(&msg);
@@ -1021,7 +1020,7 @@ static void nack__win32_drain(void)
 static void nack__win32_pump_events(double timeout)
 {
     nack__win32_drain();
-    if (!nack__queue_empty() || timeout == 0.0)
+    if (!state.queue.empty() || timeout == 0.0)
         return;
 
     DWORD ms = INFINITE;
@@ -1061,31 +1060,31 @@ static bool nack__win32_clipboard_set(const char *utf8)
 {
     std::optional<std::wstring> wide = nack__win32_utf8_to_wide(utf8);
     if (!wide)
-        return nack__fail(NACK_ERROR_INVALID_ARGUMENT, "clipboard text is not UTF-8");
+        return state.fail(NACK_ERROR_INVALID_ARGUMENT, "clipboard text is not UTF-8");
 
     size_t count = wide->size() + 1;
     HGLOBAL handle = GlobalAlloc(GMEM_MOVEABLE, count * sizeof(WCHAR));
     if (!handle)
-        return nack__fail(NACK_ERROR_OUT_OF_MEMORY, "GlobalAlloc failed");
+        return state.fail(NACK_ERROR_OUT_OF_MEMORY, "GlobalAlloc failed");
 
     void *locked = GlobalLock(handle);
     if (!locked) {
         GlobalFree(handle);
-        return nack__fail(NACK_ERROR_PLATFORM, "GlobalLock failed");
+        return state.fail(NACK_ERROR_PLATFORM, "GlobalLock failed");
     }
     memcpy(locked, wide->c_str(), count * sizeof(WCHAR));
     GlobalUnlock(handle);
 
     if (!OpenClipboard(nack__win32_any_window())) {
         GlobalFree(handle);
-        return nack__fail(NACK_ERROR_PLATFORM, "OpenClipboard failed");
+        return state.fail(NACK_ERROR_PLATFORM, "OpenClipboard failed");
     }
     EmptyClipboard();
     /* Ownership of the handle transfers to the clipboard on success. */
     if (!SetClipboardData(CF_UNICODETEXT, handle)) {
         CloseClipboard();
         GlobalFree(handle);
-        return nack__fail(NACK_ERROR_PLATFORM, "SetClipboardData failed");
+        return state.fail(NACK_ERROR_PLATFORM, "SetClipboardData failed");
     }
     CloseClipboard();
     return true;
@@ -1180,7 +1179,7 @@ static bool nack__win32_init(const struct nack_win_init_desc *desc)
                                      LR_DEFAULTSIZE | LR_SHARED);
 
     if (!RegisterClassExW(&wc))
-        return nack__fail(NACK_ERROR_PLATFORM, "RegisterClassEx failed (error %lu)",
+        return state.fail(NACK_ERROR_PLATFORM, "RegisterClassEx failed (error %lu)",
                           GetLastError());
     nack__win32.class_registered = true;
 

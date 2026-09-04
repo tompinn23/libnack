@@ -137,8 +137,8 @@ void nack__wl_window_update_scale(struct nack_window *w)
     wl_surface_set_buffer_scale(ww->surface, scale);
     nack__wl_decor_update_scale(w, scale);
     nack__wl_resize_egl(w);
-    nack__emit_scale(w, (float)scale);
-    nack__emit_resize(w, w->width, w->height, w->fb_width, w->fb_height);
+    w->emit_scale((float)scale);
+    w->emit_resize(w->width, w->height, w->fb_width, w->fb_height);
     nack__wl_load_cursor_theme(scale);
     nack__wl_update_cursor(w);
 }
@@ -209,8 +209,8 @@ static void fractional_scale_preferred(void *data,
      * up rather than rendering them at 1x on a scaled display. */
     nack__wl_decor_update_scale(w, (int)(scale + 0.999f));
 
-    nack__emit_scale(w, scale);
-    nack__emit_resize(w, w->width, w->height, fb_width, fb_height);
+    w->emit_scale(scale);
+    w->emit_resize(w->width, w->height, fb_width, fb_height);
     nack__wl_load_cursor_theme((int)(scale + 0.5f));
     nack__wl_update_cursor(w);
 }
@@ -284,17 +284,17 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
         wp_viewport_set_destination(ww->viewport, w->width, w->height);
 
     if (size_changed || !ww->configured) {
-        struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_WINDOW_RESIZE, w);
+        struct nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_WINDOW_RESIZE, w);
         ev->data.size.width = w->width;
         ev->data.size.height = w->height;
         ev->data.size.fb_width = w->fb_width;
         ev->data.size.fb_height = w->fb_height;
-        nack__push_event(ev);
+        state.push_event(ev);
     }
 
     if (ww->pending_maximized != w->maximized) {
         w->maximized = ww->pending_maximized;
-        nack__emit_simple(w, w->maximized ? NACK_WIN_EVENT_WINDOW_MAXIMIZE
+        w->emit_simple(w->maximized ? NACK_WIN_EVENT_WINDOW_MAXIMIZE
                                           : NACK_WIN_EVENT_WINDOW_RESTORE);
     }
     w->fullscreen = ww->pending_fullscreen;
@@ -344,7 +344,7 @@ static void xdg_toplevel_close(void *data, struct xdg_toplevel *toplevel)
     (void)toplevel;
     struct nack_window *w = (struct nack_window *)data;
     w->should_close = true;
-    nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_CLOSE);
+    w->emit_simple(NACK_WIN_EVENT_WINDOW_CLOSE);
 }
 
 static void xdg_toplevel_configure_bounds(void *data, struct xdg_toplevel *toplevel,
@@ -485,7 +485,7 @@ static bool nack__wl_window_create(struct nack_window *w,
                                    const struct nack_window_desc *desc)
 {
     if (!nack__wl.compositor || !nack__wl.wm_base)
-        return nack__fail(NACK_ERROR_PLATFORM,
+        return state.fail(NACK_ERROR_PLATFORM,
                           "compositor is missing wl_compositor or xdg_wm_base");
 
     struct nack_wl_window *ww = new nack_wl_window{};
@@ -499,7 +499,7 @@ static bool nack__wl_window_create(struct nack_window *w,
     if (!ww->surface) {
         delete ww;
         w->native = NULL;
-        return nack__fail(NACK_ERROR_PLATFORM, "wl_compositor.create_surface failed");
+        return state.fail(NACK_ERROR_PLATFORM, "wl_compositor.create_surface failed");
     }
     wl_surface_add_listener(ww->surface, &nack__wl_surface_listener, w);
 
@@ -654,12 +654,12 @@ static void nack__wl_window_set_size(struct nack_window *w, int width, int heigh
     if (ww->viewport)
         wp_viewport_set_destination(ww->viewport, width, height);
 
-    struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_WINDOW_RESIZE, w);
+    struct nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_WINDOW_RESIZE, w);
     ev->data.size.width = w->width;
     ev->data.size.height = w->height;
     ev->data.size.fb_width = w->fb_width;
     ev->data.size.fb_height = w->fb_height;
-    nack__push_event(ev);
+    state.push_event(ev);
 
     wl_surface_commit(ww->surface);
     wl_display_flush(nack__wl.display);
@@ -725,7 +725,7 @@ static void nack__wl_window_request_redraw(struct nack_window *w)
 {
     struct nack_wl_window *ww = nack__wl_win(w);
     wl_surface_damage_buffer(ww->surface, 0, 0, INT32_MAX, INT32_MAX);
-    nack__emit_simple(w, NACK_WIN_EVENT_WINDOW_EXPOSE);
+    w->emit_simple(NACK_WIN_EVENT_WINDOW_EXPOSE);
     wl_display_flush(nack__wl.display);
 }
 
@@ -748,7 +748,7 @@ static bool nack__wl_ensure_surface(struct nack_window *w, EGLConfig config)
     if (ww->egl_surface != EGL_NO_SURFACE)
         return true;
     if (!ww->egl_window)
-        return nack__fail(NACK_ERROR_CONTEXT_CREATION, "no wl_egl_window for surface");
+        return state.fail(NACK_ERROR_CONTEXT_CREATION, "no wl_egl_window for surface");
 
     ww->egl_surface = nack__egl_create_window_surface(config, ww->egl_window, true,
                                                       w->framebuffer.srgb);
@@ -760,12 +760,12 @@ static struct nack_gl_context *nack__wl_gl_create(nack_backend_vt *vt,
                                                   const struct nack__gl_desc *desc)
 {
     if (!nack__egl.initialized) {
-        nack__fail(NACK_ERROR_UNSUPPORTED, "EGL is not available");
+        state.fail(NACK_ERROR_UNSUPPORTED, "EGL is not available");
         return NULL;
     }
     struct nack_wl_window *ww = nack__wl_win(w);
     if (!ww->has_config) {
-        nack__fail(NACK_ERROR_NO_PIXEL_FORMAT,
+        state.fail(NACK_ERROR_NO_PIXEL_FORMAT,
                    "window was created without a usable EGL config");
         return NULL;
     }
@@ -779,8 +779,8 @@ static bool nack__wl_gl_make_current(struct nack_window *w, struct nack_gl_conte
     if (!ctx)
         return nack__egl_make_current(EGL_NO_SURFACE, NULL);
     if (!w)
-        return nack__fail(NACK_ERROR_INVALID_ARGUMENT,
-                          "nack__gl_make_current needs a window for this context");
+        return state.fail(NACK_ERROR_INVALID_ARGUMENT,
+                          "gl_make_current needs a window for this context");
     struct nack_wl_window *ww = nack__wl_win(w);
     if (ww->egl_surface == EGL_NO_SURFACE &&
         !nack__wl_ensure_surface(w, ((struct nack_egl_context *)ctx->native)->config))
@@ -822,7 +822,7 @@ static void nack__wl_pump_events(double timeout)
     wl_display_dispatch_pending(display);
     nack__wl_pump_key_repeat();
 
-    if (!nack__queue_empty() || timeout == 0.0) {
+    if (!state.queue.empty() || timeout == 0.0) {
         wl_display_flush(display);
         return;
     }
@@ -835,7 +835,7 @@ static void nack__wl_pump_events(double timeout)
     while (wl_display_prepare_read(display) != 0) {
         if (wl_display_dispatch_pending(display) < 0)
             return;
-        if (!nack__queue_empty()) {
+        if (!state.queue.empty()) {
             wl_display_flush(display);
             return;
         }
@@ -882,7 +882,7 @@ static void nack__wl_pump_events(double timeout)
         char scratch[64];
         while (read(nack__wl.wakeup_pipe[0], scratch, sizeof scratch) > 0)
             ;
-        nack__emit_simple(NULL, NACK_WIN_EVENT_WAKEUP);
+        state.emit_global(NACK_WIN_EVENT_WAKEUP);
     }
 
     nack__wl_pump_key_repeat();
@@ -904,7 +904,7 @@ static bool nack__wl_init(const struct nack_win_init_desc *desc)
 
     nack__wl.display = wl_display_connect(NULL);
     if (!nack__wl.display)
-        return nack__fail(NACK_ERROR_NO_BACKEND,
+        return state.fail(NACK_ERROR_NO_BACKEND,
                           "cannot connect to Wayland display '%s'",
                           getenv("WAYLAND_DISPLAY") ? getenv("WAYLAND_DISPLAY")
                                                     : "(unset)");
@@ -912,7 +912,7 @@ static bool nack__wl_init(const struct nack_win_init_desc *desc)
     if (pipe(nack__wl.wakeup_pipe) != 0) {
         wl_display_disconnect(nack__wl.display);
         nack__wl.display = NULL;
-        return nack__fail(NACK_ERROR_PLATFORM, "pipe() failed: %s", strerror(errno));
+        return state.fail(NACK_ERROR_PLATFORM, "pipe() failed: %s", strerror(errno));
     }
     for (int i = 0; i < 2; ++i) {
         int flags = fcntl(nack__wl.wakeup_pipe[i], F_GETFL, 0);
@@ -933,7 +933,7 @@ static bool nack__wl_init(const struct nack_win_init_desc *desc)
         const char *missing = !nack__wl.compositor ? "wl_compositor" : "xdg_wm_base";
         wl_display_disconnect(nack__wl.display);
         nack__wl.display = NULL;
-        return nack__fail(NACK_ERROR_NO_BACKEND,
+        return state.fail(NACK_ERROR_NO_BACKEND,
                           "compositor does not advertise %s", missing);
     }
 

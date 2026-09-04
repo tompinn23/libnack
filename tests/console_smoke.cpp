@@ -444,7 +444,7 @@ int main()
          * backend actually running - the XCB backend being compiled in says
          * nothing about which one was chosen.
          */
-        if (nack__win_get_backend() != NACK_BACKEND_X11) {
+        if (state.backend() != NACK_BACKEND_X11) {
             std::printf("%-52s skipped (not X11)\n", "INCR transfers both ways");
         } else {
             std::vector<char> payload(NACK_PEER_PAYLOAD_BYTES);

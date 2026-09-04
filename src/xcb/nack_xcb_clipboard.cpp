@@ -284,7 +284,7 @@ static bool nack__xcb_own_selection(xcb_atom_t selection, const char *utf8)
     bool ok = reply && reply->owner == nack__xcb.helper;
 
     if (!ok)
-        return nack__fail(NACK_ERROR_PLATFORM, "failed to take selection ownership");
+        return state.fail(NACK_ERROR_PLATFORM, "failed to take selection ownership");
     return true;
 }
 

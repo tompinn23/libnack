@@ -85,12 +85,12 @@ bool nack__egl_init(EGLenum platform, void *native_display, const EGLAttrib *att
     }
 
     if (nack__egl.display == EGL_NO_DISPLAY)
-        return nack__fail(NACK_ERROR_NO_BACKEND, "eglGetDisplay failed: %s",
+        return state.fail(NACK_ERROR_NO_BACKEND, "eglGetDisplay failed: %s",
                           nack__egl_error_string(eglGetError()));
 
     if (!eglInitialize(nack__egl.display, &nack__egl.major, &nack__egl.minor)) {
         nack__egl.display = EGL_NO_DISPLAY;
-        return nack__fail(NACK_ERROR_NO_BACKEND, "eglInitialize failed: %s",
+        return state.fail(NACK_ERROR_NO_BACKEND, "eglInitialize failed: %s",
                           nack__egl_error_string(eglGetError()));
     }
 
@@ -152,7 +152,7 @@ bool nack__egl_choose_config(const struct nack_framebuffer_desc *fb, enum nack__
 
     EGLint count = 0;
     if (!eglChooseConfig(nack__egl.display, attribs, NULL, 0, &count) || count == 0)
-        return nack__fail(NACK_ERROR_NO_PIXEL_FORMAT,
+        return state.fail(NACK_ERROR_NO_PIXEL_FORMAT,
                           "no EGL config matches the requested framebuffer");
 
     std::vector<EGLConfig> configs(count);
@@ -190,7 +190,7 @@ struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const st
     EGLenum api = (desc->profile == NACK__GL_PROFILE_ES) ? EGL_OPENGL_ES_API
                                                         : EGL_OPENGL_API;
     if (!eglBindAPI(api)) {
-        nack__fail(NACK_ERROR_CONTEXT_CREATION, "eglBindAPI failed: %s",
+        state.fail(NACK_ERROR_CONTEXT_CREATION, "eglBindAPI failed: %s",
                    nack__egl_error_string(eglGetError()));
         return NULL;
     }
@@ -236,7 +236,7 @@ struct nack_gl_context *nack__egl_create_context(struct nack_window *w, const st
 
     EGLContext egl_ctx = eglCreateContext(nack__egl.display, config, share, attribs);
     if (egl_ctx == EGL_NO_CONTEXT) {
-        nack__fail(NACK_ERROR_CONTEXT_CREATION,
+        state.fail(NACK_ERROR_CONTEXT_CREATION,
                    "eglCreateContext failed for GL %d.%d %s: %s",
                    desc->major, desc->minor,
                    desc->profile == NACK__GL_PROFILE_CORE ? "core"
@@ -294,7 +294,7 @@ EGLSurface nack__egl_create_window_surface(EGLConfig config, void *native_window
     }
 
     if (surface == EGL_NO_SURFACE)
-        nack__fail(NACK_ERROR_CONTEXT_CREATION, "eglCreateWindowSurface failed: %s",
+        state.fail(NACK_ERROR_CONTEXT_CREATION, "eglCreateWindowSurface failed: %s",
                    nack__egl_error_string(eglGetError()));
     return surface;
 }
@@ -309,7 +309,7 @@ bool nack__egl_make_current(EGLSurface surface, struct nack_gl_context *ctx)
     struct nack_egl_context *native = (struct nack_egl_context *)ctx->native;
     eglBindAPI(native->is_es ? EGL_OPENGL_ES_API : EGL_OPENGL_API);
     if (!eglMakeCurrent(nack__egl.display, surface, surface, native->context))
-        return nack__fail(NACK_ERROR_PLATFORM, "eglMakeCurrent failed: %s",
+        return state.fail(NACK_ERROR_PLATFORM, "eglMakeCurrent failed: %s",
                           nack__egl_error_string(eglGetError()));
     return true;
 }

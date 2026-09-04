@@ -168,11 +168,11 @@ void nack__cocoa_update_size(struct nack_window *w)
     const NSRect backing = [cw->view convertRectToBacking:bounds];
 
     float scale = (float)[cw->window backingScaleFactor];
-    nack__emit_scale(w, scale);
+    w->emit_scale(scale);
 
     /* The logical size is in points; the framebuffer is in backing pixels,
      * which on a Retina display is twice as many. */
-    nack__emit_resize(w, (int)bounds.size.width, (int)bounds.size.height,
+    w->emit_resize((int)bounds.size.width, (int)bounds.size.height,
                       (int)backing.size.width, (int)backing.size.height);
     nack__nsgl_update(w);
 }
@@ -195,7 +195,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 {
     (void)sender;
     _nackWindow->should_close = true;
-    nack__emit_simple(_nackWindow, NACK_WIN_EVENT_WINDOW_CLOSE);
+    _nackWindow->emit_simple(NACK_WIN_EVENT_WINDOW_CLOSE);
     /* Never close the window here: the application decides when to destroy
      * it, exactly as on the other backends. */
     return NO;
@@ -221,37 +221,37 @@ void nack__cocoa_update_size(struct nack_window *w)
     if (x != _nackWindow->pos_x || y != _nackWindow->pos_y) {
         _nackWindow->pos_x = x;
         _nackWindow->pos_y = y;
-        struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_WINDOW_MOVE, _nackWindow);
+        struct nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_WINDOW_MOVE, _nackWindow);
         ev->data.move.x = x;
         ev->data.move.y = y;
-        nack__push_event(ev);
+        state.push_event(ev);
     }
 }
 
 - (void)windowDidBecomeKey:(NSNotification *)notification
 {
     (void)notification;
-    nack__emit_focus(_nackWindow, true);
+    _nackWindow->emit_focus(true);
 }
 
 - (void)windowDidResignKey:(NSNotification *)notification
 {
     (void)notification;
-    nack__emit_focus(_nackWindow, false);
+    _nackWindow->emit_focus(false);
 }
 
 - (void)windowDidMiniaturize:(NSNotification *)notification
 {
     (void)notification;
     _nackWindow->minimized = true;
-    nack__emit_simple(_nackWindow, NACK_WIN_EVENT_WINDOW_MINIMIZE);
+    _nackWindow->emit_simple(NACK_WIN_EVENT_WINDOW_MINIMIZE);
 }
 
 - (void)windowDidDeminiaturize:(NSNotification *)notification
 {
     (void)notification;
     _nackWindow->minimized = false;
-    nack__emit_simple(_nackWindow, NACK_WIN_EVENT_WINDOW_RESTORE);
+    _nackWindow->emit_simple(NACK_WIN_EVENT_WINDOW_RESTORE);
 }
 
 - (void)windowDidChangeBackingProperties:(NSNotification *)notification
@@ -326,7 +326,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (void)drawRect:(NSRect)rect
 {
     (void)rect;
-    nack__emit_simple(_nackWindow, NACK_WIN_EVENT_WINDOW_EXPOSE);
+    _nackWindow->emit_simple(NACK_WIN_EVENT_WINDOW_EXPOSE);
 }
 
 /* ---- Mouse ---- */
@@ -343,7 +343,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (void)nackHandleMouseButton:(NSEvent *)event button:(int)button down:(BOOL)down
 {
     const NSPoint location = [self nackMouseLocation:event];
-    nack__emit_mouse_button(_nackWindow, button, down, location.x, location.y,
+    _nackWindow->emit_mouse_button(button, down, location.x, location.y,
                             nack__cocoa_mods([event modifierFlags]));
 }
 
@@ -382,18 +382,18 @@ void nack__cocoa_update_size(struct nack_window *w)
         cw->virtual_x += dx;
         cw->virtual_y += dy;
 
-        struct nack_win_event *ev = nack__event_begin(NACK_WIN_EVENT_MOUSE_MOVE, _nackWindow);
+        struct nack_win_event *ev = state.event_begin(NACK_WIN_EVENT_MOUSE_MOVE, _nackWindow);
         ev->data.motion.x = cw->virtual_x;
         ev->data.motion.y = cw->virtual_y;
         ev->data.motion.dx = dx;
         ev->data.motion.dy = dy;
         ev->data.motion.mods = nack__cocoa_mods([event modifierFlags]);
-        nack__push_event(ev);
+        state.push_event(ev);
         return;
     }
 
     const NSPoint location = [self nackMouseLocation:event];
-    nack__emit_mouse_move(_nackWindow, location.x, location.y,
+    _nackWindow->emit_mouse_move(location.x, location.y,
                           nack__cocoa_mods([event modifierFlags]));
 }
 
@@ -405,13 +405,13 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (void)mouseEntered:(NSEvent *)event
 {
     (void)event;
-    nack__emit_simple(_nackWindow, NACK_WIN_EVENT_MOUSE_ENTER);
+    _nackWindow->emit_simple(NACK_WIN_EVENT_MOUSE_ENTER);
 }
 
 - (void)mouseExited:(NSEvent *)event
 {
     (void)event;
-    nack__emit_simple(_nackWindow, NACK_WIN_EVENT_MOUSE_LEAVE);
+    _nackWindow->emit_simple(NACK_WIN_EVENT_MOUSE_LEAVE);
 }
 
 - (void)cursorUpdate:(NSEvent *)event
@@ -435,7 +435,7 @@ void nack__cocoa_update_size(struct nack_window *w)
         dy *= 0.1;
     }
 
-    nack__emit_scroll(_nackWindow, dx, dy, nack__cocoa_mods([event modifierFlags]),
+    _nackWindow->emit_scroll(dx, dy, nack__cocoa_mods([event modifierFlags]),
                       precise);
 }
 
@@ -446,7 +446,7 @@ void nack__cocoa_update_size(struct nack_window *w)
     const enum nack_key key = nack__cocoa_key([event keyCode]);
     const uint32_t mods = nack__cocoa_mods([event modifierFlags]);
 
-    nack__emit_key(_nackWindow, key, [event keyCode], mods, true, [event isARepeat]);
+    _nackWindow->emit_key(key, [event keyCode], mods, true, [event isARepeat]);
 
     /*
      * Command chords are menu shortcuts, not text. Routing them through the
@@ -458,7 +458,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 
 - (void)keyUp:(NSEvent *)event
 {
-    nack__emit_key(_nackWindow, nack__cocoa_key([event keyCode]), [event keyCode],
+    _nackWindow->emit_key(nack__cocoa_key([event keyCode]), [event keyCode],
                    nack__cocoa_mods([event modifierFlags]), false, false);
 }
 
@@ -484,7 +484,7 @@ void nack__cocoa_update_size(struct nack_window *w)
     }
 
     nack__cocoa.modifier_flags = mods;
-    nack__emit_key(_nackWindow, key, [event keyCode], mods, down, false);
+    _nackWindow->emit_key(key, [event keyCode], mods, down, false);
 }
 
 /* ---- NSTextInputClient ----
@@ -566,7 +566,7 @@ void nack__cocoa_update_size(struct nack_window *w)
 
         char utf8[5];
         nack__utf8_encode(codepoint, utf8);
-        nack__emit_text(_nackWindow, utf8);
+        _nackWindow->emit_text(utf8);
     }
 }
 
@@ -593,7 +593,7 @@ void nack__cocoa_update_size(struct nack_window *w)
     (void)sender;
     for (size_t i = 0; i < state.windows.size(); ++i)
         state.windows[i]->should_close = true;
-    nack__emit_simple(NULL, NACK_WIN_EVENT_QUIT);
+    state.emit_global(NACK_WIN_EVENT_QUIT);
     /* Let the application shut down in its own event loop rather than having
      * AppKit tear the process down underneath it. */
     return NSTerminateCancel;
@@ -661,7 +661,7 @@ static bool nack__cocoa_window_create(struct nack_window *w,
     if (!cw->window) {
         delete cw;
         w->native = NULL;
-        return nack__fail(NACK_ERROR_PLATFORM, "failed to create NSWindow");
+        return state.fail(NACK_ERROR_PLATFORM, "failed to create NSWindow");
     }
 
     cw->view = [[NackContentView alloc] initWithWindow:w];
@@ -926,7 +926,7 @@ static void nack__cocoa_drain(NSDate *deadline)
          */
         if ([event type] == NSEventTypeApplicationDefined &&
             [event subtype] == (short)NACK_COCOA_WAKEUP_SUBTYPE) {
-            nack__emit_simple(NULL, NACK_WIN_EVENT_WAKEUP);
+            state.emit_global(NACK_WIN_EVENT_WAKEUP);
         } else {
             [NSApp sendEvent:event];
         }
@@ -940,7 +940,7 @@ static void nack__cocoa_pump_events(double timeout)
     @autoreleasepool {
         nack__cocoa_drain([NSDate distantPast]);
 
-        if (!nack__queue_empty() || timeout == 0.0)
+        if (!state.queue.empty() || timeout == 0.0)
             return;
 
         NSDate *deadline = (timeout < 0.0)
@@ -980,12 +980,12 @@ static bool nack__cocoa_clipboard_set(const char *utf8)
     @autoreleasepool {
         NSString *string = [NSString stringWithUTF8String:utf8];
         if (!string)
-            return nack__fail(NACK_ERROR_INVALID_ARGUMENT,
+            return state.fail(NACK_ERROR_INVALID_ARGUMENT,
                               "clipboard text is not valid UTF-8");
         NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
         [pasteboard clearContents];
         if (![pasteboard setString:string forType:NSPasteboardTypeString])
-            return nack__fail(NACK_ERROR_PLATFORM, "NSPasteboard setString failed");
+            return state.fail(NACK_ERROR_PLATFORM, "NSPasteboard setString failed");
         nack__cocoa.clipboard_change_count = [pasteboard changeCount];
         return true;
     }

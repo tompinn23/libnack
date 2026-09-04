@@ -360,13 +360,13 @@ bool nack__wl_clipboard_set(const char *utf8)
     nack__wl_data_device_bind();   /* the seat may have appeared since init */
 
     if (!nack__wl.data_device_manager)
-        return nack__fail(NACK_ERROR_UNSUPPORTED,
+        return state.fail(NACK_ERROR_UNSUPPORTED,
                           "compositor does not offer wl_data_device_manager");
     if (!nack__wl.seat)
-        return nack__fail(NACK_ERROR_UNSUPPORTED,
+        return state.fail(NACK_ERROR_UNSUPPORTED,
                           "compositor has no wl_seat; selections need one");
     if (!nack__wl.data_device)
-        return nack__fail(NACK_ERROR_PLATFORM, "no wl_data_device for the seat");
+        return state.fail(NACK_ERROR_PLATFORM, "no wl_data_device for the seat");
 
     if (nack__wl.data_source)
         wl_data_source_destroy(nack__wl.data_source);
@@ -375,7 +375,7 @@ bool nack__wl_clipboard_set(const char *utf8)
     nack__wl.data_source = wl_data_device_manager_create_data_source(
         nack__wl.data_device_manager);
     if (!nack__wl.data_source)
-        return nack__fail(NACK_ERROR_PLATFORM, "create_data_source failed");
+        return state.fail(NACK_ERROR_PLATFORM, "create_data_source failed");
 
     wl_data_source_add_listener(
         nack__wl.data_source, &nack__wl_data_source_listener,
