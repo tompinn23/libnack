@@ -36,24 +36,24 @@ static uint32_t nack__xcb_mods_from_state(void)
 {
     if (!nack__xcb.xkb_state)
         return 0;
-    struct xkb_state *state = nack__xcb.xkb_state;
+    struct xkb_state *xkb = nack__xcb.xkb_state;
     uint32_t mods = 0;
-    if (xkb_state_mod_name_is_active(state, XKB_MOD_NAME_SHIFT,
+    if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_SHIFT,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
         mods |= NACK_MOD_SHIFT;
-    if (xkb_state_mod_name_is_active(state, XKB_MOD_NAME_CTRL,
+    if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_CTRL,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
         mods |= NACK_MOD_CTRL;
-    if (xkb_state_mod_name_is_active(state, XKB_MOD_NAME_ALT,
+    if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_ALT,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
         mods |= NACK_MOD_ALT;
-    if (xkb_state_mod_name_is_active(state, XKB_MOD_NAME_LOGO,
+    if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_LOGO,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
         mods |= NACK_MOD_SUPER;
-    if (xkb_state_mod_name_is_active(state, XKB_MOD_NAME_CAPS,
+    if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_CAPS,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
         mods |= NACK_MOD_CAPSLOCK;
-    if (xkb_state_mod_name_is_active(state, XKB_MOD_NAME_NUM,
+    if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_NUM,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
         mods |= NACK_MOD_NUMLOCK;
     return mods;
@@ -227,8 +227,8 @@ static bool nack__xcb_wm_supports(xcb_atom_t atom)
 
 static struct nack_window *nack__xcb_lookup(xcb_window_t handle)
 {
-    for (size_t i = 0; i < nack__g.windows.size(); ++i) {
-        struct nack_window *w = nack__g.windows[i];
+    for (size_t i = 0; i < state.windows.size(); ++i) {
+        struct nack_window *w = state.windows[i];
         struct nack_xcb_window *xw = (struct nack_xcb_window *)w->native;
         if (xw && xw->handle == handle)
             return w;
@@ -474,7 +474,7 @@ static void nack__xcb_handle_key(struct nack_window *w, xcb_keycode_t keycode, b
     uint32_t mods = nack__xcb_mods_from_state();
 
     /* With detectable auto-repeat a held key repeats as consecutive presses. */
-    bool repeat = down && key > 0 && key < NACK_KEY_COUNT && nack__g.keys[key];
+    bool repeat = down && key > 0 && key < NACK_KEY_COUNT && state.keys[key];
 
     nack__emit_key(w, key, keycode, mods, down, repeat);
 
@@ -548,14 +548,14 @@ static void nack__xcb_handle_xkb_event(xcb_generic_event_t *generic)
         nack__xcb_load_keymap();
         break;
     case XCB_XKB_STATE_NOTIFY: {
-        const xcb_xkb_state_notify_event_t *state =
+        const xcb_xkb_state_notify_event_t *notify =
             (const xcb_xkb_state_notify_event_t *)generic;
         if (nack__xcb.xkb_state)
             xkb_state_update_mask(nack__xcb.xkb_state,
-                                  state->baseMods, state->latchedMods,
-                                  state->lockedMods, state->baseGroup,
-                                  state->latchedGroup, state->lockedGroup);
-        nack__g.mods = nack__xcb_mods_from_state();
+                                  notify->baseMods, notify->latchedMods,
+                                  notify->lockedMods, notify->baseGroup,
+                                  notify->latchedGroup, notify->lockedGroup);
+        state.mods = nack__xcb_mods_from_state();
         break;
     }
     default:
@@ -1030,9 +1030,9 @@ static bool nack__xcb_window_create(struct nack_window *w,
 
     /* WM_CLASS is instance\0class\0, both taken from the app id. */
     {
-        std::string wm_class = nack__g.app_id;
+        std::string wm_class = state.app_id;
         wm_class.push_back('\0');
-        wm_class += nack__g.app_id;
+        wm_class += state.app_id;
         wm_class.push_back('\0');
         xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
                             XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8,

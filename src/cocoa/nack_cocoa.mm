@@ -480,7 +480,7 @@ void nack__cocoa_update_size(struct nack_window *w)
         /* Caps Lock is a toggle: the flag reflects the lock, not the key. */
         down = (mods & NACK_MOD_CAPSLOCK) != 0;
     } else {
-        down = !nack__g.keys[key];
+        down = !state.keys[key];
     }
 
     nack__cocoa.modifier_flags = mods;
@@ -591,8 +591,8 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender
 {
     (void)sender;
-    for (size_t i = 0; i < nack__g.windows.size(); ++i)
-        nack__g.windows[i]->should_close = true;
+    for (size_t i = 0; i < state.windows.size(); ++i)
+        state.windows[i]->should_close = true;
     nack__emit_simple(NULL, NACK_WIN_EVENT_QUIT);
     /* Let the application shut down in its own event loop rather than having
      * AppKit tear the process down underneath it. */
@@ -624,8 +624,8 @@ void nack__cocoa_update_size(struct nack_window *w)
 - (void)applicationDidChangeScreenParameters:(NSNotification *)notification
 {
     (void)notification;
-    for (size_t i = 0; i < nack__g.windows.size(); ++i)
-        nack__cocoa_update_size(nack__g.windows[i]);
+    for (size_t i = 0; i < state.windows.size(); ++i)
+        nack__cocoa_update_size(state.windows[i]);
 }
 
 @end

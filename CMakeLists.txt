@@ -16,8 +16,6 @@ if(APPLE)
     enable_language(OBJCXX)
 endif()
 
-# Needed early: third_party/fmt's install interface include path (below)
-# references CMAKE_INSTALL_INCLUDEDIR before the Install section runs.
 include(GNUInstallDirs)
 
 # --------------------------------------------------------------------------
@@ -42,10 +40,6 @@ option(NACK_WIN32_USE_SDK_HEADERS
 cmake_dependent_option(NACK_XCB_XLIB_FALLBACK
     "Allow falling back to an Xlib Display for EGL when EGL_EXT_platform_xcb is missing (needed for the NVIDIA driver)"
     ON "NACK_ENABLE_XCB" OFF)
-
-option(NACK_FMT_EXTERNAL
-    "Link against a fmt::fmt target the including project already provides (its own add_subdirectory or FetchContent), instead of vendoring a copy - same idea as spdlog's SPDLOG_FMT_EXTERNAL"
-    OFF)
 
 # --------------------------------------------------------------------------
 # Sources
@@ -80,21 +74,14 @@ endif()
 add_subdirectory(third_party/stb)
 
 #
-# {fmt}, for <nack/nack.hpp>'s formatting. Vendored by default, so building
-# libnack still needs nothing installed. A project that embeds libnack via
-# add_subdirectory and already has its own fmt target - its own
-# add_subdirectory or FetchContent, upstream or one it built itself - can
-# point libnack at that one instead with -DNACK_FMT_EXTERNAL=ON, the same
-# idea as spdlog's SPDLOG_FMT_EXTERNAL: one copy of fmt in the final binary
-# rather than two.
+# {fmt}, for <nack/nack.hpp>'s formatting. Vendored (the real upstream
+# project, under third_party/fmt) so building libnack needs nothing
+# installed. FMT_INSTALL is turned on so it exports itself properly, which is
+# what lets libnack's own install() below export nack without CMake
+# complaining that nack's dependency on fmt::fmt cannot be expressed.
 #
-if(NACK_FMT_EXTERNAL)
-    if(NOT TARGET fmt)
-        find_package(fmt REQUIRED)
-    endif()
-else()
-    add_subdirectory(third_party/fmt)
-endif()
+set(FMT_INSTALL ON CACHE BOOL "" FORCE)
+add_subdirectory(third_party/fmt)
 
 set(NACK_LIBRARIES "")
 # Its objects go straight into libnack rather than being a separate archive a
@@ -232,7 +219,7 @@ target_include_directories(nack_objects
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_BINARY_DIR}
             ${NACK_VENDORED_INCLUDES})
-target_link_libraries(nack_objects PUBLIC fmt PRIVATE ${NACK_LIBRARIES})
+target_link_libraries(nack_objects PUBLIC fmt::fmt PRIVATE ${NACK_LIBRARIES})
 target_compile_definitions(nack_objects PRIVATE ${NACK_DEFINITIONS})
 
 set_target_properties(nack_objects PROPERTIES
@@ -296,7 +283,7 @@ target_include_directories(nack
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
-target_link_libraries(nack PUBLIC fmt ${NACK_LIBRARIES})
+target_link_libraries(nack PUBLIC fmt::fmt ${NACK_LIBRARIES})
 
 set_target_properties(nack PROPERTIES
     VERSION ${PROJECT_VERSION}
@@ -318,7 +305,7 @@ if(PROJECT_IS_TOP_LEVEL)
     # rendered, and a shared build would have hidden that symbol.
     add_executable(nack_smoke tests/console_smoke.cpp
         $<TARGET_OBJECTS:nack_objects> ${NACK_VENDORED_OBJECTS})
-    target_link_libraries(nack_smoke PRIVATE ${NACK_LIBRARIES} nack_fmt)
+    target_link_libraries(nack_smoke PRIVATE ${NACK_LIBRARIES} fmt::fmt)
     target_include_directories(nack_smoke PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -326,6 +313,11 @@ if(PROJECT_IS_TOP_LEVEL)
         ${CMAKE_CURRENT_BINARY_DIR})
     set_target_properties(nack_smoke PROPERTIES
         CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+    if(MSVC)
+        # Without this, MSVC reports __cplusplus as 199711L and {fmt} quietly
+        # falls back to run-time format checking instead of compile-time.
+        target_compile_options(nack_smoke PRIVATE /Zc:__cplusplus)
+    endif()
     #
     # X11 selections only take the interesting path when two processes are
     # involved: reading a selection this process owns is served from its own
@@ -366,7 +358,7 @@ if(PROJECT_IS_TOP_LEVEL)
     #
     add_executable(nack_cpp_smoke tests/cpp_smoke.cpp
         $<TARGET_OBJECTS:nack_objects> ${NACK_VENDORED_OBJECTS})
-    target_link_libraries(nack_cpp_smoke PRIVATE ${NACK_LIBRARIES} nack_fmt)
+    target_link_libraries(nack_cpp_smoke PRIVATE ${NACK_LIBRARIES} fmt::fmt)
     target_include_directories(nack_cpp_smoke PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -377,7 +369,8 @@ if(PROJECT_IS_TOP_LEVEL)
         target_compile_options(nack_cpp_smoke PRIVATE
             -Wall -Wextra -Wpedantic)
     elseif(MSVC)
-        target_compile_options(nack_cpp_smoke PRIVATE /W4)
+        # /Zc:__cplusplus: see the nack_smoke target above.
+        target_compile_options(nack_cpp_smoke PRIVATE /W4 /Zc:__cplusplus)
     endif()
 
     add_test(NAME cpp COMMAND nack_cpp_smoke)
@@ -397,11 +390,18 @@ if(PROJECT_IS_TOP_LEVEL)
     #
     add_library(nack_cpp_bad_format OBJECT EXCLUDE_FROM_ALL
         tests/cpp_bad_format.cpp)
-    target_link_libraries(nack_cpp_bad_format PRIVATE nack_fmt)
+    target_link_libraries(nack_cpp_bad_format PRIVATE fmt::fmt)
     target_include_directories(nack_cpp_bad_format PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include)
     set_target_properties(nack_cpp_bad_format PROPERTIES
         CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+    if(MSVC)
+        # Without this, {fmt} falls back to run-time checking (see the
+        # nack_smoke target above) and this test would pass while proving
+        # nothing: the bad format string would compile clean and only fail,
+        # if anything, when the program ran - which it never does here.
+        target_compile_options(nack_cpp_bad_format PRIVATE /Zc:__cplusplus)
+    endif()
     add_test(NAME cpp_format_rejected
         COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
                 --target nack_cpp_bad_format --config $<CONFIG>)
@@ -478,29 +478,13 @@ endif()
 # Install
 # --------------------------------------------------------------------------
 
-#
-# Skipped under NACK_FMT_EXTERNAL: nack_fmt then links a target the including
-# project defined itself (its own add_subdirectory or FetchContent, not a
-# find_package'd one), which CMake cannot express in an exported Targets file
-# - install(EXPORT) fails at the *generate* step, not just on `cmake
-# --install`, the moment nack_fmt (or nack, which links it) is in the export
-# set. That is fine: NACK_FMT_EXTERNAL is for being embedded via
-# add_subdirectory, and nothing embedded that way installs itself - the
-# including project installs, if anything does.
-#
-#if(NOT NACK_FMT_EXTERNAL)
-#    install(TARGETS nack nack_fmt
-#        EXPORT nackTargets
-#        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-#        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-#        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-#    install(DIRECTORY include/nack DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-#    # <nack/nack.hpp> includes fmt directly, so a consumer of the installed
-#    # library needs fmt's headers too, not just nack's own.
-#    install(DIRECTORY third_party/fmt/fmt
-#        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nack/third_party/fmt)
-#    install(EXPORT nackTargets
-#        FILE nackTargets.cmake
-#        NAMESPACE nack::
-#        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/nack)
-#endif()
+install(TARGETS nack
+    EXPORT nackTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY include/nack DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(EXPORT nackTargets
+    FILE nackTargets.cmake
+    NAMESPACE nack::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/nack)

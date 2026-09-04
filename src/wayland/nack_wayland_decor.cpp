@@ -598,8 +598,8 @@ bool nack__wl_decor_find(struct wl_surface *surface,
     if (!surface)
         return false;
 
-    for (i = 0; i < nack__g.windows.size(); ++i) {
-        struct nack_window *w = nack__g.windows[i];
+    for (i = 0; i < state.windows.size(); ++i) {
+        struct nack_window *w = state.windows[i];
         struct nack_wl_window *ww = (struct nack_wl_window *)w->native;
         if (!ww || !ww->client_side_decorations)
             continue;

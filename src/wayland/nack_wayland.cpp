@@ -63,8 +63,8 @@ static void output_scale(void *data, struct wl_output *output, int32_t factor)
         return;
     entry->scale = factor;
     /* A scale change on an output we are on changes our buffer scale. */
-    for (size_t i = 0; i < nack__g.windows.size(); ++i)
-        nack__wl_window_update_scale(nack__g.windows[i]);
+    for (size_t i = 0; i < state.windows.size(); ++i)
+        nack__wl_window_update_scale(state.windows[i]);
 }
 
 static void output_name(void *data, struct wl_output *output, const char *name)
@@ -326,11 +326,11 @@ static void xdg_toplevel_configure(void *data, struct xdg_toplevel *toplevel,
      * the array's void* data straight to the loop pointer, which C++ will
      * not do implicitly.
      */
-    const uint32_t *state;
-    const uint32_t *state_end =
+    const uint32_t *pending;
+    const uint32_t *pending_end =
         (const uint32_t *)((const char *)states->data + states->size);
-    for (state = (const uint32_t *)states->data; state < state_end; ++state) {
-        switch (*state) {
+    for (pending = (const uint32_t *)states->data; pending < pending_end; ++pending) {
+        switch (*pending) {
         case XDG_TOPLEVEL_STATE_MAXIMIZED:  ww->pending_maximized = true; break;
         case XDG_TOPLEVEL_STATE_FULLSCREEN: ww->pending_fullscreen = true; break;
         case XDG_TOPLEVEL_STATE_ACTIVATED:  ww->pending_activated = true; break;
@@ -509,7 +509,7 @@ static bool nack__wl_window_create(struct nack_window *w,
     ww->xdg_toplevel = xdg_surface_get_toplevel(ww->xdg_surface);
     xdg_toplevel_add_listener(ww->xdg_toplevel, &nack__wl_toplevel_listener, w);
     xdg_toplevel_set_title(ww->xdg_toplevel, w->title.c_str());
-    xdg_toplevel_set_app_id(ww->xdg_toplevel, nack__g.app_id.c_str());
+    xdg_toplevel_set_app_id(ww->xdg_toplevel, state.app_id.c_str());
 
     if (w->min_width > 0 || w->min_height > 0)
         xdg_toplevel_set_min_size(ww->xdg_toplevel, w->min_width, w->min_height);

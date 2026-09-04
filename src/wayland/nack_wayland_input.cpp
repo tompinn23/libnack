@@ -17,24 +17,24 @@ static uint32_t nack__wl_mods(void)
 {
     if (!nack__wl.xkb_state)
         return 0;
-    struct xkb_state *state = nack__wl.xkb_state;
+    struct xkb_state *xkb = nack__wl.xkb_state;
     uint32_t mods = 0;
-    if (xkb_state_mod_name_is_active(state, XKB_MOD_NAME_SHIFT,
+    if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_SHIFT,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
         mods |= NACK_MOD_SHIFT;
-    if (xkb_state_mod_name_is_active(state, XKB_MOD_NAME_CTRL,
+    if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_CTRL,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
         mods |= NACK_MOD_CTRL;
-    if (xkb_state_mod_name_is_active(state, XKB_MOD_NAME_ALT,
+    if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_ALT,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
         mods |= NACK_MOD_ALT;
-    if (xkb_state_mod_name_is_active(state, XKB_MOD_NAME_LOGO,
+    if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_LOGO,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
         mods |= NACK_MOD_SUPER;
-    if (xkb_state_mod_name_is_active(state, XKB_MOD_NAME_CAPS,
+    if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_CAPS,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
         mods |= NACK_MOD_CAPSLOCK;
-    if (xkb_state_mod_name_is_active(state, XKB_MOD_NAME_NUM,
+    if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_NUM,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
         mods |= NACK_MOD_NUMLOCK;
     return mods;
@@ -182,8 +182,8 @@ static void keyboard_keymap(void *data, struct wl_keyboard *keyboard, uint32_t f
     if (!keymap)
         return;
 
-    struct xkb_state *state = xkb_state_new(keymap);
-    if (!state) {
+    struct xkb_state *xkb = xkb_state_new(keymap);
+    if (!xkb) {
         xkb_keymap_unref(keymap);
         return;
     }
@@ -191,7 +191,7 @@ static void keyboard_keymap(void *data, struct wl_keyboard *keyboard, uint32_t f
     if (nack__wl.xkb_state)  xkb_state_unref(nack__wl.xkb_state);
     if (nack__wl.xkb_keymap) xkb_keymap_unref(nack__wl.xkb_keymap);
     nack__wl.xkb_keymap = keymap;
-    nack__wl.xkb_state = state;
+    nack__wl.xkb_state = xkb;
     nack__xkb_build_keycodes(nack__wl.xkb_keymap, nack__wl.keycodes);
 }
 
@@ -203,8 +203,8 @@ static void keyboard_enter(void *data, struct wl_keyboard *keyboard, uint32_t se
 
     if (!surface)
         return;
-    for (size_t i = 0; i < nack__g.windows.size(); ++i) {
-        struct nack_window *w = nack__g.windows[i];
+    for (size_t i = 0; i < state.windows.size(); ++i) {
+        struct nack_window *w = state.windows[i];
         struct nack_wl_window *ww = nack__wl_win(w);
         if (ww && ww->surface == surface) {
             nack__wl.keyboard_focus = w;
@@ -233,7 +233,7 @@ static void keyboard_leave(void *data, struct wl_keyboard *keyboard, uint32_t se
 }
 
 static void keyboard_key(void *data, struct wl_keyboard *keyboard, uint32_t serial,
-                         uint32_t time, uint32_t key, uint32_t state)
+                         uint32_t time, uint32_t key, uint32_t key_state)
 {
     (void)data; (void)keyboard; (void)time;
     nack__wl.last_serial = serial;
@@ -245,7 +245,7 @@ static void keyboard_key(void *data, struct wl_keyboard *keyboard, uint32_t seri
     xkb_keycode_t keycode = NACK_WL_KEYCODE(key);
     enum nack_key nkey = keycode < 256 ? nack__wl.keycodes[keycode] : NACK_KEY_UNKNOWN;
     uint32_t mods = nack__wl_mods();
-    bool down = (state == WL_KEYBOARD_KEY_STATE_PRESSED);
+    bool down = (key_state == WL_KEYBOARD_KEY_STATE_PRESSED);
 
     nack__emit_key(w, nkey, key, mods, down, false);
 
@@ -266,7 +266,7 @@ static void keyboard_modifiers(void *data, struct wl_keyboard *keyboard, uint32_
     if (nack__wl.xkb_state)
         xkb_state_update_mask(nack__wl.xkb_state, mods_depressed, mods_latched,
                               mods_locked, 0, 0, group);
-    nack__g.mods = nack__wl_mods();
+    state.mods = nack__wl_mods();
 }
 
 static void keyboard_repeat_info(void *data, struct wl_keyboard *keyboard,
@@ -493,8 +493,8 @@ static struct nack_window *nack__wl_window_for_surface(struct wl_surface *surfac
 {
     if (!surface)
         return NULL;
-    for (size_t i = 0; i < nack__g.windows.size(); ++i) {
-        struct nack_window *w = nack__g.windows[i];
+    for (size_t i = 0; i < state.windows.size(); ++i) {
+        struct nack_window *w = state.windows[i];
         struct nack_wl_window *ww = nack__wl_win(w);
         if (ww && ww->surface == surface)
             return w;
@@ -564,7 +564,7 @@ static void pointer_motion(void *data, struct wl_pointer *pointer, uint32_t time
 }
 
 static void pointer_button(void *data, struct wl_pointer *pointer, uint32_t serial,
-                           uint32_t time, uint32_t button, uint32_t state)
+                           uint32_t time, uint32_t button, uint32_t button_state)
 {
     (void)data; (void)pointer; (void)time;
     nack__wl.last_serial = serial;
@@ -582,7 +582,7 @@ static void pointer_button(void *data, struct wl_pointer *pointer, uint32_t seri
     default:    index = (int)(button - 0x110); break;
     }
 
-    bool down = (state == WL_POINTER_BUTTON_STATE_PRESSED);
+    bool down = (button_state == WL_POINTER_BUTTON_STATE_PRESSED);
 
     if (nack__wl.decor_focus) {
         /* Route through the multi-click tracker so a double-click on the

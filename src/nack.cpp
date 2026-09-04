@@ -2,10 +2,10 @@
 #include "nack_internal.h"
 
 #include <algorithm>
+#include <cstdarg>
+#include <cstdio>
 #include <exception>
 #include <memory>
-#include <cstdio>
-#include "fmt/printf.h"
 
 #if defined(NACK_PLATFORM_WIN32)
 #  if defined(NACK_WIN32_USE_SDK_HEADERS)
@@ -584,7 +584,7 @@ void nack_framebuffer_desc_defaults(struct nack_framebuffer_desc *desc)
 
 #define NACK_REQUIRE_INIT_RET(ret)                                            \
     do {                                                                      \
-        if (!nack__g.initialized) {                                           \
+        if (!state.initialized) {                                           \
             nack__fail(NACK_ERROR_NOT_INITIALIZED, "nack__win_init() not called"); \
             return ret;                                                       \
         }                                                                     \
