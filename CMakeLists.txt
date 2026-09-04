@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.21)
 
 #
 # C is still here for two reasons: the vendored stb_image and the code
-# wayland-scanner generates are C, and a couple of tests (image_test.c, the
-# Win32 ABI check) are C on purpose - the rest of the library, its public
-# header, and its tests and examples are C++.
+# wayland-scanner generates are C, and one test (the Win32 ABI check) is C on
+# purpose - the rest of the library, its public header, and its tests and
+# examples are C++.
 #
 project(libnack
     VERSION 0.2.0
@@ -348,10 +348,10 @@ if(PROJECT_IS_TOP_LEVEL)
     # over in one property, so the test would pass having exercised nothing.
     #
     if(NACK_ENABLE_XCB)
-        add_executable(nack_x11_selection_peer tests/x11_selection_peer.c)
+        add_executable(nack_x11_selection_peer tests/x11_selection_peer.cpp)
         target_link_libraries(nack_x11_selection_peer PRIVATE PkgConfig::XCB)
         set_target_properties(nack_x11_selection_peer PROPERTIES
-            C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
+            CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
         add_dependencies(nack_smoke nack_x11_selection_peer)
         target_compile_definitions(nack_smoke PRIVATE
             NACK_X11_SELECTION_PEER="$<TARGET_FILE:nack_x11_selection_peer>")
@@ -427,15 +427,14 @@ if(PROJECT_IS_TOP_LEVEL)
                 --target nack_cpp_bad_format --config $<CONFIG>)
     set_tests_properties(cpp_format_rejected PROPERTIES WILL_FAIL TRUE)
 
-    add_executable(nack_image_test tests/image_test.c src/console/nack_image.cpp
+    add_executable(nack_image_test tests/image_test.cpp src/console/nack_image.cpp
         ${NACK_VENDORED_OBJECTS})
     target_include_directories(nack_image_test PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/tests
         ${NACK_VENDORED_INCLUDES})
     set_target_properties(nack_image_test PROPERTIES
-        C_STANDARD 99 C_STANDARD_REQUIRED ON C_EXTENSIONS ON)
+        CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
 
     #
     # The PNG fixtures are generated rather than checked in: a decoder tested

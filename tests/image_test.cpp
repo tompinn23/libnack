@@ -1,7 +1,8 @@
 /*
- * Checks that nack__image_decode turns files into the RGBA the tileset layer
- * expects. stb_image is tested upstream; what is tested here is our use of it
- * - the sizes, the alpha, and that bad input is handled rather than crashing.
+ * Checks that nack::detail::image_decode turns files into the RGBA the
+ * tileset layer expects. stb_image is tested upstream; what is tested here is
+ * our use of it - the sizes, the alpha, and that bad input is handled rather
+ * than crashing.
  *
  * PNG is compared pixel-exact against fixtures produced by tools/mkpng.py,
  * which the build runs into the build tree; the directory arrives as argv[1].
@@ -13,65 +14,75 @@
  * is not the decoder under test and shares no code with it, which is what
  * makes the comparison mean anything.
  */
-#include "nack_test_hooks.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "../src/console/nack_image.h"
 
-static unsigned char *slurp(const char *path, size_t *size)
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <memory>
+
+using nack::detail::image_decode;
+using nack::detail::image_free;
+
+namespace {
+
+std::unique_ptr<unsigned char[]> slurp(const char *path, size_t *size)
 {
     FILE *f = fopen(path, "rb");
-    unsigned char *buf;
-    if (!f) return NULL;
+    if (!f)
+        return nullptr;
     fseek(f, 0, SEEK_END);
     *size = (size_t)ftell(f);
     fseek(f, 0, SEEK_SET);
-    buf = malloc(*size);
-    if (fread(buf, 1, *size, f) != *size) { free(buf); fclose(f); return NULL; }
+    auto buf = std::make_unique<unsigned char[]>(*size);
+    if (fread(buf.get(), 1, *size, f) != *size) {
+        fclose(f);
+        return nullptr;
+    }
     fclose(f);
     return buf;
 }
+
+}   /* namespace */
 
 int main(int argc, char **argv)
 {
     const char *dir = argc > 1 ? argv[1] : ".";
     char expected_path[512];
     size_t esz;
-    unsigned char *exp;
     size_t off = 0;
     unsigned count, i;
     int failures = 0;
 
     snprintf(expected_path, sizeof expected_path, "%s/expected.bin", dir);
-    exp = slurp(expected_path, &esz);
+    auto exp = slurp(expected_path, &esz);
     if (!exp) {
         fprintf(stderr, "no fixtures in %s; run tools/mkpng.py, skipping\n", dir);
         return 77;
     }
-    memcpy(&count, exp + off, 4); off += 4;
+    memcpy(&count, exp.get() + off, 4); off += 4;
 
     for (i = 0; i < count; ++i) {
         unsigned namelen, w, h, x, y;
         char name[64], path[576];
-        unsigned char *png, *rgba;
         size_t psz;
-        const char *err = NULL;
+        const char *err = nullptr;
         int bad = 0;
 
-        memcpy(&namelen, exp + off, 4); off += 4;
-        memcpy(name, exp + off, namelen); name[namelen] = 0; off += namelen;
-        memcpy(&w, exp + off, 4); off += 4;
-        memcpy(&h, exp + off, 4); off += 4;
+        memcpy(&namelen, exp.get() + off, 4); off += 4;
+        memcpy(name, exp.get() + off, namelen); name[namelen] = 0; off += namelen;
+        memcpy(&w, exp.get() + off, 4); off += 4;
+        memcpy(&h, exp.get() + off, 4); off += 4;
 
         snprintf(path, sizeof path, "%s/%s", dir, name);
-        png = slurp(path, &psz);
+        auto png = slurp(path, &psz);
         if (!png) { printf("%-12s MISSING\n", name); failures++; off += (size_t)w*h*4; continue; }
 
         int dw = 0, dh = 0;
-        rgba = nack__image_decode(png, psz, &dw, &dh, &err);
+        auto rgba = image_decode(png.get(), psz, &dw, &dh, &err);
         if (!rgba) {
             printf("%-12s DECODE FAILED: %s\n", name, err ? err : "?");
-            failures++; free(png); off += (size_t)w*h*4; continue;
+            failures++; off += (size_t)w*h*4; continue;
         }
         if ((unsigned)dw != w || (unsigned)dh != h) {
             printf("%-12s SIZE %dx%d expected %ux%u\n", name, dw, dh, w, h);
@@ -79,7 +90,7 @@ int main(int argc, char **argv)
         }
         for (y = 0; y < h && !bad; ++y) {
             for (x = 0; x < w; ++x) {
-                const unsigned char *e = exp + off + ((size_t)y*w + x) * 4;
+                const unsigned char *e = exp.get() + off + ((size_t)y*w + x) * 4;
                 const unsigned char *g = rgba + ((size_t)y*w + x) * 4;
                 if (memcmp(e, g, 4) != 0) {
                     printf("%-12s PIXEL MISMATCH at %u,%u: got %u,%u,%u,%u want %u,%u,%u,%u\n",
@@ -90,10 +101,8 @@ int main(int argc, char **argv)
         }
         if (!bad) printf("%-12s ok  (%ux%u)\n", name, w, h);
         off += (size_t)w * h * 4;
-        nack__image_free(rgba); free(png);
+        image_free(rgba);
     }
-
-    free(exp);
 
     /* Malformed input must be rejected, not crash. */
     {
@@ -101,33 +110,31 @@ int main(int argc, char **argv)
         unsigned char junk[64];
         int w, h;
         memset(junk, 0xA5, sizeof junk);
-        if (nack__image_decode(junk, sizeof junk, &w, &h, &err) != NULL) {
+        if (image_decode(junk, sizeof junk, &w, &h, &err) != nullptr) {
             printf("junk input accepted\n"); failures++;
         } else printf("%-12s ok  (rejected: %s)\n", "junk", err);
 
         char path[576];
         size_t psz;
-        unsigned char *png;
 
         snprintf(path, sizeof path, "%s/rgba8.png", dir);
-        png = slurp(path, &psz);
+        auto png = slurp(path, &psz);
         if (png) {
-            if (nack__image_decode(png, psz / 2, &w, &h, &err) != NULL) {
+            if (image_decode(png.get(), psz / 2, &w, &h, &err) != nullptr) {
                 printf("truncated PNG accepted\n"); failures++;
             } else printf("%-12s ok  (rejected: %s)\n", "truncated", err);
             png[30] ^= 0xFF;   /* corrupt the compressed stream */
             {
                 unsigned char *salvaged =
-                    nack__image_decode(png, psz, &w, &h, &err);
+                    image_decode(png.get(), psz, &w, &h, &err);
                 if (salvaged) {
                     printf("%-12s ok  (corrupt data decoded to something; "
                            "no crash)\n", "corrupt");
-                    nack__image_free(salvaged);
+                    image_free(salvaged);
                 } else {
                     printf("%-12s ok  (rejected: %s)\n", "corrupt", err);
                 }
             }
-            free(png);
         }
     }
 
@@ -141,48 +148,45 @@ int main(int argc, char **argv)
      */
     {
         char path[576];
-        size_t esz;
-        unsigned char *exp;
-        size_t off = 0;
+        size_t jesz;
+        size_t joff = 0;
         unsigned jcount = 0, j;
 
         snprintf(path, sizeof path, "%s/expected_jpeg.bin", dir);
-        exp = slurp(path, &esz);
-        if (!exp) {
+        auto jexp = slurp(path, &jesz);
+        if (!jexp) {
             printf("%-12s no fixtures; run tools/mkjpeg.py\n", "jpeg");
             failures++;
         } else {
-            memcpy(&jcount, exp + off, 4); off += 4;
+            memcpy(&jcount, jexp.get() + joff, 4); joff += 4;
             for (j = 0; j < jcount; ++j) {
                 unsigned namelen, w, h, x, y;
                 char name[64];
-                unsigned char *jpeg, *rgba;
                 size_t jsz;
-                const char *err = NULL;
+                const char *err = nullptr;
                 int dw = 0, dh = 0, worst = 0, opaque = 1, bad = 0;
 
-                memcpy(&namelen, exp + off, 4); off += 4;
-                memcpy(name, exp + off, namelen); name[namelen] = 0;
-                off += namelen;
-                memcpy(&w, exp + off, 4); off += 4;
-                memcpy(&h, exp + off, 4); off += 4;
+                memcpy(&namelen, jexp.get() + joff, 4); joff += 4;
+                memcpy(name, jexp.get() + joff, namelen); name[namelen] = 0;
+                joff += namelen;
+                memcpy(&w, jexp.get() + joff, 4); joff += 4;
+                memcpy(&h, jexp.get() + joff, 4); joff += 4;
 
                 snprintf(path, sizeof path, "%s/%s", dir, name);
-                jpeg = slurp(path, &jsz);
+                auto jpeg = slurp(path, &jsz);
                 if (!jpeg) {
                     printf("%-12s MISSING\n", name);
                     failures++;
-                    off += (size_t)w * h * 3;
+                    joff += (size_t)w * h * 3;
                     continue;
                 }
 
-                rgba = nack__image_decode(jpeg, jsz, &dw, &dh, &err);
+                auto rgba = image_decode(jpeg.get(), jsz, &dw, &dh, &err);
                 if (!rgba) {
                     printf("%-12s DECODE FAILED: %s\n", name,
                            err ? err : "?");
                     failures++;
-                    free(jpeg);
-                    off += (size_t)w * h * 3;
+                    joff += (size_t)w * h * 3;
                     continue;
                 }
                 if ((unsigned)dw != w || (unsigned)dh != h) {
@@ -194,7 +198,7 @@ int main(int argc, char **argv)
                 for (y = 0; y < h && !bad; ++y) {
                     for (x = 0; x < w; ++x) {
                         const unsigned char *e =
-                            exp + off + ((size_t)y * w + x) * 3;
+                            jexp.get() + joff + ((size_t)y * w + x) * 3;
                         const unsigned char *g =
                             rgba + ((size_t)y * w + x) * 4;
                         int c;
@@ -226,7 +230,7 @@ int main(int argc, char **argv)
                         failures++;
                     }
                 }
-                off += (size_t)w * h * 3;
+                joff += (size_t)w * h * 3;
 
                 /*
                  * Truncation. stb_image is deliberately lenient here: once it
@@ -243,17 +247,17 @@ int main(int argc, char **argv)
                     int truncation_ok = 1;
 
                     for (fraction = 10; fraction <= 90; fraction += 20) {
-                        const char *terr = NULL;
+                        const char *terr = nullptr;
                         int tw = 0, th = 0;
-                        unsigned char *cut = nack__image_decode(
-                            jpeg, jsz * fraction / 100, &tw, &th, &terr);
+                        unsigned char *cut = image_decode(
+                            jpeg.get(), jsz * fraction / 100, &tw, &th, &terr);
                         if (!cut)
                             continue;           /* refused, which is fine */
                         if (tw <= 0 || th <= 0) {
                             printf("truncated JPEG reported %dx%d\n", tw, th);
                             truncation_ok = 0;
                         }
-                        nack__image_free(cut);
+                        image_free(cut);
                     }
                     if (!truncation_ok)
                         failures++;
@@ -262,10 +266,8 @@ int main(int argc, char **argv)
                                "length)\n", "jpeg-cut");
                 }
 
-                nack__image_free(rgba);
-                free(jpeg);
+                image_free(rgba);
             }
-            free(exp);
         }
     }
 

@@ -4,8 +4,7 @@
  * This is no longer part of libnack's public API: the library exposes only the
  * cell console (include/nack/nack.hpp), and owns the window and GL context
  * behind it. Everything here is for the console renderer's use, and is C++ -
- * nothing in tests/ that is still C (image_test.c, the Win32 ABI check)
- * reaches in here.
+ * the one test still in C, the Win32 ABI check, never reaches in here.
  *
  * Backends: Win32, Cocoa, Wayland, X11.
  *

@@ -51,7 +51,7 @@ returns an image of the declared size containing whatever scan data it managed
 to read, rather than reporting an error — the same thing most image viewers
 do. A truncated tileset therefore loads with its tail blank instead of failing
 outright. Truncation before the header is still refused, and nothing here
-reads out of bounds; `tests/image_test.c` checks both. If a future version of
+reads out of bounds; `tests/image_test.cpp` checks both. If a future version of
 libnack needs strictness instead, that is a check to add above stb_image, not
 a patch to make to it.
 
@@ -99,7 +99,7 @@ nothing.
 ## Test fixtures are not vendored
 
 `tools/mkpng.py` and `tools/mkjpeg.py` generate the images
-`tests/image_test.c` decodes, into the build tree. Nothing is checked in,
+`tests/image_test.cpp` decodes, into the build tree. Nothing is checked in,
 which is the point: pixels a decoder is compared against have to come from
 somewhere other than that decoder. `mkjpeg.py` is a small baseline JPEG
 encoder written for this — there is no encoder in the tree, and a decoder

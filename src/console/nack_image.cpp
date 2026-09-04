@@ -19,6 +19,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+namespace nack { namespace detail {
+
 static char image_error[256];
 
 static uint8_t *image_fail(const char **error, const char *fmt, ...)
@@ -33,8 +35,8 @@ static uint8_t *image_fail(const char **error, const char *fmt, ...)
     return nullptr;
 }
 
-uint8_t *nack__image_decode(const void *data, size_t size, int *width,
-                            int *height, const char **error)
+uint8_t *image_decode(const void *data, size_t size, int *width,
+                      int *height, const char **error)
 {
     unsigned char *rgba;
     int w = 0, h = 0, channels = 0;
@@ -70,7 +72,7 @@ uint8_t *nack__image_decode(const void *data, size_t size, int *width,
     return rgba;
 }
 
-void nack__image_free(uint8_t *pixels)
+void image_free(uint8_t *pixels)
 {
     /*
      * stb_image allocates through its own macros, so its buffers go back the
@@ -79,3 +81,5 @@ void nack__image_free(uint8_t *pixels)
      */
     stbi_image_free(pixels);
 }
+
+} }   /* namespace nack::detail */

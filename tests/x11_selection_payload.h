@@ -19,7 +19,7 @@
 #define NACK_PEER_PAYLOAD_BYTES (300 * 1024)
 
 /* Fills `out` with `bytes` characters and a terminating NUL. */
-static void nack__peer_payload(char *out, size_t bytes)
+static void peer_payload(char *out, size_t bytes)
 {
     static const char alphabet[] =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -32,7 +32,7 @@ static void nack__peer_payload(char *out, size_t bytes)
 }
 
 /* FNV-1a, so a mismatch can be reported as one number rather than a diff. */
-static uint32_t nack__peer_checksum(const char *data, size_t length)
+static uint32_t peer_checksum(const char *data, size_t length)
 {
     uint32_t hash = 2166136261u;
     size_t i;

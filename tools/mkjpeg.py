@@ -1,4 +1,4 @@
-"""Generate baseline JPEGs with known source pixels, for tests/image_test.c.
+"""Generate baseline JPEGs with known source pixels, for tests/image_test.cpp.
 
 There is no JPEG encoder in the tree - stb_image only decodes - so the
 fixtures are written here rather than produced by anything libnack links.

@@ -5,14 +5,13 @@
 #include "nack_gfx.h"
 
 /*
- * C++ only: the structs below hold std::vector and std::string. image_test.c
- * and the Win32 ABI check are still C on purpose and still link against this
- * library; they reach the few internals they need through
- * tests/nack_test_hooks.h, which declares those functions without the
- * layouts.
+ * C++ only: the structs below hold std::vector and std::string. Nothing
+ * still-C reaches in here any more - the Win32 ABI check tests a hand-rolled
+ * header replacement against the real SDK one and never links this library
+ * at all, and image_test.cpp is C++ now like every other test.
  */
 #ifndef __cplusplus
-#  error "nack_console_internal.h is C++; C callers want tests/nack_test_hooks.h"
+#  error "nack_console_internal.h is C++"
 #endif
 
 #include <array>

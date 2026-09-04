@@ -36,7 +36,7 @@ static int failures;
  *
  * A selection this process owns is served from libnack's own copy without
  * touching the server, so neither INCR path is reachable from here alone.
- * tests/x11_selection_peer.c is the other end; these run it and wait on its
+ * tests/x11_selection_peer.cpp is the other end; these run it and wait on its
  * output rather than sleeping, so the test is not a race.
  */
 #if defined(NACK_X11_SELECTION_PEER)
@@ -450,7 +450,7 @@ int main()
             std::vector<char> payload(NACK_PEER_PAYLOAD_BYTES);
             char line[256];
 
-            nack__peer_payload(payload.data(), payload.size());
+            peer_payload(payload.data(), payload.size());
 
             /*
              * Reading: the peer owns the selection and serves it in 4K
@@ -501,8 +501,8 @@ int main()
                 check(parsed && incremental,
                       "and is served incrementally, not in one property");
                 check(parsed && length == payload.size() - 1 &&
-                      sum == nack__peer_checksum(payload.data(),
-                                                 payload.size() - 1),
+                      sum == peer_checksum(payload.data(),
+                                          payload.size() - 1),
                       "with the bytes intact");
                 pclose(peer);
             }

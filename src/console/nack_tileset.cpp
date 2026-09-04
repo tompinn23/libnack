@@ -304,8 +304,8 @@ nack_tileset *nack_tileset::load_memory(const void *data, size_t size,
         return nullptr;
     }
 
-    nack::owned<uint8_t, nack__image_free> rgba(
-        nack__image_decode(data, size, &width, &height, &error));
+    nack::owned<uint8_t, image_free> rgba(
+        image_decode(data, size, &width, &height, &error));
     if (!rgba) {
         console_state.set_error("cannot decode tileset: %s",
                           error ? error : "unknown");
