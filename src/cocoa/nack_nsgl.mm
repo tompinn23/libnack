@@ -22,14 +22,16 @@
 #include <memory>
 #include <stdio.h>
 
+namespace nack { namespace detail {
+
 struct nack_nsgl_context {
     NSOpenGLContext *context;
     NSOpenGLPixelFormat *pixel_format;
 };
 
-static void *nack__nsgl_framework;
+static void *nsgl_framework;
 
-nack_gl_context *nack__nsgl_create_context(nack_window *w, const nack__gl_desc *desc,
+nack_gl_context *nsgl_create_context(nack_window *w, const gl_desc *desc,
                                            nack_backend_vt *vt)
 {
     @autoreleasepool {
@@ -122,7 +124,7 @@ nack_gl_context *nack__nsgl_create_context(nack_window *w, const nack__gl_desc *
             return NULL;
         }
 
-        nack_cocoa_window *cw = nack__cocoa_win(w);
+        nack_cocoa_window *cw = cocoa_win(w);
 
         if (w->high_dpi)
             [cw->view setWantsBestResolutionOpenGLSurface:YES];
@@ -142,7 +144,7 @@ nack_gl_context *nack__nsgl_create_context(nack_window *w, const nack__gl_desc *
     }
 }
 
-void nack__nsgl_destroy_context(nack_gl_context *ctx)
+void nsgl_destroy_context(nack_gl_context *ctx)
 {
     if (!ctx)
         return;
@@ -164,7 +166,7 @@ void nack__nsgl_destroy_context(nack_gl_context *ctx)
     }
 }
 
-bool nack__nsgl_make_current(nack_window *w, nack_gl_context *ctx)
+bool nsgl_make_current(nack_window *w, nack_gl_context *ctx)
 {
     @autoreleasepool {
         if (!ctx) {
@@ -173,7 +175,7 @@ bool nack__nsgl_make_current(nack_window *w, nack_gl_context *ctx)
         }
         nack_nsgl_context *native = (nack_nsgl_context *)ctx->native;
         if (w) {
-            nack_cocoa_window *cw = nack__cocoa_win(w);
+            nack_cocoa_window *cw = cocoa_win(w);
             if ([native->context view] != cw->view)
                 [native->context setView:cw->view];
         }
@@ -182,16 +184,16 @@ bool nack__nsgl_make_current(nack_window *w, nack_gl_context *ctx)
     }
 }
 
-void nack__nsgl_swap_buffers(nack_window *w)
+void nsgl_swap_buffers(nack_window *w)
 {
     @autoreleasepool {
-        nack_cocoa_window *cw = nack__cocoa_win(w);
+        nack_cocoa_window *cw = cocoa_win(w);
         if (cw && cw->gl_context)
             [(NSOpenGLContext *)cw->gl_context flushBuffer];
     }
 }
 
-void nack__nsgl_set_swap_interval(int interval)
+void nsgl_set_swap_interval(int interval)
 {
     @autoreleasepool {
         NSOpenGLContext *context = [NSOpenGLContext currentContext];
@@ -204,10 +206,10 @@ void nack__nsgl_set_swap_interval(int interval)
     }
 }
 
-void nack__nsgl_update(nack_window *w)
+void nsgl_update(nack_window *w)
 {
     @autoreleasepool {
-        nack_cocoa_window *cw = nack__cocoa_win(w);
+        nack_cocoa_window *cw = cocoa_win(w);
         if (!cw || !cw->gl_context)
             return;
         /*
@@ -219,22 +221,24 @@ void nack__nsgl_update(nack_window *w)
     }
 }
 
-void *nack__nsgl_get_proc_address(const char *name)
+void *nsgl_get_proc_address(const char *name)
 {
-    if (!nack__nsgl_framework) {
-        nack__nsgl_framework =
+    if (!nsgl_framework) {
+        nsgl_framework =
             dlopen("/System/Library/Frameworks/OpenGL.framework/OpenGL",
                    RTLD_LAZY | RTLD_LOCAL);
-        if (!nack__nsgl_framework)
+        if (!nsgl_framework)
             return NULL;
     }
-    return dlsym(nack__nsgl_framework, name);
+    return dlsym(nsgl_framework, name);
 }
 
-void nack__nsgl_terminate(void)
+void nsgl_terminate(void)
 {
-    if (nack__nsgl_framework) {
-        dlclose(nack__nsgl_framework);
-        nack__nsgl_framework = NULL;
+    if (nsgl_framework) {
+        dlclose(nsgl_framework);
+        nsgl_framework = NULL;
     }
 }
+
+} }   /* namespace nack::detail */

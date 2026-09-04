@@ -1,7 +1,7 @@
 /* Human-readable key names and generic GL helpers. */
 #include "nack_internal.h"
 
-static const struct { nack_key key; const char *name; } nack__key_names[] = {
+static const struct { nack_key key; const char *name; } key_names[] = {
     { NACK_KEY_A, "A" }, { NACK_KEY_B, "B" }, { NACK_KEY_C, "C" },
     { NACK_KEY_D, "D" }, { NACK_KEY_E, "E" }, { NACK_KEY_F, "F" },
     { NACK_KEY_G, "G" }, { NACK_KEY_H, "H" }, { NACK_KEY_I, "I" },
@@ -88,8 +88,8 @@ const char *nack_key_get_name(nack_key key)
     static const char *table[NACK_KEY_COUNT];
     static bool built = false;
     if (!built) {
-        for (size_t i = 0; i < sizeof nack__key_names / sizeof nack__key_names[0]; ++i)
-            table[nack__key_names[i].key] = nack__key_names[i].name;
+        for (size_t i = 0; i < sizeof key_names / sizeof key_names[0]; ++i)
+            table[key_names[i].key] = key_names[i].name;
         built = true;
     }
     if (key <= 0 || key >= NACK_KEY_COUNT || !table[key])
@@ -106,11 +106,11 @@ const char *nack_key_get_name(nack_key key)
 
 /* Function pointer types for the entry points resolved below; GLenum is
  * unsigned int in every OpenGL ABI. */
-using nack__pfn_get_string = const unsigned char *(*)(unsigned int);
-using nack__pfn_get_stringi = const unsigned char *(*)(unsigned int, unsigned int);
-using nack__pfn_get_integerv = void (*)(unsigned int, int *);
+using pfn_get_string = const unsigned char *(*)(unsigned int);
+using pfn_get_stringi = const unsigned char *(*)(unsigned int, unsigned int);
+using pfn_get_integerv = void (*)(unsigned int, int *);
 
-static bool nack__token_in_list(const char *list, const char *name)
+static bool token_in_list(const char *list, const char *name)
 {
     size_t len = strlen(name);
     const char *p = list;
@@ -131,10 +131,10 @@ bool nack_state::gl_extension_supported(const char *name)
     if (!name || !*name || !initialized || !current_context)
         return false;
 
-    nack__pfn_get_stringi get_stringi =
-        (nack__pfn_get_stringi)gl_get_proc_address("glGetStringi");
-    nack__pfn_get_integerv get_integerv =
-        (nack__pfn_get_integerv)gl_get_proc_address("glGetIntegerv");
+    pfn_get_stringi get_stringi =
+        (pfn_get_stringi)gl_get_proc_address("glGetStringi");
+    pfn_get_integerv get_integerv =
+        (pfn_get_integerv)gl_get_proc_address("glGetIntegerv");
 
     if (get_stringi && get_integerv) {
         int count = 0;
@@ -148,10 +148,10 @@ bool nack_state::gl_extension_supported(const char *name)
             return false;
     }
 
-    nack__pfn_get_string get_string =
-        (nack__pfn_get_string)gl_get_proc_address("glGetString");
+    pfn_get_string get_string =
+        (pfn_get_string)gl_get_proc_address("glGetString");
     if (!get_string)
         return false;
     const char *list = (const char *)get_string(NACK_GL_EXTENSIONS);
-    return list && nack__token_in_list(list, name);
+    return list && token_in_list(list, name);
 }

@@ -32,7 +32,7 @@ Result guarded(const char *what, Body &&body, Result on_error)
     try {
         return std::forward<Body>(body)();
     } catch (const std::exception &failure) {
-        nack__c.set_error("%s: %s", what, failure.what());
+        console_state.set_error("%s: %s", what, failure.what());
         return on_error;
     }
 }
@@ -44,7 +44,7 @@ void guarded_void(const char *what, Body &&body)
     try {
         std::forward<Body>(body)();
     } catch (const std::exception &failure) {
-        nack__c.set_error("%s: %s", what, failure.what());
+        console_state.set_error("%s: %s", what, failure.what());
     }
 }
 

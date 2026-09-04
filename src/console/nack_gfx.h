@@ -18,8 +18,9 @@
 
 /*
  * C++ only. The dispatch below is a class, not a table of function pointers:
- * see the comment on nack_gfx_backend. The console layer's own entry points
- * further down keep C linkage, as they always did.
+ * see the comment on nack_gfx_backend. Nothing still-C calls the console
+ * layer's own entry points further down either, so those lost the extern "C"
+ * they used to need.
  */
 #ifndef __cplusplus
 #  error "nack_gfx.h is C++"
@@ -87,32 +88,32 @@ public:
     }
 };
 
-nack_gfx_backend *nack__gfx_backend_gl(void);
-#if defined(__APPLE__)
-nack_gfx_backend *nack__gfx_backend_metal(void);
-#endif
+namespace nack { namespace detail {
 
-extern "C" {
+nack_gfx_backend *gfx_backend_gl(void);
+#if defined(__APPLE__)
+nack_gfx_backend *gfx_backend_metal(void);
+#endif
 
 /*
  * Brings up the device, swap chain and pipeline for the window. The window
  * has already been created; on the OpenGL path a context is made current here,
  * and on the Metal path a CAMetalLayer is attached.
  */
-bool nack__gfx_init(nack_window *window);
-void nack__gfx_shutdown(void);
+bool gfx_init(nack_window *window);
+void gfx_shutdown(void);
 
 /* Uploads an RGBA8 atlas. Returns NULL and sets the error on failure. */
-nack_texture *nack__gfx_texture_create(const uint8_t *rgba, int width,
+nack_texture *gfx_texture_create(const uint8_t *rgba, int width,
                                               int height);
-void nack__gfx_texture_destroy(nack_texture *texture);
+void gfx_texture_destroy(nack_texture *texture);
 
 /*
  * A frame is: begin, then any number of draws, then end. The clear colour
  * fills the whole framebuffer, so it is what shows in the letterbox; the
  * viewport is where the console itself goes, in framebuffer pixels.
  */
-void nack__gfx_begin_frame(nack_color clear, int fb_width, int fb_height,
+void gfx_begin_frame(nack_color clear, int fb_width, int fb_height,
                            int viewport_x, int viewport_y,
                            int viewport_w, int viewport_h);
 
@@ -121,16 +122,16 @@ void nack__gfx_begin_frame(nack_color clear, int fb_width, int fb_height,
  * ignores the texture, which is how cell backgrounds are filled; mode 1
  * samples the texture and tints it by the foreground.
  */
-void nack__gfx_draw(const float *vertices, size_t vertex_count, int mode,
+void gfx_draw(const float *vertices, size_t vertex_count, int mode,
                     nack_texture *texture);
 
-void nack__gfx_end_frame(void);
+void gfx_end_frame(void);
 
 /* Called when the framebuffer changes size. */
-void nack__gfx_resize(int fb_width, int fb_height);
+void gfx_resize(int fb_width, int fb_height);
 
 /* Vertical sync. */
-void nack__gfx_set_vsync(bool vsync);
+void gfx_set_vsync(bool vsync);
 
 /*
  * Keeps a copy of each frame so it can be read back afterwards. Off by
@@ -139,18 +140,18 @@ void nack__gfx_set_vsync(bool vsync);
  * presented - the OpenGL back buffer is undefined after a swap, whatever a
  * given driver happens to leave in it.
  */
-void nack__gfx_set_capture(bool capture);
+void gfx_set_capture(bool capture);
 
 /*
  * Reads one pixel of the last frame back, for the tests. Returns false where
  * the backend cannot do it, or where capture was never turned on; callers
  * treat that as "not checkable" rather than as a failure.
  */
-bool nack__gfx_read_pixel(int x, int y, uint8_t rgba[4]);
+bool gfx_read_pixel(int x, int y, uint8_t rgba[4]);
 
 /* Name of the backend actually in use, for diagnostics. */
-const char *nack__gfx_name(void);
+const char *gfx_name(void);
 
+} }   /* namespace nack::detail */
 
-}   /* extern "C" */
 #endif /* NACK_GFX_H_INCLUDED */

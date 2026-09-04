@@ -13,11 +13,13 @@
  * xkbcommon keycode is the wire value plus 8. */
 #define NACK_WL_KEYCODE(raw) ((raw) + 8u)
 
-static uint32_t nack__wl_mods(void)
+namespace nack { namespace detail {
+
+static uint32_t wl_mods(void)
 {
-    if (!nack__wl.xkb_state)
+    if (!wl.xkb_state)
         return 0;
-    struct xkb_state *xkb = nack__wl.xkb_state;
+    struct xkb_state *xkb = wl.xkb_state;
     uint32_t mods = 0;
     if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_SHIFT,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
@@ -44,28 +46,28 @@ static uint32_t nack__wl_mods(void)
 /* Text production                                                    */
 /* ------------------------------------------------------------------ */
 
-static void nack__wl_emit_text_for(nack_window *w, xkb_keycode_t keycode,
+static void wl_emit_text_for(nack_window *w, xkb_keycode_t keycode,
                                    uint32_t mods)
 {
-    if (!nack__wl.xkb_state)
+    if (!wl.xkb_state)
         return;
 
-    xkb_keysym_t sym = xkb_state_key_get_one_sym(nack__wl.xkb_state, keycode);
+    xkb_keysym_t sym = xkb_state_key_get_one_sym(wl.xkb_state, keycode);
 
-    if (nack__wl.compose_state) {
-        if (xkb_compose_state_feed(nack__wl.compose_state, sym) ==
+    if (wl.compose_state) {
+        if (xkb_compose_state_feed(wl.compose_state, sym) ==
             XKB_COMPOSE_FEED_ACCEPTED) {
-            switch (xkb_compose_state_get_status(nack__wl.compose_state)) {
+            switch (xkb_compose_state_get_status(wl.compose_state)) {
             case XKB_COMPOSE_COMPOSING:
                 return;
             case XKB_COMPOSE_CANCELLED:
-                xkb_compose_state_reset(nack__wl.compose_state);
+                xkb_compose_state_reset(wl.compose_state);
                 return;
             case XKB_COMPOSE_COMPOSED: {
                 char buffer[32];
-                int n = xkb_compose_state_get_utf8(nack__wl.compose_state, buffer,
+                int n = xkb_compose_state_get_utf8(wl.compose_state, buffer,
                                                    sizeof buffer);
-                xkb_compose_state_reset(nack__wl.compose_state);
+                xkb_compose_state_reset(wl.compose_state);
                 if (n > 0 && n < (int)sizeof buffer)
                     w->emit_text(buffer);
                 return;
@@ -81,12 +83,12 @@ static void nack__wl_emit_text_for(nack_window *w, xkb_keycode_t keycode,
         return;
 
     char buffer[32];
-    int n = xkb_state_key_get_utf8(nack__wl.xkb_state, keycode, buffer, sizeof buffer);
+    int n = xkb_state_key_get_utf8(wl.xkb_state, keycode, buffer, sizeof buffer);
     if (n <= 0 || n >= (int)sizeof buffer)
         return;
 
-    uint32_t codepoint = xkb_state_key_get_utf32(nack__wl.xkb_state, keycode);
-    if (!nack__codepoint_is_text(codepoint))
+    uint32_t codepoint = xkb_state_key_get_utf32(wl.xkb_state, keycode);
+    if (!codepoint_is_text(codepoint))
         return;
 
     w->emit_text(buffer);
@@ -96,61 +98,61 @@ static void nack__wl_emit_text_for(nack_window *w, xkb_keycode_t keycode,
 /* Key repeat                                                         */
 /* ------------------------------------------------------------------ */
 
-static void nack__wl_start_repeat(nack_window *w, uint32_t raw_key)
+static void wl_start_repeat(nack_window *w, uint32_t raw_key)
 {
-    if (nack__wl.repeat_rate <= 0 || !nack__wl.xkb_keymap)
+    if (wl.repeat_rate <= 0 || !wl.xkb_keymap)
         return;
-    if (!xkb_keymap_key_repeats(nack__wl.xkb_keymap, NACK_WL_KEYCODE(raw_key)))
+    if (!xkb_keymap_key_repeats(wl.xkb_keymap, NACK_WL_KEYCODE(raw_key)))
         return;
-    nack__wl.repeat_key = raw_key + 1;   /* +1 so 0 stays the idle marker */
-    nack__wl.repeat_window = w;
-    nack__wl.repeat_next_ns =
-        nack__win_time_ns() + (uint64_t)nack__wl.repeat_delay * 1000000ull;
+    wl.repeat_key = raw_key + 1;   /* +1 so 0 stays the idle marker */
+    wl.repeat_window = w;
+    wl.repeat_next_ns =
+        win_time_ns() + (uint64_t)wl.repeat_delay * 1000000ull;
 }
 
-static void nack__wl_stop_repeat(void)
+static void wl_stop_repeat(void)
 {
-    nack__wl.repeat_key = 0;
-    nack__wl.repeat_window = nullptr;
+    wl.repeat_key = 0;
+    wl.repeat_window = nullptr;
 }
 
-double nack__wl_next_repeat_timeout(void)
+double wl_next_repeat_timeout(void)
 {
-    if (!nack__wl.repeat_key || !nack__wl.repeat_window)
+    if (!wl.repeat_key || !wl.repeat_window)
         return -1.0;
-    uint64_t now = nack__win_time_ns();
-    if (now >= nack__wl.repeat_next_ns)
+    uint64_t now = win_time_ns();
+    if (now >= wl.repeat_next_ns)
         return 0.0;
-    return (double)(nack__wl.repeat_next_ns - now) / 1e9;
+    return (double)(wl.repeat_next_ns - now) / 1e9;
 }
 
-void nack__wl_pump_key_repeat(void)
+void wl_pump_key_repeat(void)
 {
-    if (!nack__wl.repeat_key || !nack__wl.repeat_window)
+    if (!wl.repeat_key || !wl.repeat_window)
         return;
 
-    uint64_t now = nack__win_time_ns();
-    uint64_t interval = nack__wl.repeat_rate > 0
-                            ? 1000000000ull / (uint64_t)nack__wl.repeat_rate
+    uint64_t now = win_time_ns();
+    uint64_t interval = wl.repeat_rate > 0
+                            ? 1000000000ull / (uint64_t)wl.repeat_rate
                             : 0;
     if (interval == 0)
         return;
 
     /* Catch up without spinning if the caller was blocked for a long time. */
     int guard = 0;
-    while (now >= nack__wl.repeat_next_ns && guard++ < 32) {
-        uint32_t raw_key = nack__wl.repeat_key - 1;
+    while (now >= wl.repeat_next_ns && guard++ < 32) {
+        uint32_t raw_key = wl.repeat_key - 1;
         xkb_keycode_t keycode = NACK_WL_KEYCODE(raw_key);
-        nack_key key = keycode < 256 ? nack__wl.keycodes[keycode] : NACK_KEY_UNKNOWN;
-        uint32_t mods = nack__wl_mods();
+        nack_key key = keycode < 256 ? wl.keycodes[keycode] : NACK_KEY_UNKNOWN;
+        uint32_t mods = wl_mods();
 
-        nack__wl.repeat_window->emit_key(key, raw_key, mods, true, true);
-        nack__wl_emit_text_for(nack__wl.repeat_window, keycode, mods);
+        wl.repeat_window->emit_key(key, raw_key, mods, true, true);
+        wl_emit_text_for(wl.repeat_window, keycode, mods);
 
-        nack__wl.repeat_next_ns += interval;
+        wl.repeat_next_ns += interval;
     }
     if (guard >= 32)
-        nack__wl.repeat_next_ns = now + interval;
+        wl.repeat_next_ns = now + interval;
 }
 
 /* ------------------------------------------------------------------ */
@@ -174,7 +176,7 @@ static void keyboard_keymap(void *data, struct wl_keyboard *keyboard, uint32_t f
     }
 
     struct xkb_keymap *keymap = xkb_keymap_new_from_string(
-        nack__wl.xkb_context, map, XKB_KEYMAP_FORMAT_TEXT_V1,
+        wl.xkb_context, map, XKB_KEYMAP_FORMAT_TEXT_V1,
         XKB_KEYMAP_COMPILE_NO_FLAGS);
     munmap(map, size);
     close(fd);
@@ -188,29 +190,29 @@ static void keyboard_keymap(void *data, struct wl_keyboard *keyboard, uint32_t f
         return;
     }
 
-    if (nack__wl.xkb_state)  xkb_state_unref(nack__wl.xkb_state);
-    if (nack__wl.xkb_keymap) xkb_keymap_unref(nack__wl.xkb_keymap);
-    nack__wl.xkb_keymap = keymap;
-    nack__wl.xkb_state = xkb;
-    nack__xkb_build_keycodes(nack__wl.xkb_keymap, nack__wl.keycodes);
+    if (wl.xkb_state)  xkb_state_unref(wl.xkb_state);
+    if (wl.xkb_keymap) xkb_keymap_unref(wl.xkb_keymap);
+    wl.xkb_keymap = keymap;
+    wl.xkb_state = xkb;
+    xkb_build_keycodes(wl.xkb_keymap, wl.keycodes);
 }
 
 static void keyboard_enter(void *data, struct wl_keyboard *keyboard, uint32_t serial,
                            struct wl_surface *surface, struct wl_array *keys)
 {
     (void)data; (void)keyboard; (void)keys;
-    nack__wl.last_serial = serial;
+    wl.last_serial = serial;
 
     if (!surface)
         return;
     for (size_t i = 0; i < state.windows.size(); ++i) {
         nack_window *w = state.windows[i];
-        nack_wl_window *ww = nack__wl_win(w);
+        nack_wl_window *ww = wl_win(w);
         if (ww && ww->surface == surface) {
-            nack__wl.keyboard_focus = w;
+            wl.keyboard_focus = w;
             w->emit_focus(true);
             /* The title bar is drawn differently when active. */
-            nack__wl_decor_redraw(w);
+            wl_decor_redraw(w);
             return;
         }
     }
@@ -220,15 +222,15 @@ static void keyboard_leave(void *data, struct wl_keyboard *keyboard, uint32_t se
                            struct wl_surface *surface)
 {
     (void)data; (void)keyboard; (void)surface;
-    nack__wl.last_serial = serial;
-    nack__wl_stop_repeat();
-    if (nack__wl.compose_state)
-        xkb_compose_state_reset(nack__wl.compose_state);
-    if (nack__wl.keyboard_focus) {
-        nack_window *w = nack__wl.keyboard_focus;
-        nack__wl.keyboard_focus = nullptr;
+    wl.last_serial = serial;
+    wl_stop_repeat();
+    if (wl.compose_state)
+        xkb_compose_state_reset(wl.compose_state);
+    if (wl.keyboard_focus) {
+        nack_window *w = wl.keyboard_focus;
+        wl.keyboard_focus = nullptr;
         w->emit_focus(false);
-        nack__wl_decor_redraw(w);
+        wl_decor_redraw(w);
     }
 }
 
@@ -236,24 +238,24 @@ static void keyboard_key(void *data, struct wl_keyboard *keyboard, uint32_t seri
                          uint32_t time, uint32_t key, uint32_t key_state)
 {
     (void)data; (void)keyboard; (void)time;
-    nack__wl.last_serial = serial;
+    wl.last_serial = serial;
 
-    nack_window *w = nack__wl.keyboard_focus;
+    nack_window *w = wl.keyboard_focus;
     if (!w)
         return;
 
     xkb_keycode_t keycode = NACK_WL_KEYCODE(key);
-    nack_key nkey = keycode < 256 ? nack__wl.keycodes[keycode] : NACK_KEY_UNKNOWN;
-    uint32_t mods = nack__wl_mods();
+    nack_key nkey = keycode < 256 ? wl.keycodes[keycode] : NACK_KEY_UNKNOWN;
+    uint32_t mods = wl_mods();
     bool down = (key_state == WL_KEYBOARD_KEY_STATE_PRESSED);
 
     w->emit_key(nkey, key, mods, down, false);
 
     if (down) {
-        nack__wl_emit_text_for(w, keycode, mods);
-        nack__wl_start_repeat(w, key);
-    } else if (nack__wl.repeat_key == key + 1) {
-        nack__wl_stop_repeat();
+        wl_emit_text_for(w, keycode, mods);
+        wl_start_repeat(w, key);
+    } else if (wl.repeat_key == key + 1) {
+        wl_stop_repeat();
     }
 }
 
@@ -262,24 +264,24 @@ static void keyboard_modifiers(void *data, struct wl_keyboard *keyboard, uint32_
                                uint32_t mods_locked, uint32_t group)
 {
     (void)data; (void)keyboard;
-    nack__wl.last_serial = serial;
-    if (nack__wl.xkb_state)
-        xkb_state_update_mask(nack__wl.xkb_state, mods_depressed, mods_latched,
+    wl.last_serial = serial;
+    if (wl.xkb_state)
+        xkb_state_update_mask(wl.xkb_state, mods_depressed, mods_latched,
                               mods_locked, 0, 0, group);
-    state.mods = nack__wl_mods();
+    state.mods = wl_mods();
 }
 
 static void keyboard_repeat_info(void *data, struct wl_keyboard *keyboard,
                                  int32_t rate, int32_t delay)
 {
     (void)data; (void)keyboard;
-    nack__wl.repeat_rate = rate;
-    nack__wl.repeat_delay = delay;
+    wl.repeat_rate = rate;
+    wl.repeat_delay = delay;
     if (rate == 0)
-        nack__wl_stop_repeat();   /* the user disabled repeat */
+        wl_stop_repeat();   /* the user disabled repeat */
 }
 
-static const struct wl_keyboard_listener nack__wl_keyboard_listener = {
+static const struct wl_keyboard_listener wl_keyboard_listener = {
     .keymap = keyboard_keymap,
     .enter = keyboard_enter,
     .leave = keyboard_leave,
@@ -292,7 +294,7 @@ static const struct wl_keyboard_listener nack__wl_keyboard_listener = {
 /* Cursors                                                            */
 /* ------------------------------------------------------------------ */
 
-static const char *const nack__wl_cursor_names[NACK_CURSOR_SHAPE_COUNT][3] = {
+static const char *const wl_cursor_names[NACK_CURSOR_SHAPE_COUNT][3] = {
     { "default", "left_ptr", nullptr },
     { "text", "xterm", nullptr },
     { "crosshair", "cross", nullptr },
@@ -306,11 +308,11 @@ static const char *const nack__wl_cursor_names[NACK_CURSOR_SHAPE_COUNT][3] = {
     { "wait", "watch", nullptr },
 };
 
-void nack__wl_load_cursor_theme(int scale)
+void wl_load_cursor_theme(int scale)
 {
-    if (!nack__wl.shm || scale < 1)
+    if (!wl.shm || scale < 1)
         return;
-    if (nack__wl.cursor_theme && nack__wl.cursor_theme_scale == scale)
+    if (wl.cursor_theme && wl.cursor_theme_scale == scale)
         return;
 
     int size = 24;
@@ -322,48 +324,48 @@ void nack__wl_load_cursor_theme(int scale)
     }
 
     struct wl_cursor_theme *theme =
-        wl_cursor_theme_load(getenv("XCURSOR_THEME"), size * scale, nack__wl.shm);
+        wl_cursor_theme_load(getenv("XCURSOR_THEME"), size * scale, wl.shm);
     if (!theme)
         return;
 
-    if (nack__wl.cursor_theme)
-        wl_cursor_theme_destroy(nack__wl.cursor_theme);
-    nack__wl.cursor_theme = theme;
-    nack__wl.cursor_theme_scale = scale;
-    memset(nack__wl.cursors, 0, sizeof nack__wl.cursors);
-    memset(nack__wl.cursors_loaded, 0, sizeof nack__wl.cursors_loaded);
+    if (wl.cursor_theme)
+        wl_cursor_theme_destroy(wl.cursor_theme);
+    wl.cursor_theme = theme;
+    wl.cursor_theme_scale = scale;
+    memset(wl.cursors, 0, sizeof wl.cursors);
+    memset(wl.cursors_loaded, 0, sizeof wl.cursors_loaded);
 }
 
-static struct wl_cursor *nack__wl_get_cursor(nack_cursor_shape shape)
+static struct wl_cursor *wl_get_cursor(nack_cursor_shape shape)
 {
-    if (nack__wl.cursors_loaded[shape])
-        return nack__wl.cursors[shape];
+    if (wl.cursors_loaded[shape])
+        return wl.cursors[shape];
     struct wl_cursor *cursor = nullptr;
-    if (nack__wl.cursor_theme) {
-        for (int i = 0; i < 3 && nack__wl_cursor_names[shape][i]; ++i) {
-            cursor = wl_cursor_theme_get_cursor(nack__wl.cursor_theme,
-                                                nack__wl_cursor_names[shape][i]);
+    if (wl.cursor_theme) {
+        for (int i = 0; i < 3 && wl_cursor_names[shape][i]; ++i) {
+            cursor = wl_cursor_theme_get_cursor(wl.cursor_theme,
+                                                wl_cursor_names[shape][i]);
             if (cursor)
                 break;
         }
     }
-    nack__wl.cursors[shape] = cursor;
-    nack__wl.cursors_loaded[shape] = true;
+    wl.cursors[shape] = cursor;
+    wl.cursors_loaded[shape] = true;
     return cursor;
 }
 
-void nack__wl_apply_cursor_shape(nack_cursor_shape shape)
+void wl_apply_cursor_shape(nack_cursor_shape shape)
 {
     struct wl_cursor *cursor;
     struct wl_cursor_image *image;
     struct wl_buffer *buffer;
     int scale;
 
-    if (!nack__wl.pointer)
+    if (!wl.pointer)
         return;
 
-    cursor = nack__wl_get_cursor(shape);
-    if (!cursor || !nack__wl.cursor_surface || cursor->image_count == 0)
+    cursor = wl_get_cursor(shape);
+    if (!cursor || !wl.cursor_surface || cursor->image_count == 0)
         return;
 
     image = cursor->images[0];
@@ -371,38 +373,38 @@ void nack__wl_apply_cursor_shape(nack_cursor_shape shape)
     if (!buffer)
         return;
 
-    scale = nack__wl.cursor_theme_scale > 0 ? nack__wl.cursor_theme_scale : 1;
-    wl_surface_set_buffer_scale(nack__wl.cursor_surface, scale);
-    wl_surface_attach(nack__wl.cursor_surface, buffer, 0, 0);
-    wl_surface_damage_buffer(nack__wl.cursor_surface, 0, 0,
+    scale = wl.cursor_theme_scale > 0 ? wl.cursor_theme_scale : 1;
+    wl_surface_set_buffer_scale(wl.cursor_surface, scale);
+    wl_surface_attach(wl.cursor_surface, buffer, 0, 0);
+    wl_surface_damage_buffer(wl.cursor_surface, 0, 0,
                              (int32_t)image->width, (int32_t)image->height);
-    wl_surface_commit(nack__wl.cursor_surface);
+    wl_surface_commit(wl.cursor_surface);
 
-    wl_pointer_set_cursor(nack__wl.pointer, nack__wl.pointer_enter_serial,
-                          nack__wl.cursor_surface,
+    wl_pointer_set_cursor(wl.pointer, wl.pointer_enter_serial,
+                          wl.cursor_surface,
                           (int32_t)image->hotspot_x / scale,
                           (int32_t)image->hotspot_y / scale);
 }
 
-void nack__wl_update_cursor(nack_window *w)
+void wl_update_cursor(nack_window *w)
 {
-    if (!nack__wl.pointer || nack__wl.pointer_focus != w)
+    if (!wl.pointer || wl.pointer_focus != w)
         return;
 
     if (w->cursor_mode != NACK_CURSOR_MODE_NORMAL) {
         /* A null surface hides the pointer over this surface. */
-        wl_pointer_set_cursor(nack__wl.pointer, nack__wl.pointer_enter_serial,
+        wl_pointer_set_cursor(wl.pointer, wl.pointer_enter_serial,
                               nullptr, 0, 0);
         return;
     }
 
-    nack__wl_apply_cursor_shape(w->cursor_shape);
+    wl_apply_cursor_shape(w->cursor_shape);
 }
 
-void nack__wl_set_cursor_shape(nack_window *w, nack_cursor_shape shape)
+void wl_set_cursor_shape(nack_window *w, nack_cursor_shape shape)
 {
     (void)shape;
-    nack__wl_update_cursor(w);
+    wl_update_cursor(w);
 }
 
 /* ------------------------------------------------------------------ */
@@ -422,7 +424,7 @@ static void relative_pointer_motion(void *data,
     if (w->cursor_mode != NACK_CURSOR_MODE_CAPTURED)
         return;
 
-    nack_wl_window *ww = nack__wl_win(w);
+    nack_wl_window *ww = wl_win(w);
     double ddx = wl_fixed_to_double(dx);
     double ddy = wl_fixed_to_double(dy);
     ww->virtual_x += ddx;
@@ -433,17 +435,17 @@ static void relative_pointer_motion(void *data,
     ev->data.motion.y = ww->virtual_y;
     ev->data.motion.dx = ddx;
     ev->data.motion.dy = ddy;
-    ev->data.motion.mods = nack__wl_mods();
+    ev->data.motion.mods = wl_mods();
     state.push_event(ev);
 }
 
-static const struct zwp_relative_pointer_v1_listener nack__wl_relative_listener = {
+static const struct zwp_relative_pointer_v1_listener wl_relative_listener = {
     .relative_motion = relative_pointer_motion,
 };
 
-void nack__wl_set_cursor_mode(nack_window *w, nack_cursor_mode mode)
+void wl_set_cursor_mode(nack_window *w, nack_cursor_mode mode)
 {
-    nack_wl_window *ww = nack__wl_win(w);
+    nack_wl_window *ww = wl_win(w);
 
     if (mode == NACK_CURSOR_MODE_CAPTURED) {
         ww->virtual_x = w->mouse_x;
@@ -454,17 +456,17 @@ void nack__wl_set_cursor_mode(nack_window *w, nack_cursor_mode mode)
          * zwp_relative_pointer_v1 while zwp_locked_pointer_v1 keeps the
          * pointer inside the surface.
          */
-        if (nack__wl.relative_pointer_manager && nack__wl.pointer &&
+        if (wl.relative_pointer_manager && wl.pointer &&
             !ww->relative_pointer) {
             ww->relative_pointer =
                 zwp_relative_pointer_manager_v1_get_relative_pointer(
-                    nack__wl.relative_pointer_manager, nack__wl.pointer);
+                    wl.relative_pointer_manager, wl.pointer);
             zwp_relative_pointer_v1_add_listener(ww->relative_pointer,
-                                                 &nack__wl_relative_listener, w);
+                                                 &wl_relative_listener, w);
         }
-        if (nack__wl.pointer_constraints && nack__wl.pointer && !ww->locked_pointer) {
+        if (wl.pointer_constraints && wl.pointer && !ww->locked_pointer) {
             ww->locked_pointer = zwp_pointer_constraints_v1_lock_pointer(
-                nack__wl.pointer_constraints, ww->surface, nack__wl.pointer, nullptr,
+                wl.pointer_constraints, ww->surface, wl.pointer, nullptr,
                 ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
         }
         if (!ww->relative_pointer || !ww->locked_pointer)
@@ -481,21 +483,21 @@ void nack__wl_set_cursor_mode(nack_window *w, nack_cursor_mode mode)
         }
     }
 
-    nack__wl_update_cursor(w);
-    wl_display_flush(nack__wl.display);
+    wl_update_cursor(w);
+    wl_display_flush(wl.display);
 }
 
 /* ------------------------------------------------------------------ */
 /* Pointer                                                            */
 /* ------------------------------------------------------------------ */
 
-static nack_window *nack__wl_window_for_surface(struct wl_surface *surface)
+static nack_window *wl_window_for_surface(struct wl_surface *surface)
 {
     if (!surface)
         return nullptr;
     for (size_t i = 0; i < state.windows.size(); ++i) {
         nack_window *w = state.windows[i];
-        nack_wl_window *ww = nack__wl_win(w);
+        nack_wl_window *ww = wl_win(w);
         if (ww && ww->surface == surface)
             return w;
     }
@@ -506,27 +508,27 @@ static void pointer_enter(void *data, struct wl_pointer *pointer, uint32_t seria
                           struct wl_surface *surface, wl_fixed_t sx, wl_fixed_t sy)
 {
     (void)data; (void)pointer;
-    nack__wl.pointer_enter_serial = serial;
-    nack__wl.last_serial = serial;
+    wl.pointer_enter_serial = serial;
+    wl.last_serial = serial;
 
-    nack_window *w = nack__wl_window_for_surface(surface);
+    nack_window *w = wl_window_for_surface(surface);
     if (!w) {
         /* The pointer may instead be over one of our decoration surfaces. */
         nack_wl_decor_part part;
-        if (nack__wl_decor_find(surface, &w, &part)) {
-            nack__wl.decor_focus = w;
-            nack__wl.decor_focus_part = part;
-            nack__wl_decor_pointer_motion(w, wl_fixed_to_double(sx),
+        if (wl_decor_find(surface, &w, &part)) {
+            wl.decor_focus = w;
+            wl.decor_focus_part = part;
+            wl_decor_pointer_motion(w, wl_fixed_to_double(sx),
                                           wl_fixed_to_double(sy));
         }
         return;
     }
 
-    nack__wl.decor_focus = nullptr;
-    nack__wl.pointer_focus = w;
+    wl.decor_focus = nullptr;
+    wl.pointer_focus = w;
     w->mouse_x = wl_fixed_to_double(sx);
     w->mouse_y = wl_fixed_to_double(sy);
-    nack__wl_update_cursor(w);
+    wl_update_cursor(w);
     w->emit_simple(NACK_WIN_EVENT_MOUSE_ENTER);
 }
 
@@ -534,14 +536,14 @@ static void pointer_leave(void *data, struct wl_pointer *pointer, uint32_t seria
                           struct wl_surface *surface)
 {
     (void)data; (void)pointer; (void)surface;
-    nack__wl.last_serial = serial;
-    if (nack__wl.decor_focus) {
-        nack__wl_decor_pointer_leave(nack__wl.decor_focus);
-        nack__wl.decor_focus = nullptr;
+    wl.last_serial = serial;
+    if (wl.decor_focus) {
+        wl_decor_pointer_leave(wl.decor_focus);
+        wl.decor_focus = nullptr;
     }
-    if (nack__wl.pointer_focus) {
-        nack__wl.pointer_focus->emit_simple(NACK_WIN_EVENT_MOUSE_LEAVE);
-        nack__wl.pointer_focus = nullptr;
+    if (wl.pointer_focus) {
+        wl.pointer_focus->emit_simple(NACK_WIN_EVENT_MOUSE_LEAVE);
+        wl.pointer_focus = nullptr;
     }
 }
 
@@ -550,26 +552,26 @@ static void pointer_motion(void *data, struct wl_pointer *pointer, uint32_t time
 {
     (void)data; (void)pointer; (void)time;
 
-    if (nack__wl.decor_focus) {
-        nack__wl_decor_pointer_motion(nack__wl.decor_focus, wl_fixed_to_double(sx),
+    if (wl.decor_focus) {
+        wl_decor_pointer_motion(wl.decor_focus, wl_fixed_to_double(sx),
                                       wl_fixed_to_double(sy));
         return;
     }
 
-    nack_window *w = nack__wl.pointer_focus;
+    nack_window *w = wl.pointer_focus;
     if (!w || w->cursor_mode == NACK_CURSOR_MODE_CAPTURED)
         return;   /* captured motion arrives through the relative pointer */
     w->emit_mouse_move(wl_fixed_to_double(sx), wl_fixed_to_double(sy),
-                      nack__wl_mods());
+                      wl_mods());
 }
 
 static void pointer_button(void *data, struct wl_pointer *pointer, uint32_t serial,
                            uint32_t time, uint32_t button, uint32_t button_state)
 {
     (void)data; (void)pointer; (void)time;
-    nack__wl.last_serial = serial;
+    wl.last_serial = serial;
 
-    nack_window *w = nack__wl.pointer_focus;
+    nack_window *w = wl.pointer_focus;
 
     /* Wayland reports Linux input event codes. */
     int index;
@@ -584,14 +586,14 @@ static void pointer_button(void *data, struct wl_pointer *pointer, uint32_t seri
 
     bool down = (button_state == WL_POINTER_BUTTON_STATE_PRESSED);
 
-    if (nack__wl.decor_focus) {
+    if (wl.decor_focus) {
         /* Route through the multi-click tracker so a double-click on the
          * title bar is recognised, then let the decorations act on it. */
-        nack_window *decorated = nack__wl.decor_focus;
+        nack_window *decorated = wl.decor_focus;
         if (down)
-            decorated->emit_mouse_button(index, true, nack__wl.decor_x,
-                                         nack__wl.decor_y, nack__wl_mods());
-        if (nack__wl_decor_pointer_button(decorated, index, down, serial))
+            decorated->emit_mouse_button(index, true, wl.decor_x,
+                                         wl.decor_y, wl_mods());
+        if (wl_decor_pointer_button(decorated, index, down, serial))
             return;
         return;
     }
@@ -599,14 +601,14 @@ static void pointer_button(void *data, struct wl_pointer *pointer, uint32_t seri
     if (!w)
         return;
 
-    w->emit_mouse_button(index, down, w->mouse_x, w->mouse_y, nack__wl_mods());
+    w->emit_mouse_button(index, down, w->mouse_x, w->mouse_y, wl_mods());
 }
 
 static void pointer_axis(void *data, struct wl_pointer *pointer, uint32_t time,
                          uint32_t axis, wl_fixed_t value)
 {
     (void)data; (void)pointer; (void)time;
-    if (!nack__wl.pointer_focus)
+    if (!wl.pointer_focus)
         return;
 
     /*
@@ -616,24 +618,24 @@ static void pointer_axis(void *data, struct wl_pointer *pointer, uint32_t time,
      */
     double amount = wl_fixed_to_double(value) / 10.0;
     if (axis == WL_POINTER_AXIS_VERTICAL_SCROLL)
-        nack__wl.axis_y -= amount;
+        wl.axis_y -= amount;
     else
-        nack__wl.axis_x -= amount;
-    nack__wl.axis_pending = true;
+        wl.axis_x -= amount;
+    wl.axis_pending = true;
 }
 
 static void pointer_axis_discrete(void *data, struct wl_pointer *pointer, uint32_t axis,
                                   int32_t discrete)
 {
     (void)data; (void)pointer; (void)axis; (void)discrete;
-    nack__wl.axis_discrete = true;
+    wl.axis_discrete = true;
 }
 
 static void pointer_axis_source(void *data, struct wl_pointer *pointer, uint32_t source)
 {
     (void)data; (void)pointer;
     if (source == WL_POINTER_AXIS_SOURCE_WHEEL)
-        nack__wl.axis_discrete = true;
+        wl.axis_discrete = true;
 }
 
 static void pointer_axis_stop(void *data, struct wl_pointer *pointer, uint32_t time,
@@ -645,21 +647,21 @@ static void pointer_axis_stop(void *data, struct wl_pointer *pointer, uint32_t t
 static void pointer_frame(void *data, struct wl_pointer *pointer)
 {
     (void)data; (void)pointer;
-    if (!nack__wl.axis_pending) {
-        nack__wl.axis_discrete = false;
+    if (!wl.axis_pending) {
+        wl.axis_discrete = false;
         return;
     }
-    nack_window *w = nack__wl.pointer_focus;
+    nack_window *w = wl.pointer_focus;
     if (w)
-        w->emit_scroll(nack__wl.axis_x, nack__wl.axis_y, nack__wl_mods(),
-                      !nack__wl.axis_discrete);
-    nack__wl.axis_x = 0.0;
-    nack__wl.axis_y = 0.0;
-    nack__wl.axis_pending = false;
-    nack__wl.axis_discrete = false;
+        w->emit_scroll(wl.axis_x, wl.axis_y, wl_mods(),
+                      !wl.axis_discrete);
+    wl.axis_x = 0.0;
+    wl.axis_y = 0.0;
+    wl.axis_pending = false;
+    wl.axis_discrete = false;
 }
 
-static const struct wl_pointer_listener nack__wl_pointer_listener = {
+static const struct wl_pointer_listener wl_pointer_listener = {
     .enter = pointer_enter,
     .leave = pointer_leave,
     .motion = pointer_motion,
@@ -682,20 +684,20 @@ static void seat_capabilities(void *data, struct wl_seat *seat, uint32_t capabil
     bool has_pointer = (capabilities & WL_SEAT_CAPABILITY_POINTER) != 0;
     bool has_keyboard = (capabilities & WL_SEAT_CAPABILITY_KEYBOARD) != 0;
 
-    if (has_pointer && !nack__wl.pointer) {
-        nack__wl.pointer = wl_seat_get_pointer(seat);
-        wl_pointer_add_listener(nack__wl.pointer, &nack__wl_pointer_listener, nullptr);
-    } else if (!has_pointer && nack__wl.pointer) {
-        wl_pointer_release(nack__wl.pointer);
-        nack__wl.pointer = nullptr;
+    if (has_pointer && !wl.pointer) {
+        wl.pointer = wl_seat_get_pointer(seat);
+        wl_pointer_add_listener(wl.pointer, &wl_pointer_listener, nullptr);
+    } else if (!has_pointer && wl.pointer) {
+        wl_pointer_release(wl.pointer);
+        wl.pointer = nullptr;
     }
 
-    if (has_keyboard && !nack__wl.keyboard) {
-        nack__wl.keyboard = wl_seat_get_keyboard(seat);
-        wl_keyboard_add_listener(nack__wl.keyboard, &nack__wl_keyboard_listener, nullptr);
-    } else if (!has_keyboard && nack__wl.keyboard) {
-        wl_keyboard_release(nack__wl.keyboard);
-        nack__wl.keyboard = nullptr;
+    if (has_keyboard && !wl.keyboard) {
+        wl.keyboard = wl_seat_get_keyboard(seat);
+        wl_keyboard_add_listener(wl.keyboard, &wl_keyboard_listener, nullptr);
+    } else if (!has_keyboard && wl.keyboard) {
+        wl_keyboard_release(wl.keyboard);
+        wl.keyboard = nullptr;
     }
 }
 
@@ -704,60 +706,62 @@ static void seat_name(void *data, struct wl_seat *seat, const char *name)
     (void)data; (void)seat; (void)name;
 }
 
-static const struct wl_seat_listener nack__wl_seat_listener = {
+static const struct wl_seat_listener wl_seat_listener = {
     .capabilities = seat_capabilities,
     .name = seat_name,
 };
 
-void nack__wl_seat_bind(uint32_t name, uint32_t version)
+void wl_seat_bind(uint32_t name, uint32_t version)
 {
-    if (nack__wl.seat)
+    if (wl.seat)
         return;
 
-    nack__wl.seat = (struct wl_seat *)wl_registry_bind(nack__wl.registry, name, &wl_seat_interface,
+    wl.seat = (struct wl_seat *)wl_registry_bind(wl.registry, name, &wl_seat_interface,
                                      version);
-    wl_seat_add_listener(nack__wl.seat, &nack__wl_seat_listener, nullptr);
+    wl_seat_add_listener(wl.seat, &wl_seat_listener, nullptr);
 
-    if (!nack__wl.xkb_context) {
-        nack__wl.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-        if (nack__wl.xkb_context) {
+    if (!wl.xkb_context) {
+        wl.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+        if (wl.xkb_context) {
             const char *locale = getenv("LC_ALL");
             if (!locale || !*locale) locale = getenv("LC_CTYPE");
             if (!locale || !*locale) locale = getenv("LANG");
             if (!locale || !*locale) locale = "C";
-            nack__wl.compose_table = xkb_compose_table_new_from_locale(
-                nack__wl.xkb_context, locale, XKB_COMPOSE_COMPILE_NO_FLAGS);
-            if (nack__wl.compose_table)
-                nack__wl.compose_state = xkb_compose_state_new(
-                    nack__wl.compose_table, XKB_COMPOSE_STATE_NO_FLAGS);
+            wl.compose_table = xkb_compose_table_new_from_locale(
+                wl.xkb_context, locale, XKB_COMPOSE_COMPILE_NO_FLAGS);
+            if (wl.compose_table)
+                wl.compose_state = xkb_compose_state_new(
+                    wl.compose_table, XKB_COMPOSE_STATE_NO_FLAGS);
         }
     }
 }
 
-void nack__wl_input_shutdown(void)
+void wl_input_shutdown(void)
 {
-    if (nack__wl.pointer)  wl_pointer_release(nack__wl.pointer);
-    if (nack__wl.keyboard) wl_keyboard_release(nack__wl.keyboard);
-    if (nack__wl.touch)    wl_touch_release(nack__wl.touch);
-    if (nack__wl.seat)     wl_seat_destroy(nack__wl.seat);
-    nack__wl.pointer = nullptr;
-    nack__wl.keyboard = nullptr;
-    nack__wl.touch = nullptr;
-    nack__wl.seat = nullptr;
+    if (wl.pointer)  wl_pointer_release(wl.pointer);
+    if (wl.keyboard) wl_keyboard_release(wl.keyboard);
+    if (wl.touch)    wl_touch_release(wl.touch);
+    if (wl.seat)     wl_seat_destroy(wl.seat);
+    wl.pointer = nullptr;
+    wl.keyboard = nullptr;
+    wl.touch = nullptr;
+    wl.seat = nullptr;
 
-    if (nack__wl.compose_state) xkb_compose_state_unref(nack__wl.compose_state);
-    if (nack__wl.compose_table) xkb_compose_table_unref(nack__wl.compose_table);
-    if (nack__wl.xkb_state)     xkb_state_unref(nack__wl.xkb_state);
-    if (nack__wl.xkb_keymap)    xkb_keymap_unref(nack__wl.xkb_keymap);
-    if (nack__wl.xkb_context)   xkb_context_unref(nack__wl.xkb_context);
-    nack__wl.compose_state = nullptr;
-    nack__wl.compose_table = nullptr;
-    nack__wl.xkb_state = nullptr;
-    nack__wl.xkb_keymap = nullptr;
-    nack__wl.xkb_context = nullptr;
+    if (wl.compose_state) xkb_compose_state_unref(wl.compose_state);
+    if (wl.compose_table) xkb_compose_table_unref(wl.compose_table);
+    if (wl.xkb_state)     xkb_state_unref(wl.xkb_state);
+    if (wl.xkb_keymap)    xkb_keymap_unref(wl.xkb_keymap);
+    if (wl.xkb_context)   xkb_context_unref(wl.xkb_context);
+    wl.compose_state = nullptr;
+    wl.compose_table = nullptr;
+    wl.xkb_state = nullptr;
+    wl.xkb_keymap = nullptr;
+    wl.xkb_context = nullptr;
 }
 
-void nack__wl_seat_release(void)
+void wl_seat_unbind(void)
 {
-    nack__wl_input_shutdown();
+    wl_input_shutdown();
 }
+
+} }   /* namespace nack::detail */

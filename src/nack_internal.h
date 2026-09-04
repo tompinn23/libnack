@@ -150,7 +150,7 @@ struct nack_gl_context {
     nack_window *owner = nullptr;   /* window whose pixel format the context matches */
 
     static nack_gl_context *create(nack_window *window,
-                                          const nack__gl_desc *desc);
+                                          const gl_desc *desc);
     static void destroy(nack_gl_context *context);
 };
 
@@ -217,7 +217,7 @@ public:
     virtual void wakeup() = 0;
 
     virtual nack_gl_context *gl_create(nack_window *w,
-                                              const nack__gl_desc *desc) = 0;
+                                              const gl_desc *desc) = 0;
     virtual void gl_destroy(nack_gl_context *ctx) = 0;
     virtual bool gl_make_current(nack_window *w,
                                  nack_gl_context *ctx) = 0;
@@ -352,19 +352,23 @@ Result guarded_win(const char *what, Body &&body, Result on_error)
 
 }   /* namespace nack */
 
+namespace nack { namespace detail {
+
 /* GL entry-point lookup cache (src/common/nack_proc_cache.c) */
-void *nack__proc_cache_get(const char *name, void *(*resolve)(const char *));
-void  nack__proc_cache_clear(void);
+void *proc_cache_get(const char *name, void *(*resolve)(const char *));
+void  proc_cache_clear(void);
 
 /* out must have room for 4 bytes plus a terminator. Spelled [5] rather
  * than the C99 [static 5], which MSVC does not implement. */
-uint32_t nack__utf8_encode(uint32_t codepoint, char out[5]);
-bool nack__codepoint_is_text(uint32_t codepoint);
+uint32_t utf8_encode(uint32_t codepoint, char out[5]);
+bool codepoint_is_text(uint32_t codepoint);
 
 /* Backend registration - each platform provides the ones it supports. */
-nack_backend_vt *nack__backend_win32(void);
-nack_backend_vt *nack__backend_cocoa(void);
-nack_backend_vt *nack__backend_wayland(void);
-nack_backend_vt *nack__backend_x11(void);
+nack_backend_vt *backend_win32(void);
+nack_backend_vt *backend_cocoa(void);
+nack_backend_vt *backend_wayland(void);
+nack_backend_vt *backend_x11(void);
+
+} }   /* namespace nack::detail */
 
 #endif /* NACK_INTERNAL_H_INCLUDED */

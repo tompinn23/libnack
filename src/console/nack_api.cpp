@@ -11,13 +11,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-nack_console_state nack__c;
+namespace nack { namespace detail {
 
-static void nack__log_to_stderr(const char *message, void *user_data)
+nack_console_state console_state;
+
+static void log_to_stderr(const char *message, void *user_data)
 {
     (void)user_data;
     fprintf(stderr, "%s\n", message);
 }
+
+} }   /* namespace nack::detail */
+using namespace nack::detail;
 
 bool nack_console_state::set_error(const char *fmt, ...)
 {
@@ -57,12 +62,16 @@ const char *nack_console_state::last_error() const
 /* Lifetime                                                           */
 /* ------------------------------------------------------------------ */
 
-static void nack__sync_framebuffer(void)
+namespace nack { namespace detail {
+
+static void sync_framebuffer(void)
 {
-    nack__c.fb_width = nack__c.window->fb_width;
-    nack__c.fb_height = nack__c.window->fb_height;
-    nack__render_update_viewport();
+    console_state.fb_width = console_state.window->fb_width;
+    console_state.fb_height = console_state.window->fb_height;
+    render_update_viewport();
 }
+
+} }   /* namespace nack::detail */
 
 bool nack_console_state::init(const nack_config *config)
 {
@@ -94,7 +103,7 @@ bool nack_console_state::init(const nack_config *config)
      * user can tell us what happened on a machine we cannot reach.
      */
     if (getenv("NACK_DEBUG"))
-        init_desc.log_fn = nack__log_to_stderr;
+        init_desc.log_fn = log_to_stderr;
     if (!state.init(&init_desc)) {
         const char *message = nullptr;
         state.last_error(&message);
@@ -136,13 +145,13 @@ bool nack_console_state::init(const nack_config *config)
                          message ? message : "unknown");
     }
 
-    if (!nack__gfx_init(window)) {
+    if (!gfx_init(window)) {
         nack_window::destroy(window);
         window = nullptr;
         state.shutdown();
         return false;   /* the backend already described the failure */
     }
-    nack__gfx_set_vsync(cfg.vsync);
+    gfx_set_vsync(cfg.vsync);
 
     initialized = true;   /* tileset loading checks this */
 
@@ -188,9 +197,9 @@ bool nack_console_state::init(const nack_config *config)
         window->set_fullscreen(true);
 
     window->show();
-    nack__sync_framebuffer();
+    sync_framebuffer();
 
-    start_time = nack__win_time_seconds();
+    start_time = win_time_seconds();
     last_frame_time = start_time;
     has_error = false;
     return true;
@@ -202,7 +211,7 @@ void nack_console_state::shutdown()
 
     /*
      * Tilesets hold textures, so they go before the renderer that owns them:
-     * nack__gfx_texture_destroy needs a live backend to hand the texture back
+     * gfx_texture_destroy needs a live backend to hand the texture back
      * to, and does nothing once there is not one. Shutting the renderer down
      * first leaked every atlas, the built-in font included.
      */
@@ -218,7 +227,7 @@ void nack_console_state::shutdown()
         nack_tileset::destroy(builtin);
     }
 
-    nack__gfx_shutdown();
+    gfx_shutdown();
 
     if (root) {
         nack_console *old_root = root;
@@ -250,40 +259,44 @@ void nack_console_state::present()
     if (!initialized)
         return;
 
-    nack__gfx_begin_frame(letterbox, fb_width, fb_height, viewport_x,
+    gfx_begin_frame(letterbox, fb_width, fb_height, viewport_x,
                           viewport_y, viewport_w, viewport_h);
-    nack__render_console(root);
-    nack__gfx_end_frame();
+    render_console(root);
+    gfx_end_frame();
 
-    now = nack__win_time_seconds();
+    now = win_time_seconds();
     delta = now - last_frame_time;
     last_frame_time = now;
 }
 
-void nack__debug_capture_frames(bool capture)
+namespace nack { namespace detail {
+
+void debug_capture_frames(bool capture)
 {
-    nack__gfx_set_capture(capture);
+    gfx_set_capture(capture);
 }
 
-bool nack__debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4])
+bool debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4])
 {
-    const nack_console *console = nack__c.root;
+    const nack_console *console = console_state.root;
     int px, py;
 
-    if (!nack__c.initialized || !console)
+    if (!console_state.initialized || !console)
         return false;
 
     /* Centre of the requested cell, in framebuffer coordinates. The GL origin
      * is bottom left, so the row is flipped. */
-    px = nack__c.viewport_x +
-         (int)(((double)cell_x + 0.5) * nack__c.viewport_w / console->columns);
-    py = nack__c.viewport_y +
-         (int)(((double)cell_y + 0.5) * nack__c.viewport_h / console->rows);
-    if (px < 0 || py < 0 || px >= nack__c.fb_width || py >= nack__c.fb_height)
+    px = console_state.viewport_x +
+         (int)(((double)cell_x + 0.5) * console_state.viewport_w / console->columns);
+    py = console_state.viewport_y +
+         (int)(((double)cell_y + 0.5) * console_state.viewport_h / console->rows);
+    if (px < 0 || py < 0 || px >= console_state.fb_width || py >= console_state.fb_height)
         return false;
 
-    return nack__gfx_read_pixel(px, py, rgba);
+    return gfx_read_pixel(px, py, rgba);
 }
+
+} }   /* namespace nack::detail */
 
 bool nack_console_state::should_close() const
 {
@@ -301,7 +314,7 @@ double nack_console_state::time() const
 {
     if (!initialized)
         return 0.0;
-    return nack__win_time_seconds() - start_time;
+    return win_time_seconds() - start_time;
 }
 
 double nack_console_state::delta_time() const
@@ -313,23 +326,25 @@ double nack_console_state::delta_time() const
 /* Events                                                             */
 /* ------------------------------------------------------------------ */
 
+namespace nack { namespace detail {
+
 /* Window pixels to console cells, accounting for the letterbox offset. */
-static void nack__pixel_to_cell(double px, double py, int *cx, int *cy,
+static void pixel_to_cell(double px, double py, int *cx, int *cy,
                                 int *out_px, int *out_py)
 {
-    const nack_console *console = nack__c.root;
-    double scale = nack__c.dpi_scale > 0.0f ? nack__c.dpi_scale : 1.0;
-    double fx = px * scale - nack__c.viewport_x;
-    double fy = py * scale - nack__c.viewport_y;
+    const nack_console *console = console_state.root;
+    double scale = console_state.dpi_scale > 0.0f ? console_state.dpi_scale : 1.0;
+    double fx = px * scale - console_state.viewport_x;
+    double fy = py * scale - console_state.viewport_y;
     int columns = console ? console->columns : 1;
     int rows = console ? console->rows : 1;
 
     if (out_px) *out_px = (int)fx;
     if (out_py) *out_py = (int)fy;
 
-    if (nack__c.viewport_w > 0 && nack__c.viewport_h > 0) {
-        *cx = (int)(fx * columns / nack__c.viewport_w);
-        *cy = (int)(fy * rows / nack__c.viewport_h);
+    if (console_state.viewport_w > 0 && console_state.viewport_h > 0) {
+        *cx = (int)(fx * columns / console_state.viewport_w);
+        *cy = (int)(fy * rows / console_state.viewport_h);
     } else {
         *cx = *cy = 0;
     }
@@ -340,7 +355,7 @@ static void nack__pixel_to_cell(double px, double py, int *cx, int *cy,
 }
 
 /* Returns false for window events the console does not surface. */
-static bool nack__translate(const nack_win_event *in,
+static bool translate(const nack_win_event *in,
                             nack_event *out)
 {
     memset(out, 0, sizeof *out);
@@ -368,26 +383,26 @@ static bool nack__translate(const nack_win_event *in,
 
     case NACK_WIN_EVENT_MOUSE_MOVE: {
         int cx, cy, px, py;
-        nack__pixel_to_cell(in->data.motion.x, in->data.motion.y, &cx, &cy,
+        pixel_to_cell(in->data.motion.x, in->data.motion.y, &cx, &cy,
                             &px, &py);
         out->type = NACK_EVENT_MOUSE_MOVE;
-        out->data.mouse.dx = cx - nack__c.mouse_cell_x;
-        out->data.mouse.dy = cy - nack__c.mouse_cell_y;
+        out->data.mouse.dx = cx - console_state.mouse_cell_x;
+        out->data.mouse.dy = cy - console_state.mouse_cell_y;
         out->data.mouse.x = cx;
         out->data.mouse.y = cy;
         out->data.mouse.px = px;
         out->data.mouse.py = py;
         out->data.mouse.mods = in->data.motion.mods;
         out->data.mouse.button = -1;
-        nack__c.mouse_cell_x = cx;
-        nack__c.mouse_cell_y = cy;
+        console_state.mouse_cell_x = cx;
+        console_state.mouse_cell_y = cy;
         return true;
     }
 
     case NACK_WIN_EVENT_MOUSE_DOWN:
     case NACK_WIN_EVENT_MOUSE_UP: {
         int cx, cy, px, py;
-        nack__pixel_to_cell(in->data.button.x, in->data.button.y, &cx, &cy,
+        pixel_to_cell(in->data.button.x, in->data.button.y, &cx, &cy,
                             &px, &py);
         out->type = in->type == NACK_WIN_EVENT_MOUSE_DOWN ? NACK_EVENT_MOUSE_DOWN
                                                           : NACK_EVENT_MOUSE_UP;
@@ -398,8 +413,8 @@ static bool nack__translate(const nack_win_event *in,
         out->data.mouse.button = in->data.button.button;
         out->data.mouse.clicks = in->data.button.click_count;
         out->data.mouse.mods = in->data.button.mods;
-        nack__c.mouse_cell_x = cx;
-        nack__c.mouse_cell_y = cy;
+        console_state.mouse_cell_x = cx;
+        console_state.mouse_cell_y = cy;
         return true;
     }
 
@@ -423,28 +438,28 @@ static bool nack__translate(const nack_win_event *in,
         return true;
 
     case NACK_WIN_EVENT_WINDOW_RESIZE: {
-        nack__c.fb_width = in->data.size.fb_width;
-        nack__c.fb_height = in->data.size.fb_height;
-        nack__gfx_resize(nack__c.fb_width, nack__c.fb_height);
+        console_state.fb_width = in->data.size.fb_width;
+        console_state.fb_height = in->data.size.fb_height;
+        gfx_resize(console_state.fb_width, console_state.fb_height);
         if (in->data.size.width > 0)
-            nack__c.dpi_scale = (float)in->data.size.fb_width /
+            console_state.dpi_scale = (float)in->data.size.fb_width /
                                 (float)in->data.size.width;
 
-        if (nack__c.auto_resize && nack__c.root && nack__c.font) {
-            int columns = nack__c.fb_width / nack__c.font->tile_width;
-            int rows = nack__c.fb_height / nack__c.font->tile_height;
+        if (console_state.auto_resize && console_state.root && console_state.font) {
+            int columns = console_state.fb_width / console_state.font->tile_width;
+            int rows = console_state.fb_height / console_state.font->tile_height;
             if (columns < 1) columns = 1;
             if (rows < 1) rows = 1;
-            if (columns != nack__c.root->columns || rows != nack__c.root->rows) {
-                nack__c.root->resize(columns, rows);
-                nack__render_update_viewport();
+            if (columns != console_state.root->columns || rows != console_state.root->rows) {
+                console_state.root->resize(columns, rows);
+                render_update_viewport();
                 out->type = NACK_EVENT_RESIZE;
                 out->data.resize.columns = columns;
                 out->data.resize.rows = rows;
                 return true;
             }
         }
-        nack__render_update_viewport();
+        render_update_viewport();
         return false;   /* a fixed console just re-letterboxes */
     }
 
@@ -453,6 +468,8 @@ static bool nack__translate(const nack_win_event *in,
     }
 }
 
+} }   /* namespace nack::detail */
+
 bool nack_console_state::poll_event(nack_event *event)
 {
     nack_win_event raw;
@@ -460,7 +477,7 @@ bool nack_console_state::poll_event(nack_event *event)
     if (!initialized || !event)
         return false;
     while (state.poll_event(&raw)) {
-        if (nack__translate(&raw, event))
+        if (translate(&raw, event))
             return true;
     }
     return false;
@@ -482,23 +499,23 @@ bool nack_console_state::wait_event_timeout(nack_event *event,
 
     if (seconds < 0.0) {
         while (state.wait_event(&raw)) {
-            if (nack__translate(&raw, event))
+            if (translate(&raw, event))
                 return true;
         }
         return false;
     }
 
     /* Window events the console hides must not shorten the caller's wait. */
-    deadline = nack__win_time_seconds() + seconds;
+    deadline = win_time_seconds() + seconds;
     for (;;) {
-        double remaining = deadline - nack__win_time_seconds();
+        double remaining = deadline - win_time_seconds();
         if (remaining < 0.0)
             remaining = 0.0;
         if (!state.wait_event_timeout(&raw, remaining))
             return false;
-        if (nack__translate(&raw, event))
+        if (translate(&raw, event))
             return true;
-        if (nack__win_time_seconds() >= deadline)
+        if (win_time_seconds() >= deadline)
             return false;
     }
 }
@@ -529,10 +546,14 @@ void nack_console_state::mouse_cell(int *x, int *y) const
     if (y) *y = mouse_cell_y;
 }
 
-const char *nack__key_name(nack_key key)
+namespace nack { namespace detail {
+
+const char *key_name(nack_key key)
 {
     return nack_key_get_name(key);
 }
+
+} }   /* namespace nack::detail */
 
 /* ------------------------------------------------------------------ */
 /* Window                                                             */
@@ -558,7 +579,7 @@ bool nack_console_state::is_fullscreen() const
 void nack_console_state::set_vsync(bool on)
 {
     vsync = on;
-    nack__gfx_set_vsync(on);
+    gfx_set_vsync(on);
 }
 
 void nack_console_state::set_font(nack_tileset *tileset)
@@ -575,20 +596,24 @@ void nack_console_state::set_font(nack_tileset *tileset)
  * no account of why - which is what happened to every clipboard failure
  * until now.
  */
-static bool nack__forward_error(const char *what)
+namespace nack { namespace detail {
+
+static bool forward_error(const char *what)
 {
     const char *message = nullptr;
 
     state.last_error(&message);
-    return nack__c.set_error("%s: %s", what,
+    return console_state.set_error("%s: %s", what,
                              message && *message ? message
                                                   : "no reason given");
 }
 
+} }   /* namespace nack::detail */
+
 bool nack_console_state::clipboard_set(const char *utf8)
 {
     if (!state.clipboard_set(utf8))
-        return nack__forward_error("cannot set the clipboard");
+        return forward_error("cannot set the clipboard");
     return true;
 }
 

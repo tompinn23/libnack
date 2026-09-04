@@ -11,9 +11,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+namespace nack { namespace detail {
+
 /* Decodes one codepoint and advances the cursor. Invalid bytes yield U+FFFD
  * and consume one byte, so bad input cannot stall the loop. */
-uint32_t nack__utf8_next(const char **cursor)
+uint32_t utf8_next(const char **cursor)
 {
     const unsigned char *p = (const unsigned char *)*cursor;
     uint32_t codepoint;
@@ -39,6 +41,8 @@ uint32_t nack__utf8_next(const char **cursor)
     return codepoint;
 }
 
+} }   /* namespace nack::detail */
+
 /* ------------------------------------------------------------------ */
 /* Lifetime                                                           */
 /* ------------------------------------------------------------------ */
@@ -46,7 +50,7 @@ uint32_t nack__utf8_next(const char **cursor)
 nack_console *nack_console::create(int columns, int rows)
 {
     if (columns < 1 || rows < 1) {
-        nack__c.set_error("console size %dx%d is not positive", columns, rows);
+        console_state.set_error("console size %dx%d is not positive", columns, rows);
         return nullptr;
     }
     return nack::guarded("cannot create a console", [&] {
@@ -61,7 +65,7 @@ nack_console *nack_console::create(int columns, int rows)
 
 void nack_console::destroy(nack_console *console)
 {
-    if (!console || console == nack__c.root)
+    if (!console || console == console_state.root)
         return;
     delete console;
 }
@@ -69,7 +73,7 @@ void nack_console::destroy(nack_console *console)
 bool nack_console::resize(int new_columns, int new_rows)
 {
     if (new_columns < 1 || new_rows < 1)
-        return nack__c.set_error("console size %dx%d is not positive",
+        return console_state.set_error("console size %dx%d is not positive",
                                  new_columns, new_rows);
     if (columns == new_columns && rows == new_rows)
         return true;
@@ -96,12 +100,12 @@ bool nack_console::resize(int new_columns, int new_rows)
 /* Drawing                                                            */
 /* ------------------------------------------------------------------ */
 
-static bool nack__in_bounds(const nack_console *c, int x, int y)
+static bool in_bounds(const nack_console *c, int x, int y)
 {
     return x >= 0 && y >= 0 && x < c->columns && y < c->rows;
 }
 
-static nack_cell *nack__cell_at(nack_console *c, int x, int y)
+static nack_cell *cell_at(nack_console *c, int x, int y)
 {
     return &c->cells[(size_t)y * (size_t)c->columns + (size_t)x];
 }
@@ -129,9 +133,9 @@ void nack_console::put(int x, int y, uint32_t codepoint, nack_color fg,
 {
     nack_cell *cell;
 
-    if (!nack__in_bounds(this, x, y))
+    if (!in_bounds(this, x, y))
         return;
-    cell = nack__cell_at(this, x, y);
+    cell = cell_at(this, x, y);
     cell->glyph = codepoint;
     cell->tileset = nullptr;
     cell->fg = fg;
@@ -144,11 +148,11 @@ void nack_console::put_tile(int x, int y, nack_tileset *tileset,
 {
     nack_cell *cell;
 
-    if (!nack__in_bounds(this, x, y) || !tileset)
+    if (!in_bounds(this, x, y) || !tileset)
         return;
     if (index < 0 || index >= tileset->count)
         return;
-    cell = nack__cell_at(this, x, y);
+    cell = cell_at(this, x, y);
     cell->glyph = (uint32_t)index;
     cell->tileset = tileset;
     cell->fg = tint;
@@ -159,23 +163,23 @@ void nack_console::set_glyph(int x, int y, uint32_t codepoint)
 {
     nack_cell *cell;
 
-    if (!nack__in_bounds(this, x, y))
+    if (!in_bounds(this, x, y))
         return;
-    cell = nack__cell_at(this, x, y);
+    cell = cell_at(this, x, y);
     cell->glyph = codepoint;
     cell->tileset = nullptr;
 }
 
 void nack_console::set_fg(int x, int y, nack_color fg)
 {
-    if (nack__in_bounds(this, x, y))
-        nack__cell_at(this, x, y)->fg = fg;
+    if (in_bounds(this, x, y))
+        cell_at(this, x, y)->fg = fg;
 }
 
 void nack_console::set_bg(int x, int y, nack_color bg)
 {
-    if (nack__in_bounds(this, x, y))
-        nack__cell_at(this, x, y)->bg = bg;
+    if (in_bounds(this, x, y))
+        cell_at(this, x, y)->bg = bg;
 }
 
 nack_cell nack_console::get(int x, int y) const
@@ -183,7 +187,7 @@ nack_cell nack_console::get(int x, int y) const
     nack_cell empty;
 
     memset(&empty, 0, sizeof empty);
-    if (!nack__in_bounds(this, x, y))
+    if (!in_bounds(this, x, y))
         return empty;
     return cells[(size_t)y * (size_t)columns + (size_t)x];
 }
@@ -197,7 +201,7 @@ int nack_console::print(int x, int y, nack_color fg,
     if (!utf8)
         return 0;
     while (*cursor) {
-        uint32_t codepoint = nack__utf8_next(&cursor);
+        uint32_t codepoint = utf8_next(&cursor);
         if (codepoint == '\n') {
             /* Printing is single-line; a newline ends it rather than
              * silently wrapping into whatever is below. */
@@ -248,7 +252,7 @@ int nack_console::print_wrapped(int x, int y, int width, int height,
         /* Measure the next word in codepoints, not bytes. */
         scan = cursor;
         while (*scan && *scan != ' ' && *scan != '\n') {
-            nack__utf8_next(&scan);
+            utf8_next(&scan);
             word_length++;
         }
 
@@ -258,7 +262,7 @@ int nack_console::print_wrapped(int x, int y, int width, int height,
         }
 
         while (word < scan) {
-            uint32_t codepoint = nack__utf8_next(&word);
+            uint32_t codepoint = utf8_next(&word);
             if (column >= width) {
                 row++;
                 column = 0;
@@ -313,7 +317,7 @@ void nack_console::draw_box(int x, int y, int width, int height,
         int start;
 
         while (*scan) {
-            nack__utf8_next(&scan);
+            utf8_next(&scan);
             length++;
         }
         if (length > width - 4)
@@ -331,7 +335,7 @@ void nack_console::draw_box(int x, int y, int width, int height,
 /* Blitting                                                           */
 /* ------------------------------------------------------------------ */
 
-static nack_color nack__blend(nack_color dst,
+static nack_color blend(nack_color dst,
                                      nack_color src, float alpha)
 {
     nack_color out;
@@ -367,20 +371,20 @@ void nack_console::blit_to(nack_console *dst, int src_x, int src_y,
             const nack_cell *from;
             nack_cell *to;
 
-            if (!nack__in_bounds(this, sx, sy) || !nack__in_bounds(dst, tx, ty))
+            if (!in_bounds(this, sx, sy) || !in_bounds(dst, tx, ty))
                 continue;
 
             from = &cells[(size_t)sy * (size_t)columns + (size_t)sx];
-            to = nack__cell_at(dst, tx, ty);
+            to = cell_at(dst, tx, ty);
 
-            to->bg = nack__blend(to->bg, from->bg, bg_alpha);
+            to->bg = blend(to->bg, from->bg, bg_alpha);
             if (fg_alpha > 0.0f) {
                 /* A blank source cell contributes background only, so an
                  * overlay does not punch holes in the text underneath. */
                 if (from->glyph != ' ' && from->glyph != 0) {
                     to->glyph = from->glyph;
                     to->tileset = from->tileset;
-                    to->fg = nack__blend(to->fg, from->fg, fg_alpha);
+                    to->fg = blend(to->fg, from->fg, fg_alpha);
                 }
             }
         }

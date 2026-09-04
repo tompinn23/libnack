@@ -81,13 +81,15 @@ struct nack_wgl_context {
     HGLRC glrc;
 };
 
-static nack_wgl_state nack__wgl;
+namespace nack { namespace detail {
+
+static nack_wgl_state wgl;
 
 /* ------------------------------------------------------------------ */
 /* Extension bootstrap                                                */
 /* ------------------------------------------------------------------ */
 
-static bool nack__wgl_has_extension(const char *list, const char *name)
+static bool wgl_has_extension(const char *list, const char *name)
 {
     if (!list || !name)
         return false;
@@ -108,11 +110,11 @@ static bool nack__wgl_has_extension(const char *list, const char *name)
  * separate from any real one because a window's pixel format can only be set
  * once, and the legacy format is not the one we want to keep.
  */
-static bool nack__wgl_bootstrap(void)
+static bool wgl_bootstrap(void)
 {
     HWND hwnd = CreateWindowExW(0, NACK_WIN32_CLASS_NAME, L"nack wgl bootstrap",
                                 WS_OVERLAPPEDWINDOW, 0, 0, 1, 1,
-                                NULL, NULL, nack__win32.instance, NULL);
+                                NULL, NULL, win32.instance, NULL);
     if (!hwnd)
         return state.fail(NACK_ERROR_PLATFORM, "failed to create WGL helper window");
 
@@ -138,7 +140,7 @@ static bool nack__wgl_bootstrap(void)
                           "no legacy pixel format available for WGL bootstrap");
     }
 
-    HGLRC glrc = nack__wgl.CreateContext(hdc);
+    HGLRC glrc = wgl.CreateContext(hdc);
     if (!glrc) {
         ReleaseDC(hwnd, hdc);
         DestroyWindow(hwnd);
@@ -149,76 +151,76 @@ static bool nack__wgl_bootstrap(void)
     HDC previous_dc = wglGetCurrentDC();
     HGLRC previous_glrc = wglGetCurrentContext();
 
-    if (!nack__wgl.MakeCurrent(hdc, glrc)) {
-        nack__wgl.DeleteContext(glrc);
+    if (!wgl.MakeCurrent(hdc, glrc)) {
+        wgl.DeleteContext(glrc);
         ReleaseDC(hwnd, hdc);
         DestroyWindow(hwnd);
         return state.fail(NACK_ERROR_CONTEXT_CREATION,
                           "failed to make WGL bootstrap context current");
     }
 
-    nack__wgl.GetExtensionsStringARB = (nack_pfn_wglGetExtensionsStringARB)(void *)
-        nack__wgl.GetProcAddress_("wglGetExtensionsStringARB");
-    nack__wgl.GetExtensionsStringEXT = (nack_pfn_wglGetExtensionsStringEXT)(void *)
-        nack__wgl.GetProcAddress_("wglGetExtensionsStringEXT");
+    wgl.GetExtensionsStringARB = (nack_pfn_wglGetExtensionsStringARB)(void *)
+        wgl.GetProcAddress_("wglGetExtensionsStringARB");
+    wgl.GetExtensionsStringEXT = (nack_pfn_wglGetExtensionsStringEXT)(void *)
+        wgl.GetProcAddress_("wglGetExtensionsStringEXT");
 
     const char *extensions = NULL;
-    if (nack__wgl.GetExtensionsStringARB)
-        extensions = nack__wgl.GetExtensionsStringARB(hdc);
-    else if (nack__wgl.GetExtensionsStringEXT)
-        extensions = nack__wgl.GetExtensionsStringEXT();
+    if (wgl.GetExtensionsStringARB)
+        extensions = wgl.GetExtensionsStringARB(hdc);
+    else if (wgl.GetExtensionsStringEXT)
+        extensions = wgl.GetExtensionsStringEXT();
 
-    nack__wgl.has_create_context =
-        nack__wgl_has_extension(extensions, "WGL_ARB_create_context");
-    nack__wgl.has_create_context_profile =
-        nack__wgl_has_extension(extensions, "WGL_ARB_create_context_profile");
-    nack__wgl.has_create_context_robustness =
-        nack__wgl_has_extension(extensions, "WGL_ARB_create_context_robustness");
-    nack__wgl.has_pixel_format =
-        nack__wgl_has_extension(extensions, "WGL_ARB_pixel_format");
-    nack__wgl.has_multisample =
-        nack__wgl_has_extension(extensions, "WGL_ARB_multisample");
-    nack__wgl.has_srgb =
-        nack__wgl_has_extension(extensions, "WGL_ARB_framebuffer_sRGB") ||
-        nack__wgl_has_extension(extensions, "WGL_EXT_framebuffer_sRGB");
-    nack__wgl.has_swap_control =
-        nack__wgl_has_extension(extensions, "WGL_EXT_swap_control");
-    nack__wgl.has_swap_control_tear =
-        nack__wgl_has_extension(extensions, "WGL_EXT_swap_control_tear");
+    wgl.has_create_context =
+        wgl_has_extension(extensions, "WGL_ARB_create_context");
+    wgl.has_create_context_profile =
+        wgl_has_extension(extensions, "WGL_ARB_create_context_profile");
+    wgl.has_create_context_robustness =
+        wgl_has_extension(extensions, "WGL_ARB_create_context_robustness");
+    wgl.has_pixel_format =
+        wgl_has_extension(extensions, "WGL_ARB_pixel_format");
+    wgl.has_multisample =
+        wgl_has_extension(extensions, "WGL_ARB_multisample");
+    wgl.has_srgb =
+        wgl_has_extension(extensions, "WGL_ARB_framebuffer_sRGB") ||
+        wgl_has_extension(extensions, "WGL_EXT_framebuffer_sRGB");
+    wgl.has_swap_control =
+        wgl_has_extension(extensions, "WGL_EXT_swap_control");
+    wgl.has_swap_control_tear =
+        wgl_has_extension(extensions, "WGL_EXT_swap_control_tear");
 
-    if (nack__wgl.has_create_context)
-        nack__wgl.CreateContextAttribsARB =
+    if (wgl.has_create_context)
+        wgl.CreateContextAttribsARB =
             (nack_pfn_wglCreateContextAttribsARB)(void *)
-                nack__wgl.GetProcAddress_("wglCreateContextAttribsARB");
-    if (nack__wgl.has_pixel_format)
-        nack__wgl.ChoosePixelFormatARB = (nack_pfn_wglChoosePixelFormatARB)(void *)
-            nack__wgl.GetProcAddress_("wglChoosePixelFormatARB");
-    if (nack__wgl.has_swap_control)
-        nack__wgl.SwapIntervalEXT = (nack_pfn_wglSwapIntervalEXT)(void *)
-            nack__wgl.GetProcAddress_("wglSwapIntervalEXT");
+                wgl.GetProcAddress_("wglCreateContextAttribsARB");
+    if (wgl.has_pixel_format)
+        wgl.ChoosePixelFormatARB = (nack_pfn_wglChoosePixelFormatARB)(void *)
+            wgl.GetProcAddress_("wglChoosePixelFormatARB");
+    if (wgl.has_swap_control)
+        wgl.SwapIntervalEXT = (nack_pfn_wglSwapIntervalEXT)(void *)
+            wgl.GetProcAddress_("wglSwapIntervalEXT");
 
-    nack__wgl.MakeCurrent(previous_dc, previous_glrc);
-    nack__wgl.DeleteContext(glrc);
+    wgl.MakeCurrent(previous_dc, previous_glrc);
+    wgl.DeleteContext(glrc);
     ReleaseDC(hwnd, hdc);
     DestroyWindow(hwnd);
     return true;
 }
 
-bool nack__wgl_init(void)
+bool wgl_init(void)
 {
-    if (nack__wgl.initialized)
+    if (wgl.initialized)
         return true;
-    memset(&nack__wgl, 0, sizeof nack__wgl);
+    memset(&wgl, 0, sizeof wgl);
 
-    nack__wgl.opengl32 = LoadLibraryA("opengl32.dll");
-    if (!nack__wgl.opengl32)
+    wgl.opengl32 = LoadLibraryA("opengl32.dll");
+    if (!wgl.opengl32)
         return state.fail(NACK_ERROR_NO_BACKEND, "cannot load opengl32.dll");
 
 #define NACK_WGL_LOAD(field, name, type)                                       \
-    nack__wgl.field = (type)(void *)GetProcAddress(nack__wgl.opengl32, name);  \
-    if (!nack__wgl.field) {                                                    \
-        FreeLibrary(nack__wgl.opengl32);                                       \
-        nack__wgl.opengl32 = NULL;                                             \
+    wgl.field = (type)(void *)GetProcAddress(wgl.opengl32, name);  \
+    if (!wgl.field) {                                                    \
+        FreeLibrary(wgl.opengl32);                                       \
+        wgl.opengl32 = NULL;                                             \
         return state.fail(NACK_ERROR_NO_BACKEND, "opengl32.dll lacks %s", name); \
     }
     NACK_WGL_LOAD(CreateContext, "wglCreateContext", HGLRC (WINAPI *)(HDC))
@@ -228,35 +230,35 @@ bool nack__wgl_init(void)
     NACK_WGL_LOAD(ShareLists, "wglShareLists", BOOL (WINAPI *)(HGLRC, HGLRC))
 #undef NACK_WGL_LOAD
 
-    if (!nack__wgl_bootstrap()) {
-        FreeLibrary(nack__wgl.opengl32);
-        nack__wgl.opengl32 = NULL;
+    if (!wgl_bootstrap()) {
+        FreeLibrary(wgl.opengl32);
+        wgl.opengl32 = NULL;
         return false;
     }
 
-    nack__wgl.initialized = true;
+    wgl.initialized = true;
     return true;
 }
 
-void nack__wgl_terminate(void)
+void wgl_terminate(void)
 {
-    if (nack__wgl.opengl32)
-        FreeLibrary(nack__wgl.opengl32);
-    memset(&nack__wgl, 0, sizeof nack__wgl);
+    if (wgl.opengl32)
+        FreeLibrary(wgl.opengl32);
+    memset(&wgl, 0, sizeof wgl);
 }
 
 /* ------------------------------------------------------------------ */
 /* Pixel format                                                       */
 /* ------------------------------------------------------------------ */
 
-bool nack__wgl_choose_pixel_format(nack_window *w, HDC hdc, int *out_format)
+bool wgl_choose_pixel_format(nack_window *w, HDC hdc, int *out_format)
 {
-    if (!nack__wgl.initialized)
+    if (!wgl.initialized)
         return false;
 
     const nack_framebuffer_desc *fb = &w->framebuffer;
 
-    if (nack__wgl.ChoosePixelFormatARB) {
+    if (wgl.ChoosePixelFormatARB) {
         int attribs[32];
         int n = 0;
         attribs[n++] = WGL_DRAW_TO_WINDOW_ARB;  attribs[n++] = TRUE;
@@ -270,11 +272,11 @@ bool nack__wgl_choose_pixel_format(nack_window *w, HDC hdc, int *out_format)
         attribs[n++] = WGL_ALPHA_BITS_ARB;      attribs[n++] = fb->alpha_bits;
         attribs[n++] = WGL_DEPTH_BITS_ARB;      attribs[n++] = fb->depth_bits;
         attribs[n++] = WGL_STENCIL_BITS_ARB;    attribs[n++] = fb->stencil_bits;
-        if (fb->samples > 0 && nack__wgl.has_multisample) {
+        if (fb->samples > 0 && wgl.has_multisample) {
             attribs[n++] = WGL_SAMPLE_BUFFERS_ARB; attribs[n++] = 1;
             attribs[n++] = WGL_SAMPLES_ARB;        attribs[n++] = fb->samples;
         }
-        if (fb->srgb && nack__wgl.has_srgb) {
+        if (fb->srgb && wgl.has_srgb) {
             attribs[n++] = WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB;
             attribs[n++] = TRUE;
         }
@@ -282,7 +284,7 @@ bool nack__wgl_choose_pixel_format(nack_window *w, HDC hdc, int *out_format)
 
         int format = 0;
         UINT count = 0;
-        if (nack__wgl.ChoosePixelFormatARB(hdc, attribs, NULL, 1, &format, &count) &&
+        if (wgl.ChoosePixelFormatARB(hdc, attribs, NULL, 1, &format, &count) &&
             count > 0) {
             *out_format = format;
             return true;
@@ -315,15 +317,15 @@ bool nack__wgl_choose_pixel_format(nack_window *w, HDC hdc, int *out_format)
 /* Contexts                                                           */
 /* ------------------------------------------------------------------ */
 
-nack_gl_context *nack__wgl_create_context(nack_window *w, const nack__gl_desc *desc,
+nack_gl_context *wgl_create_context(nack_window *w, const gl_desc *desc,
                                           nack_backend_vt *vt)
 {
-    if (!nack__wgl.initialized) {
+    if (!wgl.initialized) {
         state.fail(NACK_ERROR_UNSUPPORTED, "WGL is not available");
         return NULL;
     }
 
-    nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = win32_win(w);
     if (!ww || !ww->hdc) {
         state.fail(NACK_ERROR_INVALID_ARGUMENT, "window has no device context");
         return NULL;
@@ -342,7 +344,7 @@ nack_gl_context *nack__wgl_create_context(nack_window *w, const nack__gl_desc *d
 
     HGLRC glrc = NULL;
 
-    if (nack__wgl.CreateContextAttribsARB) {
+    if (wgl.CreateContextAttribsARB) {
         int attribs[16];
         int n = 0;
         int flags = 0;
@@ -356,10 +358,10 @@ nack_gl_context *nack__wgl_create_context(nack_window *w, const nack__gl_desc *d
             flags |= WGL_CONTEXT_DEBUG_BIT_ARB;
         if (desc->forward_compatible)
             flags |= WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
-        if (desc->robust && nack__wgl.has_create_context_robustness)
+        if (desc->robust && wgl.has_create_context_robustness)
             flags |= WGL_CONTEXT_ROBUST_ACCESS_BIT_ARB;
 
-        if (nack__wgl.has_create_context_profile)
+        if (wgl.has_create_context_profile)
             mask = (desc->profile == NACK__GL_PROFILE_CORE)
                        ? WGL_CONTEXT_CORE_PROFILE_BIT_ARB
                        : WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
@@ -374,7 +376,7 @@ nack_gl_context *nack__wgl_create_context(nack_window *w, const nack__gl_desc *d
         }
         attribs[n] = 0;
 
-        glrc = nack__wgl.CreateContextAttribsARB(ww->hdc, share, attribs);
+        glrc = wgl.CreateContextAttribsARB(ww->hdc, share, attribs);
     }
 
     if (!glrc && desc->major == 0) {
@@ -386,13 +388,13 @@ nack_gl_context *nack__wgl_create_context(nack_window *w, const nack__gl_desc *d
          * it - which is exactly what the Microsoft GDI generic renderer, the
          * only one a GPU-less Windows box has, does.
          */
-        glrc = nack__wgl.CreateContext(ww->hdc);
-        if (glrc && share && !nack__wgl.ShareLists(share, glrc))
+        glrc = wgl.CreateContext(ww->hdc);
+        if (glrc && share && !wgl.ShareLists(share, glrc))
             nack_log("nack: wglShareLists failed; contexts will not share objects");
     }
 
     if (!glrc) {
-        if (desc->major > 0 && !nack__wgl.CreateContextAttribsARB)
+        if (desc->major > 0 && !wgl.CreateContextAttribsARB)
             state.fail(NACK_ERROR_CONTEXT_CREATION,
                        "this OpenGL driver has no WGL_ARB_create_context, so "
                        "no GL %d.%d context can be made; it is most likely "
@@ -416,7 +418,7 @@ nack_gl_context *nack__wgl_create_context(nack_window *w, const nack__gl_desc *d
     return ctx.release();
 }
 
-void nack__wgl_destroy_context(nack_gl_context *ctx)
+void wgl_destroy_context(nack_gl_context *ctx)
 {
     if (!ctx)
         return;
@@ -424,61 +426,63 @@ void nack__wgl_destroy_context(nack_gl_context *ctx)
     if (native) {
         if (native->glrc) {
             if (wglGetCurrentContext() == native->glrc)
-                nack__wgl.MakeCurrent(NULL, NULL);
-            nack__wgl.DeleteContext(native->glrc);
+                wgl.MakeCurrent(NULL, NULL);
+            wgl.DeleteContext(native->glrc);
         }
         delete native;
     }
     delete ctx;
 }
 
-bool nack__wgl_make_current(nack_window *w, nack_gl_context *ctx)
+bool wgl_make_current(nack_window *w, nack_gl_context *ctx)
 {
     if (!ctx)
-        return nack__wgl.MakeCurrent(NULL, NULL) != FALSE;
+        return wgl.MakeCurrent(NULL, NULL) != FALSE;
     if (!w)
         return state.fail(NACK_ERROR_INVALID_ARGUMENT,
                           "gl_make_current needs a window for this context");
 
-    nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = win32_win(w);
     nack_wgl_context *native = (nack_wgl_context *)ctx->native;
-    if (!nack__wgl.MakeCurrent(ww->hdc, native->glrc))
+    if (!wgl.MakeCurrent(ww->hdc, native->glrc))
         return state.fail(NACK_ERROR_PLATFORM, "wglMakeCurrent failed (error %lu)",
                           GetLastError());
     ww->glrc = native->glrc;
     return true;
 }
 
-void nack__wgl_swap_buffers(nack_window *w)
+void wgl_swap_buffers(nack_window *w)
 {
-    nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = win32_win(w);
     if (ww && ww->hdc)
         SwapBuffers(ww->hdc);
 }
 
-void nack__wgl_set_swap_interval(int interval)
+void wgl_set_swap_interval(int interval)
 {
-    if (!nack__wgl.SwapIntervalEXT)
+    if (!wgl.SwapIntervalEXT)
         return;
-    if (interval < 0 && !nack__wgl.has_swap_control_tear)
+    if (interval < 0 && !wgl.has_swap_control_tear)
         interval = -interval;   /* no adaptive vsync; use plain vsync */
-    nack__wgl.SwapIntervalEXT(interval);
+    wgl.SwapIntervalEXT(interval);
 }
 
-void *nack__wgl_get_proc_address(const char *name)
+void *wgl_get_proc_address(const char *name)
 {
     /*
      * wglGetProcAddress only resolves extension entry points; the OpenGL 1.1
      * core that ships in opengl32.dll has to come from the module itself.
      */
-    if (nack__wgl.GetProcAddress_) {
-        PROC proc = nack__wgl.GetProcAddress_(name);
+    if (wgl.GetProcAddress_) {
+        PROC proc = wgl.GetProcAddress_(name);
         /* Some drivers return these sentinels instead of NULL on failure. */
         if (proc && proc != (PROC)1 && proc != (PROC)2 && proc != (PROC)3 &&
             proc != (PROC)-1)
             return (void *)proc;
     }
-    if (nack__wgl.opengl32)
-        return (void *)GetProcAddress(nack__wgl.opengl32, name);
+    if (wgl.opengl32)
+        return (void *)GetProcAddress(wgl.opengl32, name);
     return NULL;
 }
+
+} }   /* namespace nack::detail */

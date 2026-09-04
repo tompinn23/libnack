@@ -14,7 +14,7 @@
  * xcb_xkb_get_map_map_t and the set-explicit request, neither of which this
  * backend uses. If that ever changes, the field is spelled explicit_.
  */
-#define explicit nack__xcb_explicit
+#define explicit xcb_explicit
 #include <xcb/xkb.h>
 #undef explicit
 #include <xcb/xcb_cursor.h>
@@ -102,27 +102,31 @@ struct nack_xcb_state {
     std::optional<std::string> primary_received;
 };
 
-extern nack_xcb_state nack__xcb;
+namespace nack { namespace detail {
 
-static inline nack_xcb_window *nack__xcb_win(nack_window *w)
+extern nack_xcb_state xcb;
+
+static inline nack_xcb_window *xcb_win(nack_window *w)
 {
     return (nack_xcb_window *)w->native;
 }
 
 /* Selection handling lives in nack_xcb_clipboard.c. */
-bool  nack__xcb_handle_selection_request(xcb_selection_request_event_t *event);
-void  nack__xcb_handle_selection_clear(xcb_selection_clear_event_t *event);
+bool  xcb_handle_selection_request(xcb_selection_request_event_t *event);
+void  xcb_handle_selection_clear(xcb_selection_clear_event_t *event);
 /* Serves the next chunk of an outgoing INCR transfer. False if the event was
  * not part of one, so the caller can carry on handling it. */
-bool  nack__xcb_handle_property_notify(xcb_property_notify_event_t *event);
-bool  nack__xcb_clipboard_set(const char *utf8);
-const char *nack__xcb_clipboard_get(void);
-bool  nack__xcb_primary_set(const char *utf8);
-const char *nack__xcb_primary_get(void);
-void  nack__xcb_clipboard_shutdown(void);
+bool  xcb_handle_property_notify(xcb_property_notify_event_t *event);
+bool  xcb_clipboard_set(const char *utf8);
+const char *xcb_clipboard_get(void);
+bool  xcb_primary_set(const char *utf8);
+const char *xcb_primary_get(void);
+void  xcb_clipboard_shutdown(void);
 
 /* Dispatch a single event; shared with the nested loop the selection code
  * runs while waiting for a transfer to complete. */
-void nack__xcb_dispatch(xcb_generic_event_t *event);
+void xcb_dispatch(xcb_generic_event_t *event);
+
+} }   /* namespace nack::detail */
 
 #endif /* NACK_XCB_H_INCLUDED */

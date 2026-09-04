@@ -6,7 +6,9 @@
 
 #include <stdio.h>
 
-nack_cocoa_state nack__cocoa;
+namespace nack { namespace detail {
+
+nack_cocoa_state cocoa;
 
 /* ------------------------------------------------------------------ */
 /* Key mapping                                                        */
@@ -17,128 +19,128 @@ nack_cocoa_state nack__cocoa;
  * which is exactly the mapping we want; the character produced comes
  * separately through the text input client.
  */
-static void nack__cocoa_build_keycodes(void)
+static void cocoa_build_keycodes(void)
 {
-    memset(nack__cocoa.keycodes, 0, sizeof nack__cocoa.keycodes);
+    memset(cocoa.keycodes, 0, sizeof cocoa.keycodes);
 
-    nack__cocoa.keycodes[kVK_ANSI_A] = NACK_KEY_A;
-    nack__cocoa.keycodes[kVK_ANSI_B] = NACK_KEY_B;
-    nack__cocoa.keycodes[kVK_ANSI_C] = NACK_KEY_C;
-    nack__cocoa.keycodes[kVK_ANSI_D] = NACK_KEY_D;
-    nack__cocoa.keycodes[kVK_ANSI_E] = NACK_KEY_E;
-    nack__cocoa.keycodes[kVK_ANSI_F] = NACK_KEY_F;
-    nack__cocoa.keycodes[kVK_ANSI_G] = NACK_KEY_G;
-    nack__cocoa.keycodes[kVK_ANSI_H] = NACK_KEY_H;
-    nack__cocoa.keycodes[kVK_ANSI_I] = NACK_KEY_I;
-    nack__cocoa.keycodes[kVK_ANSI_J] = NACK_KEY_J;
-    nack__cocoa.keycodes[kVK_ANSI_K] = NACK_KEY_K;
-    nack__cocoa.keycodes[kVK_ANSI_L] = NACK_KEY_L;
-    nack__cocoa.keycodes[kVK_ANSI_M] = NACK_KEY_M;
-    nack__cocoa.keycodes[kVK_ANSI_N] = NACK_KEY_N;
-    nack__cocoa.keycodes[kVK_ANSI_O] = NACK_KEY_O;
-    nack__cocoa.keycodes[kVK_ANSI_P] = NACK_KEY_P;
-    nack__cocoa.keycodes[kVK_ANSI_Q] = NACK_KEY_Q;
-    nack__cocoa.keycodes[kVK_ANSI_R] = NACK_KEY_R;
-    nack__cocoa.keycodes[kVK_ANSI_S] = NACK_KEY_S;
-    nack__cocoa.keycodes[kVK_ANSI_T] = NACK_KEY_T;
-    nack__cocoa.keycodes[kVK_ANSI_U] = NACK_KEY_U;
-    nack__cocoa.keycodes[kVK_ANSI_V] = NACK_KEY_V;
-    nack__cocoa.keycodes[kVK_ANSI_W] = NACK_KEY_W;
-    nack__cocoa.keycodes[kVK_ANSI_X] = NACK_KEY_X;
-    nack__cocoa.keycodes[kVK_ANSI_Y] = NACK_KEY_Y;
-    nack__cocoa.keycodes[kVK_ANSI_Z] = NACK_KEY_Z;
+    cocoa.keycodes[kVK_ANSI_A] = NACK_KEY_A;
+    cocoa.keycodes[kVK_ANSI_B] = NACK_KEY_B;
+    cocoa.keycodes[kVK_ANSI_C] = NACK_KEY_C;
+    cocoa.keycodes[kVK_ANSI_D] = NACK_KEY_D;
+    cocoa.keycodes[kVK_ANSI_E] = NACK_KEY_E;
+    cocoa.keycodes[kVK_ANSI_F] = NACK_KEY_F;
+    cocoa.keycodes[kVK_ANSI_G] = NACK_KEY_G;
+    cocoa.keycodes[kVK_ANSI_H] = NACK_KEY_H;
+    cocoa.keycodes[kVK_ANSI_I] = NACK_KEY_I;
+    cocoa.keycodes[kVK_ANSI_J] = NACK_KEY_J;
+    cocoa.keycodes[kVK_ANSI_K] = NACK_KEY_K;
+    cocoa.keycodes[kVK_ANSI_L] = NACK_KEY_L;
+    cocoa.keycodes[kVK_ANSI_M] = NACK_KEY_M;
+    cocoa.keycodes[kVK_ANSI_N] = NACK_KEY_N;
+    cocoa.keycodes[kVK_ANSI_O] = NACK_KEY_O;
+    cocoa.keycodes[kVK_ANSI_P] = NACK_KEY_P;
+    cocoa.keycodes[kVK_ANSI_Q] = NACK_KEY_Q;
+    cocoa.keycodes[kVK_ANSI_R] = NACK_KEY_R;
+    cocoa.keycodes[kVK_ANSI_S] = NACK_KEY_S;
+    cocoa.keycodes[kVK_ANSI_T] = NACK_KEY_T;
+    cocoa.keycodes[kVK_ANSI_U] = NACK_KEY_U;
+    cocoa.keycodes[kVK_ANSI_V] = NACK_KEY_V;
+    cocoa.keycodes[kVK_ANSI_W] = NACK_KEY_W;
+    cocoa.keycodes[kVK_ANSI_X] = NACK_KEY_X;
+    cocoa.keycodes[kVK_ANSI_Y] = NACK_KEY_Y;
+    cocoa.keycodes[kVK_ANSI_Z] = NACK_KEY_Z;
 
-    nack__cocoa.keycodes[kVK_ANSI_0] = NACK_KEY_0;
-    nack__cocoa.keycodes[kVK_ANSI_1] = NACK_KEY_1;
-    nack__cocoa.keycodes[kVK_ANSI_2] = NACK_KEY_2;
-    nack__cocoa.keycodes[kVK_ANSI_3] = NACK_KEY_3;
-    nack__cocoa.keycodes[kVK_ANSI_4] = NACK_KEY_4;
-    nack__cocoa.keycodes[kVK_ANSI_5] = NACK_KEY_5;
-    nack__cocoa.keycodes[kVK_ANSI_6] = NACK_KEY_6;
-    nack__cocoa.keycodes[kVK_ANSI_7] = NACK_KEY_7;
-    nack__cocoa.keycodes[kVK_ANSI_8] = NACK_KEY_8;
-    nack__cocoa.keycodes[kVK_ANSI_9] = NACK_KEY_9;
+    cocoa.keycodes[kVK_ANSI_0] = NACK_KEY_0;
+    cocoa.keycodes[kVK_ANSI_1] = NACK_KEY_1;
+    cocoa.keycodes[kVK_ANSI_2] = NACK_KEY_2;
+    cocoa.keycodes[kVK_ANSI_3] = NACK_KEY_3;
+    cocoa.keycodes[kVK_ANSI_4] = NACK_KEY_4;
+    cocoa.keycodes[kVK_ANSI_5] = NACK_KEY_5;
+    cocoa.keycodes[kVK_ANSI_6] = NACK_KEY_6;
+    cocoa.keycodes[kVK_ANSI_7] = NACK_KEY_7;
+    cocoa.keycodes[kVK_ANSI_8] = NACK_KEY_8;
+    cocoa.keycodes[kVK_ANSI_9] = NACK_KEY_9;
 
-    nack__cocoa.keycodes[kVK_Return]              = NACK_KEY_ENTER;
-    nack__cocoa.keycodes[kVK_Escape]              = NACK_KEY_ESCAPE;
-    nack__cocoa.keycodes[kVK_Delete]              = NACK_KEY_BACKSPACE;
-    nack__cocoa.keycodes[kVK_ForwardDelete]       = NACK_KEY_DELETE;
-    nack__cocoa.keycodes[kVK_Tab]                 = NACK_KEY_TAB;
-    nack__cocoa.keycodes[kVK_Space]               = NACK_KEY_SPACE;
-    nack__cocoa.keycodes[kVK_ANSI_Minus]          = NACK_KEY_MINUS;
-    nack__cocoa.keycodes[kVK_ANSI_Equal]          = NACK_KEY_EQUAL;
-    nack__cocoa.keycodes[kVK_ANSI_LeftBracket]    = NACK_KEY_LEFT_BRACKET;
-    nack__cocoa.keycodes[kVK_ANSI_RightBracket]   = NACK_KEY_RIGHT_BRACKET;
-    nack__cocoa.keycodes[kVK_ANSI_Backslash]      = NACK_KEY_BACKSLASH;
-    nack__cocoa.keycodes[kVK_ANSI_Semicolon]      = NACK_KEY_SEMICOLON;
-    nack__cocoa.keycodes[kVK_ANSI_Quote]          = NACK_KEY_APOSTROPHE;
-    nack__cocoa.keycodes[kVK_ANSI_Grave]          = NACK_KEY_GRAVE;
-    nack__cocoa.keycodes[kVK_ANSI_Comma]          = NACK_KEY_COMMA;
-    nack__cocoa.keycodes[kVK_ANSI_Period]         = NACK_KEY_PERIOD;
-    nack__cocoa.keycodes[kVK_ANSI_Slash]          = NACK_KEY_SLASH;
-    nack__cocoa.keycodes[kVK_CapsLock]            = NACK_KEY_CAPS_LOCK;
-    nack__cocoa.keycodes[kVK_ISO_Section]         = NACK_KEY_NON_US_BACKSLASH;
+    cocoa.keycodes[kVK_Return]              = NACK_KEY_ENTER;
+    cocoa.keycodes[kVK_Escape]              = NACK_KEY_ESCAPE;
+    cocoa.keycodes[kVK_Delete]              = NACK_KEY_BACKSPACE;
+    cocoa.keycodes[kVK_ForwardDelete]       = NACK_KEY_DELETE;
+    cocoa.keycodes[kVK_Tab]                 = NACK_KEY_TAB;
+    cocoa.keycodes[kVK_Space]               = NACK_KEY_SPACE;
+    cocoa.keycodes[kVK_ANSI_Minus]          = NACK_KEY_MINUS;
+    cocoa.keycodes[kVK_ANSI_Equal]          = NACK_KEY_EQUAL;
+    cocoa.keycodes[kVK_ANSI_LeftBracket]    = NACK_KEY_LEFT_BRACKET;
+    cocoa.keycodes[kVK_ANSI_RightBracket]   = NACK_KEY_RIGHT_BRACKET;
+    cocoa.keycodes[kVK_ANSI_Backslash]      = NACK_KEY_BACKSLASH;
+    cocoa.keycodes[kVK_ANSI_Semicolon]      = NACK_KEY_SEMICOLON;
+    cocoa.keycodes[kVK_ANSI_Quote]          = NACK_KEY_APOSTROPHE;
+    cocoa.keycodes[kVK_ANSI_Grave]          = NACK_KEY_GRAVE;
+    cocoa.keycodes[kVK_ANSI_Comma]          = NACK_KEY_COMMA;
+    cocoa.keycodes[kVK_ANSI_Period]         = NACK_KEY_PERIOD;
+    cocoa.keycodes[kVK_ANSI_Slash]          = NACK_KEY_SLASH;
+    cocoa.keycodes[kVK_CapsLock]            = NACK_KEY_CAPS_LOCK;
+    cocoa.keycodes[kVK_ISO_Section]         = NACK_KEY_NON_US_BACKSLASH;
 
-    nack__cocoa.keycodes[kVK_F1]  = NACK_KEY_F1;
-    nack__cocoa.keycodes[kVK_F2]  = NACK_KEY_F2;
-    nack__cocoa.keycodes[kVK_F3]  = NACK_KEY_F3;
-    nack__cocoa.keycodes[kVK_F4]  = NACK_KEY_F4;
-    nack__cocoa.keycodes[kVK_F5]  = NACK_KEY_F5;
-    nack__cocoa.keycodes[kVK_F6]  = NACK_KEY_F6;
-    nack__cocoa.keycodes[kVK_F7]  = NACK_KEY_F7;
-    nack__cocoa.keycodes[kVK_F8]  = NACK_KEY_F8;
-    nack__cocoa.keycodes[kVK_F9]  = NACK_KEY_F9;
-    nack__cocoa.keycodes[kVK_F10] = NACK_KEY_F10;
-    nack__cocoa.keycodes[kVK_F11] = NACK_KEY_F11;
-    nack__cocoa.keycodes[kVK_F12] = NACK_KEY_F12;
-    nack__cocoa.keycodes[kVK_F13] = NACK_KEY_F13;
-    nack__cocoa.keycodes[kVK_F14] = NACK_KEY_F14;
-    nack__cocoa.keycodes[kVK_F15] = NACK_KEY_F15;
-    nack__cocoa.keycodes[kVK_F16] = NACK_KEY_F16;
-    nack__cocoa.keycodes[kVK_F17] = NACK_KEY_F17;
-    nack__cocoa.keycodes[kVK_F18] = NACK_KEY_F18;
-    nack__cocoa.keycodes[kVK_F19] = NACK_KEY_F19;
-    nack__cocoa.keycodes[kVK_F20] = NACK_KEY_F20;
+    cocoa.keycodes[kVK_F1]  = NACK_KEY_F1;
+    cocoa.keycodes[kVK_F2]  = NACK_KEY_F2;
+    cocoa.keycodes[kVK_F3]  = NACK_KEY_F3;
+    cocoa.keycodes[kVK_F4]  = NACK_KEY_F4;
+    cocoa.keycodes[kVK_F5]  = NACK_KEY_F5;
+    cocoa.keycodes[kVK_F6]  = NACK_KEY_F6;
+    cocoa.keycodes[kVK_F7]  = NACK_KEY_F7;
+    cocoa.keycodes[kVK_F8]  = NACK_KEY_F8;
+    cocoa.keycodes[kVK_F9]  = NACK_KEY_F9;
+    cocoa.keycodes[kVK_F10] = NACK_KEY_F10;
+    cocoa.keycodes[kVK_F11] = NACK_KEY_F11;
+    cocoa.keycodes[kVK_F12] = NACK_KEY_F12;
+    cocoa.keycodes[kVK_F13] = NACK_KEY_F13;
+    cocoa.keycodes[kVK_F14] = NACK_KEY_F14;
+    cocoa.keycodes[kVK_F15] = NACK_KEY_F15;
+    cocoa.keycodes[kVK_F16] = NACK_KEY_F16;
+    cocoa.keycodes[kVK_F17] = NACK_KEY_F17;
+    cocoa.keycodes[kVK_F18] = NACK_KEY_F18;
+    cocoa.keycodes[kVK_F19] = NACK_KEY_F19;
+    cocoa.keycodes[kVK_F20] = NACK_KEY_F20;
 
-    nack__cocoa.keycodes[kVK_Home]        = NACK_KEY_HOME;
-    nack__cocoa.keycodes[kVK_End]         = NACK_KEY_END;
-    nack__cocoa.keycodes[kVK_PageUp]      = NACK_KEY_PAGE_UP;
-    nack__cocoa.keycodes[kVK_PageDown]    = NACK_KEY_PAGE_DOWN;
-    nack__cocoa.keycodes[kVK_LeftArrow]   = NACK_KEY_LEFT;
-    nack__cocoa.keycodes[kVK_RightArrow]  = NACK_KEY_RIGHT;
-    nack__cocoa.keycodes[kVK_UpArrow]     = NACK_KEY_UP;
-    nack__cocoa.keycodes[kVK_DownArrow]   = NACK_KEY_DOWN;
+    cocoa.keycodes[kVK_Home]        = NACK_KEY_HOME;
+    cocoa.keycodes[kVK_End]         = NACK_KEY_END;
+    cocoa.keycodes[kVK_PageUp]      = NACK_KEY_PAGE_UP;
+    cocoa.keycodes[kVK_PageDown]    = NACK_KEY_PAGE_DOWN;
+    cocoa.keycodes[kVK_LeftArrow]   = NACK_KEY_LEFT;
+    cocoa.keycodes[kVK_RightArrow]  = NACK_KEY_RIGHT;
+    cocoa.keycodes[kVK_UpArrow]     = NACK_KEY_UP;
+    cocoa.keycodes[kVK_DownArrow]   = NACK_KEY_DOWN;
 
-    nack__cocoa.keycodes[kVK_ANSI_Keypad0]        = NACK_KEY_KP_0;
-    nack__cocoa.keycodes[kVK_ANSI_Keypad1]        = NACK_KEY_KP_1;
-    nack__cocoa.keycodes[kVK_ANSI_Keypad2]        = NACK_KEY_KP_2;
-    nack__cocoa.keycodes[kVK_ANSI_Keypad3]        = NACK_KEY_KP_3;
-    nack__cocoa.keycodes[kVK_ANSI_Keypad4]        = NACK_KEY_KP_4;
-    nack__cocoa.keycodes[kVK_ANSI_Keypad5]        = NACK_KEY_KP_5;
-    nack__cocoa.keycodes[kVK_ANSI_Keypad6]        = NACK_KEY_KP_6;
-    nack__cocoa.keycodes[kVK_ANSI_Keypad7]        = NACK_KEY_KP_7;
-    nack__cocoa.keycodes[kVK_ANSI_Keypad8]        = NACK_KEY_KP_8;
-    nack__cocoa.keycodes[kVK_ANSI_Keypad9]        = NACK_KEY_KP_9;
-    nack__cocoa.keycodes[kVK_ANSI_KeypadDecimal]  = NACK_KEY_KP_DECIMAL;
-    nack__cocoa.keycodes[kVK_ANSI_KeypadDivide]   = NACK_KEY_KP_DIVIDE;
-    nack__cocoa.keycodes[kVK_ANSI_KeypadMultiply] = NACK_KEY_KP_MULTIPLY;
-    nack__cocoa.keycodes[kVK_ANSI_KeypadMinus]    = NACK_KEY_KP_SUBTRACT;
-    nack__cocoa.keycodes[kVK_ANSI_KeypadPlus]     = NACK_KEY_KP_ADD;
-    nack__cocoa.keycodes[kVK_ANSI_KeypadEnter]    = NACK_KEY_KP_ENTER;
-    nack__cocoa.keycodes[kVK_ANSI_KeypadEquals]   = NACK_KEY_KP_EQUAL;
+    cocoa.keycodes[kVK_ANSI_Keypad0]        = NACK_KEY_KP_0;
+    cocoa.keycodes[kVK_ANSI_Keypad1]        = NACK_KEY_KP_1;
+    cocoa.keycodes[kVK_ANSI_Keypad2]        = NACK_KEY_KP_2;
+    cocoa.keycodes[kVK_ANSI_Keypad3]        = NACK_KEY_KP_3;
+    cocoa.keycodes[kVK_ANSI_Keypad4]        = NACK_KEY_KP_4;
+    cocoa.keycodes[kVK_ANSI_Keypad5]        = NACK_KEY_KP_5;
+    cocoa.keycodes[kVK_ANSI_Keypad6]        = NACK_KEY_KP_6;
+    cocoa.keycodes[kVK_ANSI_Keypad7]        = NACK_KEY_KP_7;
+    cocoa.keycodes[kVK_ANSI_Keypad8]        = NACK_KEY_KP_8;
+    cocoa.keycodes[kVK_ANSI_Keypad9]        = NACK_KEY_KP_9;
+    cocoa.keycodes[kVK_ANSI_KeypadDecimal]  = NACK_KEY_KP_DECIMAL;
+    cocoa.keycodes[kVK_ANSI_KeypadDivide]   = NACK_KEY_KP_DIVIDE;
+    cocoa.keycodes[kVK_ANSI_KeypadMultiply] = NACK_KEY_KP_MULTIPLY;
+    cocoa.keycodes[kVK_ANSI_KeypadMinus]    = NACK_KEY_KP_SUBTRACT;
+    cocoa.keycodes[kVK_ANSI_KeypadPlus]     = NACK_KEY_KP_ADD;
+    cocoa.keycodes[kVK_ANSI_KeypadEnter]    = NACK_KEY_KP_ENTER;
+    cocoa.keycodes[kVK_ANSI_KeypadEquals]   = NACK_KEY_KP_EQUAL;
 
-    nack__cocoa.keycodes[kVK_Shift]        = NACK_KEY_LEFT_SHIFT;
-    nack__cocoa.keycodes[kVK_RightShift]   = NACK_KEY_RIGHT_SHIFT;
-    nack__cocoa.keycodes[kVK_Control]      = NACK_KEY_LEFT_CTRL;
-    nack__cocoa.keycodes[kVK_RightControl] = NACK_KEY_RIGHT_CTRL;
-    nack__cocoa.keycodes[kVK_Option]       = NACK_KEY_LEFT_ALT;
-    nack__cocoa.keycodes[kVK_RightOption]  = NACK_KEY_RIGHT_ALT;
-    nack__cocoa.keycodes[kVK_Command]      = NACK_KEY_LEFT_SUPER;
-    nack__cocoa.keycodes[kVK_RightCommand] = NACK_KEY_RIGHT_SUPER;
-    nack__cocoa.keycodes[kVK_Function]     = NACK_KEY_UNKNOWN;
+    cocoa.keycodes[kVK_Shift]        = NACK_KEY_LEFT_SHIFT;
+    cocoa.keycodes[kVK_RightShift]   = NACK_KEY_RIGHT_SHIFT;
+    cocoa.keycodes[kVK_Control]      = NACK_KEY_LEFT_CTRL;
+    cocoa.keycodes[kVK_RightControl] = NACK_KEY_RIGHT_CTRL;
+    cocoa.keycodes[kVK_Option]       = NACK_KEY_LEFT_ALT;
+    cocoa.keycodes[kVK_RightOption]  = NACK_KEY_RIGHT_ALT;
+    cocoa.keycodes[kVK_Command]      = NACK_KEY_LEFT_SUPER;
+    cocoa.keycodes[kVK_RightCommand] = NACK_KEY_RIGHT_SUPER;
+    cocoa.keycodes[kVK_Function]     = NACK_KEY_UNKNOWN;
 }
 
-static uint32_t nack__cocoa_mods(NSEventModifierFlags flags)
+static uint32_t cocoa_mods(NSEventModifierFlags flags)
 {
     uint32_t mods = 0;
     if (flags & NSEventModifierFlagShift)    mods |= NACK_MOD_SHIFT;
@@ -149,18 +151,18 @@ static uint32_t nack__cocoa_mods(NSEventModifierFlags flags)
     return mods;
 }
 
-static nack_key nack__cocoa_key(unsigned short keycode)
+static nack_key cocoa_key(unsigned short keycode)
 {
-    return keycode < 256 ? nack__cocoa.keycodes[keycode] : NACK_KEY_UNKNOWN;
+    return keycode < 256 ? cocoa.keycodes[keycode] : NACK_KEY_UNKNOWN;
 }
 
 /* ------------------------------------------------------------------ */
 /* Geometry                                                           */
 /* ------------------------------------------------------------------ */
 
-void nack__cocoa_update_size(nack_window *w)
+void cocoa_update_size(nack_window *w)
 {
-    nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = cocoa_win(w);
     if (!cw || !cw->view)
         return;
 
@@ -174,8 +176,10 @@ void nack__cocoa_update_size(nack_window *w)
      * which on a Retina display is twice as many. */
     w->emit_resize((int)bounds.size.width, (int)bounds.size.height,
                       (int)backing.size.width, (int)backing.size.height);
-    nack__nsgl_update(w);
+    nsgl_update(w);
 }
+
+} }   /* namespace nack::detail */
 
 /* ------------------------------------------------------------------ */
 /* Window delegate                                                    */
@@ -204,13 +208,13 @@ void nack__cocoa_update_size(nack_window *w)
 - (void)windowDidResize:(NSNotification *)notification
 {
     (void)notification;
-    nack__cocoa_update_size(_nackWindow);
+    cocoa_update_size(_nackWindow);
 }
 
 - (void)windowDidMove:(NSNotification *)notification
 {
     (void)notification;
-    nack_cocoa_window *cw = nack__cocoa_win(_nackWindow);
+    nack_cocoa_window *cw = cocoa_win(_nackWindow);
     const NSRect frame = [cw->window frame];
     const NSRect content = [cw->window contentRectForFrameRect:frame];
     /* Cocoa's origin is bottom-left; report top-left like everywhere else. */
@@ -258,7 +262,7 @@ void nack__cocoa_update_size(nack_window *w)
 {
     (void)notification;
     /* Fires when the window moves between displays of different densities. */
-    nack__cocoa_update_size(_nackWindow);
+    cocoa_update_size(_nackWindow);
 }
 
 - (void)windowDidEnterFullScreen:(NSNotification *)notification
@@ -344,7 +348,7 @@ void nack__cocoa_update_size(nack_window *w)
 {
     const NSPoint location = [self nackMouseLocation:event];
     _nackWindow->emit_mouse_button(button, down, location.x, location.y,
-                            nack__cocoa_mods([event modifierFlags]));
+                            cocoa_mods([event modifierFlags]));
 }
 
 - (void)mouseDown:(NSEvent *)event
@@ -372,7 +376,7 @@ void nack__cocoa_update_size(nack_window *w)
 
 - (void)nackHandleMouseMove:(NSEvent *)event
 {
-    nack_cocoa_window *cw = nack__cocoa_win(_nackWindow);
+    nack_cocoa_window *cw = cocoa_win(_nackWindow);
 
     if (_nackWindow->cursor_mode == NACK_CURSOR_MODE_CAPTURED) {
         /* In captured mode the deltas are authoritative; the pointer itself
@@ -387,14 +391,14 @@ void nack__cocoa_update_size(nack_window *w)
         ev->data.motion.y = cw->virtual_y;
         ev->data.motion.dx = dx;
         ev->data.motion.dy = dy;
-        ev->data.motion.mods = nack__cocoa_mods([event modifierFlags]);
+        ev->data.motion.mods = cocoa_mods([event modifierFlags]);
         state.push_event(ev);
         return;
     }
 
     const NSPoint location = [self nackMouseLocation:event];
     _nackWindow->emit_mouse_move(location.x, location.y,
-                          nack__cocoa_mods([event modifierFlags]));
+                          cocoa_mods([event modifierFlags]));
 }
 
 - (void)mouseMoved:(NSEvent *)event        { [self nackHandleMouseMove:event]; }
@@ -417,7 +421,7 @@ void nack__cocoa_update_size(nack_window *w)
 - (void)cursorUpdate:(NSEvent *)event
 {
     (void)event;
-    nack_cocoa_window *cw = nack__cocoa_win(_nackWindow);
+    nack_cocoa_window *cw = cocoa_win(_nackWindow);
     if (cw->cursor)
         [cw->cursor set];
 }
@@ -435,7 +439,7 @@ void nack__cocoa_update_size(nack_window *w)
         dy *= 0.1;
     }
 
-    _nackWindow->emit_scroll(dx, dy, nack__cocoa_mods([event modifierFlags]),
+    _nackWindow->emit_scroll(dx, dy, cocoa_mods([event modifierFlags]),
                       precise);
 }
 
@@ -443,8 +447,8 @@ void nack__cocoa_update_size(nack_window *w)
 
 - (void)keyDown:(NSEvent *)event
 {
-    const nack_key key = nack__cocoa_key([event keyCode]);
-    const uint32_t mods = nack__cocoa_mods([event modifierFlags]);
+    const nack_key key = cocoa_key([event keyCode]);
+    const uint32_t mods = cocoa_mods([event modifierFlags]);
 
     _nackWindow->emit_key(key, [event keyCode], mods, true, [event isARepeat]);
 
@@ -458,8 +462,8 @@ void nack__cocoa_update_size(nack_window *w)
 
 - (void)keyUp:(NSEvent *)event
 {
-    _nackWindow->emit_key(nack__cocoa_key([event keyCode]), [event keyCode],
-                   nack__cocoa_mods([event modifierFlags]), false, false);
+    _nackWindow->emit_key(cocoa_key([event keyCode]), [event keyCode],
+                   cocoa_mods([event modifierFlags]), false, false);
 }
 
 - (void)flagsChanged:(NSEvent *)event
@@ -469,8 +473,8 @@ void nack__cocoa_update_size(nack_window *w)
      * release events, so the transition has to be derived by comparing
      * against the previous state.
      */
-    const uint32_t mods = nack__cocoa_mods([event modifierFlags]);
-    const nack_key key = nack__cocoa_key([event keyCode]);
+    const uint32_t mods = cocoa_mods([event modifierFlags]);
+    const nack_key key = cocoa_key([event keyCode]);
 
     if (key == NACK_KEY_UNKNOWN)
         return;
@@ -483,7 +487,7 @@ void nack__cocoa_update_size(nack_window *w)
         down = !state.keys[key];
     }
 
-    nack__cocoa.modifier_flags = mods;
+    cocoa.modifier_flags = mods;
     _nackWindow->emit_key(key, [event keyCode], mods, down, false);
 }
 
@@ -561,11 +565,11 @@ void nack__cocoa_update_size(nack_window *w)
 
         /* Function keys arrive here as private-use code points; those are
          * key events, not text. */
-        if (!nack__codepoint_is_text(codepoint))
+        if (!codepoint_is_text(codepoint))
             continue;
 
         char utf8[5];
-        nack__utf8_encode(codepoint, utf8);
+        utf8_encode(codepoint, utf8);
         _nackWindow->emit_text(utf8);
     }
 }
@@ -602,7 +606,7 @@ void nack__cocoa_update_size(nack_window *w)
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
     (void)notification;
-    nack__cocoa.finished_launching = true;
+    cocoa.finished_launching = true;
 
     /*
      * -stop: only takes effect after the next event is processed, so post a
@@ -625,16 +629,18 @@ void nack__cocoa_update_size(nack_window *w)
 {
     (void)notification;
     for (size_t i = 0; i < state.windows.size(); ++i)
-        nack__cocoa_update_size(state.windows[i]);
+        cocoa_update_size(state.windows[i]);
 }
 
 @end
+
+namespace nack { namespace detail {
 
 /* ------------------------------------------------------------------ */
 /* Window management                                                  */
 /* ------------------------------------------------------------------ */
 
-static bool nack__cocoa_window_create(nack_window *w,
+static bool cocoa_window_create(nack_window *w,
                                       const nack_window_desc *desc)
 {
     (void)desc;
@@ -715,9 +721,9 @@ static bool nack__cocoa_window_create(nack_window *w,
     return true;
 }
 
-static void nack__cocoa_window_destroy(nack_window *w)
+static void cocoa_window_destroy(nack_window *w)
 {
-    nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = cocoa_win(w);
     if (!cw)
         return;
 
@@ -737,38 +743,38 @@ static void nack__cocoa_window_destroy(nack_window *w)
     w->native = NULL;
 }
 
-static void nack__cocoa_window_show(nack_window *w, bool show)
+static void cocoa_window_show(nack_window *w, bool show)
 {
-    nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = cocoa_win(w);
     if (show) {
         [cw->window orderFront:nil];
-        nack__cocoa_update_size(w);
+        cocoa_update_size(w);
     } else {
         [cw->window orderOut:nil];
     }
 }
 
-static void nack__cocoa_window_focus(nack_window *w)
+static void cocoa_window_focus(nack_window *w)
 {
     [NSApp activateIgnoringOtherApps:YES];
-    [nack__cocoa_win(w)->window makeKeyAndOrderFront:nil];
+    [cocoa_win(w)->window makeKeyAndOrderFront:nil];
 }
 
-static void nack__cocoa_window_set_title(nack_window *w, const char *title)
+static void cocoa_window_set_title(nack_window *w, const char *title)
 {
     NSString *string = [NSString stringWithUTF8String:title];
     if (string)
-        [nack__cocoa_win(w)->window setTitle:string];
+        [cocoa_win(w)->window setTitle:string];
 }
 
-static void nack__cocoa_window_set_size(nack_window *w, int width, int height)
+static void cocoa_window_set_size(nack_window *w, int width, int height)
 {
-    [nack__cocoa_win(w)->window setContentSize:NSMakeSize(width, height)];
+    [cocoa_win(w)->window setContentSize:NSMakeSize(width, height)];
 }
 
-static void nack__cocoa_window_set_position(nack_window *w, int x, int y)
+static void cocoa_window_set_position(nack_window *w, int x, int y)
 {
-    nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = cocoa_win(w);
     const NSRect content = [cw->window contentRectForFrameRect:[cw->window frame]];
     const CGFloat screen_height = [[cw->window screen] frame].size.height;
     /* Convert our top-left origin back to Cocoa's bottom-left one. */
@@ -778,9 +784,9 @@ static void nack__cocoa_window_set_position(nack_window *w, int x, int y)
         [cw->window frameRectForContentRect:target].origin];
 }
 
-static void nack__cocoa_apply_size_hints(nack_window *w)
+static void cocoa_apply_size_hints(nack_window *w)
 {
-    nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = cocoa_win(w);
     [cw->window setContentMinSize:
         NSMakeSize(w->min_width > 0 ? w->min_width : 1,
                    w->min_height > 0 ? w->min_height : 1)];
@@ -792,48 +798,48 @@ static void nack__cocoa_apply_size_hints(nack_window *w)
                    w->inc_height > 0 ? w->inc_height : 1)];
 }
 
-static void nack__cocoa_window_set_fullscreen(nack_window *w, bool fullscreen)
+static void cocoa_window_set_fullscreen(nack_window *w, bool fullscreen)
 {
-    nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = cocoa_win(w);
     const bool is_fullscreen =
         ([cw->window styleMask] & NSWindowStyleMaskFullScreen) != 0;
     if (fullscreen != is_fullscreen)
         [cw->window toggleFullScreen:nil];
 }
 
-static void nack__cocoa_window_minimize(nack_window *w)
+static void cocoa_window_minimize(nack_window *w)
 {
-    [nack__cocoa_win(w)->window miniaturize:nil];
+    [cocoa_win(w)->window miniaturize:nil];
 }
 
-static void nack__cocoa_window_maximize(nack_window *w)
+static void cocoa_window_maximize(nack_window *w)
 {
-    nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = cocoa_win(w);
     if (![cw->window isZoomed])
         [cw->window zoom:nil];
 }
 
-static void nack__cocoa_window_restore(nack_window *w)
+static void cocoa_window_restore(nack_window *w)
 {
-    nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = cocoa_win(w);
     if ([cw->window isMiniaturized])
         [cw->window deminiaturize:nil];
     else if ([cw->window isZoomed])
         [cw->window zoom:nil];
 }
 
-static void nack__cocoa_window_request_attention(nack_window *w)
+static void cocoa_window_request_attention(nack_window *w)
 {
     (void)w;
     [NSApp requestUserAttention:NSInformationalRequest];
 }
 
-static void nack__cocoa_window_request_redraw(nack_window *w)
+static void cocoa_window_request_redraw(nack_window *w)
 {
-    [nack__cocoa_win(w)->view setNeedsDisplay:YES];
+    [cocoa_win(w)->view setNeedsDisplay:YES];
 }
 
-static void nack__cocoa_window_get_native(const nack_window *w,
+static void cocoa_window_get_native(const nack_window *w,
                                           nack_native_window *out)
 {
     nack_cocoa_window *cw = (nack_cocoa_window *)w->native;
@@ -847,7 +853,7 @@ static void nack__cocoa_window_get_native(const nack_window *w,
 /* Cursor                                                             */
 /* ------------------------------------------------------------------ */
 
-static NSCursor *nack__cocoa_cursor_for(nack_cursor_shape shape)
+static NSCursor *cocoa_cursor_for(nack_cursor_shape shape)
 {
     switch (shape) {
     case NACK_CURSOR_IBEAM:        return [NSCursor IBeamCursor];
@@ -867,19 +873,19 @@ static NSCursor *nack__cocoa_cursor_for(nack_cursor_shape shape)
     }
 }
 
-static void nack__cocoa_set_cursor_shape(nack_window *w,
+static void cocoa_set_cursor_shape(nack_window *w,
                                          nack_cursor_shape shape)
 {
-    nack_cocoa_window *cw = nack__cocoa_win(w);
-    cw->cursor = nack__cocoa_cursor_for(shape);
+    nack_cocoa_window *cw = cocoa_win(w);
+    cw->cursor = cocoa_cursor_for(shape);
     if (w->cursor_mode == NACK_CURSOR_MODE_NORMAL && w->focused)
         [cw->cursor set];
 }
 
-static void nack__cocoa_set_cursor_mode(nack_window *w,
+static void cocoa_set_cursor_mode(nack_window *w,
                                         nack_cursor_mode mode)
 {
-    nack_cocoa_window *cw = nack__cocoa_win(w);
+    nack_cocoa_window *cw = cocoa_win(w);
 
     const bool should_hide = (mode != NACK_CURSOR_MODE_NORMAL);
     if (should_hide != cw->cursor_hidden) {
@@ -906,10 +912,10 @@ static void nack__cocoa_set_cursor_mode(nack_window *w,
 /* Event loop                                                         */
 /* ------------------------------------------------------------------ */
 
-/* Marks the dummy event nack__cocoa_wakeup posts as ours. */
+/* Marks the dummy event cocoa_wakeup posts as ours. */
 #define NACK_COCOA_WAKEUP_SUBTYPE 0x4E41   /* 'NA' */
 
-static void nack__cocoa_drain(NSDate *deadline)
+static void cocoa_drain(NSDate *deadline)
 {
     for (;;) {
         NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
@@ -921,7 +927,7 @@ static void nack__cocoa_drain(NSDate *deadline)
         /*
          * Our own wakeup event becomes a queued NACK_WIN_EVENT_WAKEUP rather
          * than going to AppKit, which has nothing to do with it. Breaking the
-         * wait is only half of what nack__win_wakeup promises; the caller is
+         * wait is only half of what win_wakeup promises; the caller is
          * waiting for the event itself.
          */
         if ([event type] == NSEventTypeApplicationDefined &&
@@ -935,10 +941,10 @@ static void nack__cocoa_drain(NSDate *deadline)
     }
 }
 
-static void nack__cocoa_pump_events(double timeout)
+static void cocoa_pump_events(double timeout)
 {
     @autoreleasepool {
-        nack__cocoa_drain([NSDate distantPast]);
+        cocoa_drain([NSDate distantPast]);
 
         if (!state.queue.empty() || timeout == 0.0)
             return;
@@ -946,11 +952,11 @@ static void nack__cocoa_pump_events(double timeout)
         NSDate *deadline = (timeout < 0.0)
                                ? [NSDate distantFuture]
                                : [NSDate dateWithTimeIntervalSinceNow:timeout];
-        nack__cocoa_drain(deadline);
+        cocoa_drain(deadline);
     }
 }
 
-static void nack__cocoa_wakeup(void)
+static void cocoa_wakeup(void)
 {
     @autoreleasepool {
         /*
@@ -975,7 +981,7 @@ static void nack__cocoa_wakeup(void)
 /* Clipboard                                                          */
 /* ------------------------------------------------------------------ */
 
-static bool nack__cocoa_clipboard_set(const char *utf8)
+static bool cocoa_clipboard_set(const char *utf8)
 {
     @autoreleasepool {
         NSString *string = [NSString stringWithUTF8String:utf8];
@@ -986,12 +992,12 @@ static bool nack__cocoa_clipboard_set(const char *utf8)
         [pasteboard clearContents];
         if (![pasteboard setString:string forType:NSPasteboardTypeString])
             return state.fail(NACK_ERROR_PLATFORM, "NSPasteboard setString failed");
-        nack__cocoa.clipboard_change_count = [pasteboard changeCount];
+        cocoa.clipboard_change_count = [pasteboard changeCount];
         return true;
     }
 }
 
-static const char *nack__cocoa_clipboard_get(void)
+static const char *cocoa_clipboard_get(void)
 {
     @autoreleasepool {
         NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
@@ -1003,8 +1009,8 @@ static const char *nack__cocoa_clipboard_get(void)
         if (!utf8)
             return NULL;
 
-        nack__cocoa.clipboard_text = utf8;
-        return nack__cocoa.clipboard_text->c_str();
+        cocoa.clipboard_text = utf8;
+        return cocoa.clipboard_text->c_str();
     }
 }
 
@@ -1012,7 +1018,7 @@ static const char *nack__cocoa_clipboard_get(void)
 /* Init / shutdown                                                    */
 /* ------------------------------------------------------------------ */
 
-static void nack__cocoa_create_menu_bar(void)
+static void cocoa_create_menu_bar(void)
 {
     /*
      * A process launched outside a bundle has no menu bar, and without at
@@ -1052,10 +1058,10 @@ static void nack__cocoa_create_menu_bar(void)
     [bar release];
 }
 
-static bool nack__cocoa_init(const nack_win_init_desc *desc)
+static bool cocoa_init(const nack_win_init_desc *desc)
 {
     (void)desc;
-    nack__cocoa = nack_cocoa_state{};
+    cocoa = nack_cocoa_state{};
 
     @autoreleasepool {
         [NSApplication sharedApplication];
@@ -1066,11 +1072,11 @@ static bool nack__cocoa_init(const nack_win_init_desc *desc)
          */
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 
-        nack__cocoa.app_delegate = [[NackApplicationDelegate alloc] init];
-        [NSApp setDelegate:nack__cocoa.app_delegate];
+        cocoa.app_delegate = [[NackApplicationDelegate alloc] init];
+        [NSApp setDelegate:cocoa.app_delegate];
 
         if (![NSApp mainMenu])
-            nack__cocoa_create_menu_bar();
+            cocoa_create_menu_bar();
 
         /* Run once so AppKit finishes launching; the delegate stops it. */
         if (![NSApp isRunning])
@@ -1078,18 +1084,18 @@ static bool nack__cocoa_init(const nack_win_init_desc *desc)
 
         [NSApp activateIgnoringOtherApps:YES];
 
-        nack__cocoa_build_keycodes();
+        cocoa_build_keycodes();
     }
     return true;
 }
 
-static void nack__cocoa_shutdown(void)
+static void cocoa_shutdown(void)
 {
     @autoreleasepool {
-        nack__nsgl_terminate();
+        nsgl_terminate();
         [NSApp setDelegate:nil];
-        [nack__cocoa.app_delegate release];
-        nack__cocoa = nack_cocoa_state{};
+        [cocoa.app_delegate release];
+        cocoa = nack_cocoa_state{};
     }
 }
 
@@ -1104,129 +1110,131 @@ public:
 
     bool init(const nack_win_init_desc *desc) override
     {
-        return nack__cocoa_init(desc);
+        return cocoa_init(desc);
     }
     void shutdown() override
     {
-        nack__cocoa_shutdown();
+        cocoa_shutdown();
     }
     bool window_create(nack_window *w, const nack_window_desc *desc) override
     {
-        return nack__cocoa_window_create(w, desc);
+        return cocoa_window_create(w, desc);
     }
     void window_destroy(nack_window *w) override
     {
-        nack__cocoa_window_destroy(w);
+        cocoa_window_destroy(w);
     }
     void window_show(nack_window *w, bool show) override
     {
-        nack__cocoa_window_show(w, show);
+        cocoa_window_show(w, show);
     }
     void window_set_title(nack_window *w, const char *title) override
     {
-        nack__cocoa_window_set_title(w, title);
+        cocoa_window_set_title(w, title);
     }
     void window_set_size(nack_window *w, int width, int height) override
     {
-        nack__cocoa_window_set_size(w, width, height);
+        cocoa_window_set_size(w, width, height);
     }
     void window_apply_size_hints(nack_window *w) override
     {
-        nack__cocoa_apply_size_hints(w);
+        cocoa_apply_size_hints(w);
     }
     void window_set_fullscreen(nack_window *w, bool fullscreen) override
     {
-        nack__cocoa_window_set_fullscreen(w, fullscreen);
+        cocoa_window_set_fullscreen(w, fullscreen);
     }
     void window_minimize(nack_window *w) override
     {
-        nack__cocoa_window_minimize(w);
+        cocoa_window_minimize(w);
     }
     void window_maximize(nack_window *w) override
     {
-        nack__cocoa_window_maximize(w);
+        cocoa_window_maximize(w);
     }
     void window_restore(nack_window *w) override
     {
-        nack__cocoa_window_restore(w);
+        cocoa_window_restore(w);
     }
     void window_request_redraw(nack_window *w) override
     {
-        nack__cocoa_window_request_redraw(w);
+        cocoa_window_request_redraw(w);
     }
     void window_set_cursor_shape(nack_window *w, nack_cursor_shape shape) override
     {
-        nack__cocoa_set_cursor_shape(w, shape);
+        cocoa_set_cursor_shape(w, shape);
     }
     void window_set_cursor_mode(nack_window *w, nack_cursor_mode mode) override
     {
-        nack__cocoa_set_cursor_mode(w, mode);
+        cocoa_set_cursor_mode(w, mode);
     }
     void window_get_native(const nack_window *w, nack_native_window *out) override
     {
-        nack__cocoa_window_get_native(w, out);
+        cocoa_window_get_native(w, out);
     }
     void window_focus(nack_window *w) override
     {
-        nack__cocoa_window_focus(w);
+        cocoa_window_focus(w);
     }
     void window_set_position(nack_window *w, int x, int y) override
     {
-        nack__cocoa_window_set_position(w, x, y);
+        cocoa_window_set_position(w, x, y);
     }
     void window_request_attention(nack_window *w) override
     {
-        nack__cocoa_window_request_attention(w);
+        cocoa_window_request_attention(w);
     }
     void pump_events(double timeout) override
     {
-        nack__cocoa_pump_events(timeout);
+        cocoa_pump_events(timeout);
     }
     void wakeup() override
     {
-        nack__cocoa_wakeup();
+        cocoa_wakeup();
     }
     nack_gl_context *gl_create(nack_window *w,
-                                      const nack__gl_desc *desc) override
+                                      const gl_desc *desc) override
     {
-        return nack__nsgl_create_context(w, desc, this);
+        return nsgl_create_context(w, desc, this);
     }
     void gl_destroy(nack_gl_context *ctx) override
     {
-        nack__nsgl_destroy_context(ctx);
+        nsgl_destroy_context(ctx);
     }
     bool gl_make_current(nack_window *w, nack_gl_context *ctx) override
     {
-        return nack__nsgl_make_current(w, ctx);
+        return nsgl_make_current(w, ctx);
     }
     void gl_swap_buffers(nack_window *w) override
     {
-        nack__nsgl_swap_buffers(w);
+        nsgl_swap_buffers(w);
     }
     void gl_set_swap_interval(int interval) override
     {
-        nack__nsgl_set_swap_interval(interval);
+        nsgl_set_swap_interval(interval);
     }
     void *gl_get_proc_address(const char *name) override
     {
-        return nack__nsgl_get_proc_address(name);
+        return nsgl_get_proc_address(name);
     }
     bool clipboard_set(const char *utf8) override
     {
-        return nack__cocoa_clipboard_set(utf8);
+        return cocoa_clipboard_set(utf8);
     }
     const char *clipboard_get() override
     {
-        return nack__cocoa_clipboard_get();
+        return cocoa_clipboard_get();
     }
 };
 
-cocoa_backend nack__cocoa_backend_instance;
+cocoa_backend cocoa_backend_instance;
 
 }   /* namespace */
 
 
-nack_backend_vt *nack__backend_cocoa(void)
+nack_backend_vt *backend_cocoa(void)
 {
-    return &nack__cocoa_backend_instance;
+    return &cocoa_backend_instance;
 }
+
+} }   /* namespace nack::detail */

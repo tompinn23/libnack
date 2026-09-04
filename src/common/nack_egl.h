@@ -35,32 +35,32 @@ struct nack_egl_context {
     bool is_es;
 };
 
-extern nack_egl_state nack__egl;
+extern nack_egl_state egl;
 
 /* platform: EGL_PLATFORM_XCB_EXT / EGL_PLATFORM_X11_KHR / EGL_PLATFORM_WAYLAND_KHR.
  * attribs may be NULL. Falls back to eglGetDisplay when the platform base
  * extension is unavailable. */
-bool nack__egl_init(EGLenum platform, void *native_display, const EGLAttrib *attribs);
-void nack__egl_terminate(void);
+bool egl_init(EGLenum platform, void *native_display, const EGLAttrib *attribs);
+void egl_terminate(void);
 
-bool nack__egl_choose_config(const nack_framebuffer_desc *fb, nack__gl_profile profile,
+bool egl_choose_config(const nack_framebuffer_desc *fb, gl_profile profile,
                              int gl_major, EGLConfig *out_config,
                              EGLint *out_visual_id);
 
 /* Creates the EGLContext. The window's surface is created separately so the
  * backend can pick the right native window representation. */
-nack_gl_context *nack__egl_create_context(nack_window *w, const nack__gl_desc *desc,
+nack_gl_context *egl_create_context(nack_window *w, const gl_desc *desc,
                                           EGLConfig config, nack_backend_vt *vt);
-void nack__egl_destroy_context(nack_gl_context *ctx);
+void egl_destroy_context(nack_gl_context *ctx);
 
-EGLSurface nack__egl_create_window_surface(EGLConfig config, void *native_window,
+EGLSurface egl_create_window_surface(EGLConfig config, void *native_window,
                                            bool use_pointer, bool srgb);
 
-bool  nack__egl_make_current(EGLSurface surface, nack_gl_context *ctx);
-void  nack__egl_swap_buffers(EGLSurface surface);
-void  nack__egl_set_swap_interval(int interval);
-void *nack__egl_get_proc_address(const char *name);
+bool  egl_make_current(EGLSurface surface, nack_gl_context *ctx);
+void  egl_swap_buffers(EGLSurface surface);
+void  egl_set_swap_interval(int interval);
+void *egl_get_proc_address(const char *name);
 
-const char *nack__egl_error_string(EGLint error);
+const char *egl_error_string(EGLint error);
 
 #endif /* NACK_EGL_H_INCLUDED */

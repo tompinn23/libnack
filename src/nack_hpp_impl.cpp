@@ -10,9 +10,9 @@
  * one file that includes both worlds and converts between them at the
  * seam.
  *
- * Every method here is a thin conversion in front of a call already renamed
- * with a nack__ prefix in nack_api.cpp / nack_console.cpp / nack_tileset.cpp
- * - the logic itself did not move, only what name reaches it and from where.
+ * Every method here is a thin conversion in front of a call already living
+ * in nack_api.cpp / nack_console.cpp / nack_tileset.cpp - the logic itself
+ * did not move, only what name reaches it and from where.
  */
 #include "console/nack_console_internal.h"
 
@@ -29,13 +29,13 @@ namespace nack {
 
 static std::string last_error_or(const char *fallback)
 {
-    const char *why = nack__c.last_error();
+    const char *why = console_state.last_error();
     return why ? std::string(why) : std::string(fallback);
 }
 
 std::string_view last_error()
 {
-    const char *why = nack__c.last_error();
+    const char *why = console_state.last_error();
     return why ? std::string_view(why) : std::string_view();
 }
 
@@ -182,7 +182,7 @@ static bool is_terminated(std::string_view text)
 
 std::string_view key_name(key which)
 {
-    return nack__key_name(static_cast<nack_key>(which));
+    return detail::key_name(static_cast<nack_key>(which));
 }
 
 /* ------------------------------------------------------------------------ */
@@ -366,12 +366,12 @@ bool tileset::map_range(std::uint32_t first, std::uint32_t last,
 /* The application                                                           */
 /* ------------------------------------------------------------------------ */
 
-console_view root() { return console_view(nack__c.root); }
+console_view root() { return console_view(console_state.root); }
 
 app::app(const config &settings)
 {
     nack_config cfg = to_core(settings);
-    if (!nack__c.init(&cfg))
+    if (!console_state.init(&cfg))
         detail::fail(last_error_or("cannot start libnack"));
     active = true;
 }
@@ -379,7 +379,7 @@ app::app(const config &settings)
 std::optional<app> app::try_create(const config &settings)
 {
     nack_config cfg = to_core(settings);
-    if (!nack__c.init(&cfg))
+    if (!console_state.init(&cfg))
         return std::nullopt;
     return app(adopt{});
 }
@@ -388,7 +388,7 @@ app &app::operator=(app &&other) noexcept
 {
     if (this != &other) {
         if (active)
-            nack__c.shutdown();
+            console_state.shutdown();
         active = std::exchange(other.active, false);
     }
     return *this;
@@ -397,25 +397,25 @@ app &app::operator=(app &&other) noexcept
 app::~app()
 {
     if (active)
-        nack__c.shutdown();
+        console_state.shutdown();
 }
 
-void app::present() const { nack__c.present(); }
+void app::present() const { console_state.present(); }
 
-bool app::should_close() const { return nack__c.should_close(); }
+bool app::should_close() const { return console_state.should_close(); }
 
 void app::set_should_close(bool value) const
 {
-    nack__c.set_should_close(value);
+    console_state.set_should_close(value);
 }
 
-double app::time() const { return nack__c.time(); }
-double app::delta_time() const { return nack__c.delta_time(); }
+double app::time() const { return console_state.time(); }
+double app::delta_time() const { return console_state.delta_time(); }
 
 std::optional<event> app::poll() const
 {
     nack_event ev;
-    while (nack__c.poll_event(&ev)) {
+    while (console_state.poll_event(&ev)) {
         if (auto out = detail::to_event(ev))
             return out;
     }
@@ -425,7 +425,7 @@ std::optional<event> app::poll() const
 std::optional<event> app::wait() const
 {
     nack_event ev;
-    while (nack__c.wait_event(&ev)) {
+    while (console_state.wait_event(&ev)) {
         if (auto out = detail::to_event(ev))
             return out;
     }
@@ -435,58 +435,58 @@ std::optional<event> app::wait() const
 std::optional<event> app::wait_for(double seconds) const
 {
     nack_event ev;
-    while (nack__c.wait_event_timeout(&ev, seconds)) {
+    while (console_state.wait_event_timeout(&ev, seconds)) {
         if (auto out = detail::to_event(ev))
             return out;
     }
     return std::nullopt;
 }
 
-void app::wake() const { nack__c.wakeup(); }
+void app::wake() const { console_state.wakeup(); }
 
 bool app::key_down(nack::key which) const
 {
-    return nack__c.key_down(static_cast<nack_key>(which));
+    return console_state.key_down(static_cast<nack_key>(which));
 }
 
 nack::mod app::mods() const
 {
-    return static_cast<nack::mod>(nack__c.mods());
+    return static_cast<nack::mod>(console_state.mods());
 }
 
 bool app::mouse_down(nack::mouse_button button) const
 {
-    return nack__c.mouse_down(static_cast<int>(button));
+    return console_state.mouse_down(static_cast<int>(button));
 }
 
 std::pair<int, int> app::mouse_cell() const
 {
     int x = 0, y = 0;
-    nack__c.mouse_cell(&x, &y);
+    console_state.mouse_cell(&x, &y);
     return { x, y };
 }
 
-void app::set_title(const char *title) const { nack__c.set_title(title); }
+void app::set_title(const char *title) const { console_state.set_title(title); }
 
-void app::set_fullscreen(bool on) const { nack__c.set_fullscreen(on); }
+void app::set_fullscreen(bool on) const { console_state.set_fullscreen(on); }
 
-bool app::fullscreen() const { return nack__c.is_fullscreen(); }
+bool app::fullscreen() const { return console_state.is_fullscreen(); }
 
-void app::set_vsync(bool on) const { nack__c.set_vsync(on); }
+void app::set_vsync(bool on) const { console_state.set_vsync(on); }
 
 void app::set_font(nack::tileset &tiles) const
 {
-    nack__c.set_font(tiles.get());
+    console_state.set_font(tiles.get());
 }
 
 bool app::set_clipboard(const char *utf8) const
 {
-    return nack__c.clipboard_set(utf8);
+    return console_state.clipboard_set(utf8);
 }
 
 std::string app::clipboard() const
 {
-    const char *text = nack__c.clipboard_get();
+    const char *text = console_state.clipboard_get();
     return text ? std::string(text) : std::string();
 }
 

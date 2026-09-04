@@ -7,8 +7,8 @@
  *
  * The OpenGL backend is compiled into the macOS build too, and nack_gfx.c
  * falls back to it if anything here refuses to start. Restoring the view is
- * therefore part of the contract: nack__mtl_shutdown has to undo whatever
- * nack__mtl_init managed to do, however far it got.
+ * therefore part of the contract: mtl_shutdown has to undo whatever
+ * mtl_init managed to do, however far it got.
  *
  * The shaders are Metal Shading Language, which is C++ based - that is not a
  * choice, it is the only shading language Metal accepts. No host code here is
@@ -32,7 +32,9 @@
  * together here, so each keeps its own type rather than two definitions of one
  * tag. Only the backend that made a texture ever looks inside it.
  */
-struct nack__mtl_texture {
+namespace nack { namespace detail {
+
+struct mtl_texture {
     id<MTLTexture> texture;
 };
 
@@ -63,7 +65,7 @@ struct nack_metal_backend {
     bool vsync;
 };
 
-static nack_metal_backend nack__mtl;
+static nack_metal_backend mtl;
 
 /*
  * Matches the interleaved float layout the console produces: position, uv,
@@ -71,7 +73,7 @@ static nack_metal_backend nack__mtl;
  * position and uv fill exactly one such slot, so the strides line up without
  * padding.
  */
-static NSString *const nack__shader_source = @""
+static NSString *const shader_source = @""
 "#include <metal_stdlib>\n"
 "using namespace metal;\n"
 "\n"
@@ -129,7 +131,7 @@ struct nack_uniforms {
     int padding;         /* keep the struct 16-byte aligned for Metal */
 };
 
-static bool nack__mtl_init(nack_window *window)
+static bool mtl_init(nack_window *window)
 {
     @autoreleasepool {
         nack_native_window native;
@@ -139,44 +141,44 @@ static bool nack__mtl_init(nack_window *window)
         id<MTLLibrary> library;
         NSError *error = nil;
 
-        memset(&nack__mtl, 0, sizeof nack__mtl);
-        nack__mtl.window = window;
+        memset(&mtl, 0, sizeof mtl);
+        mtl.window = window;
 
         window->get_native(&native);
-        nack__mtl.view = (NSView *)native.view;
-        if (!nack__mtl.view)
-            return nack__c.set_error("the window has no view to attach Metal to");
+        mtl.view = (NSView *)native.view;
+        if (!mtl.view)
+            return console_state.set_error("the window has no view to attach Metal to");
 
-        nack__mtl.device = MTLCreateSystemDefaultDevice();
-        if (!nack__mtl.device)
-            return nack__c.set_error("no Metal device is available");
+        mtl.device = MTLCreateSystemDefaultDevice();
+        if (!mtl.device)
+            return console_state.set_error("no Metal device is available");
 
-        nack__mtl.queue = [nack__mtl.device newCommandQueue];
-        if (!nack__mtl.queue)
-            return nack__c.set_error("cannot create a Metal command queue");
+        mtl.queue = [mtl.device newCommandQueue];
+        if (!mtl.queue)
+            return console_state.set_error("cannot create a Metal command queue");
 
         /* +layer returns an autoreleased object; the view will retain it, but
          * hold our own reference so the struct pointer cannot dangle. */
-        nack__mtl.layer = [[CAMetalLayer layer] retain];
-        nack__mtl.layer.device = nack__mtl.device;
-        nack__mtl.layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+        mtl.layer = [[CAMetalLayer layer] retain];
+        mtl.layer.device = mtl.device;
+        mtl.layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
         /* Readable so the tests can check what was drawn. */
-        nack__mtl.layer.framebufferOnly = NO;
+        mtl.layer.framebufferOnly = NO;
         {
-            CGFloat scale = [[nack__mtl.view window] backingScaleFactor];
-            nack__mtl.layer.contentsScale = scale > 0.0 ? scale : 1.0;
+            CGFloat scale = [[mtl.view window] backingScaleFactor];
+            mtl.layer.contentsScale = scale > 0.0 ? scale : 1.0;
         }
 
-        [nack__mtl.view setWantsLayer:YES];
-        [nack__mtl.view setLayer:nack__mtl.layer];
+        [mtl.view setWantsLayer:YES];
+        [mtl.view setLayer:mtl.layer];
 
         options = [[MTLCompileOptions alloc] init];
-        library = [nack__mtl.device newLibraryWithSource:nack__shader_source
+        library = [mtl.device newLibraryWithSource:shader_source
                                                  options:options
                                                    error:&error];
         [options release];
         if (!library) {
-            return nack__c.set_error("console shader failed to compile: %s",
+            return console_state.set_error("console shader failed to compile: %s",
                                error ? [[error localizedDescription] UTF8String]
                                      : "unknown");
         }
@@ -203,13 +205,13 @@ static bool nack__mtl_init(nack_window *window)
         descriptor.colorAttachments[0].destinationAlphaBlendFactor =
             MTLBlendFactorOneMinusSourceAlpha;
 
-        nack__mtl.pipeline =
-            [nack__mtl.device newRenderPipelineStateWithDescriptor:descriptor
+        mtl.pipeline =
+            [mtl.device newRenderPipelineStateWithDescriptor:descriptor
                                                              error:&error];
         [descriptor release];
         [library release];
-        if (!nack__mtl.pipeline) {
-            return nack__c.set_error("console pipeline failed to build: %s",
+        if (!mtl.pipeline) {
+            return console_state.set_error("console pipeline failed to build: %s",
                                error ? [[error localizedDescription] UTF8String]
                                      : "unknown");
         }
@@ -220,42 +222,42 @@ static bool nack__mtl_init(nack_window *window)
         sampler_descriptor.magFilter = MTLSamplerMinMagFilterNearest;
         sampler_descriptor.sAddressMode = MTLSamplerAddressModeClampToEdge;
         sampler_descriptor.tAddressMode = MTLSamplerAddressModeClampToEdge;
-        nack__mtl.sampler =
-            [nack__mtl.device newSamplerStateWithDescriptor:sampler_descriptor];
+        mtl.sampler =
+            [mtl.device newSamplerStateWithDescriptor:sampler_descriptor];
         [sampler_descriptor release];
 
-        nack__mtl.vsync = true;
+        mtl.vsync = true;
         return true;
     }
 }
 
-static void nack__mtl_shutdown(void)
+static void mtl_shutdown(void)
 {
     @autoreleasepool {
-        [nack__mtl.vertices release];
-        [nack__mtl.sampler release];
-        [nack__mtl.pipeline release];
-        [nack__mtl.queue release];
-        [nack__mtl.device release];
-        [nack__mtl.last_commands release];
-        [nack__mtl.last_texture release];
-        if (nack__mtl.view) {
-            [nack__mtl.view setLayer:nil];
-            [nack__mtl.view setWantsLayer:NO];
+        [mtl.vertices release];
+        [mtl.sampler release];
+        [mtl.pipeline release];
+        [mtl.queue release];
+        [mtl.device release];
+        [mtl.last_commands release];
+        [mtl.last_texture release];
+        if (mtl.view) {
+            [mtl.view setLayer:nil];
+            [mtl.view setWantsLayer:NO];
         }
-        [nack__mtl.layer release];
-        memset(&nack__mtl, 0, sizeof nack__mtl);
+        [mtl.layer release];
+        memset(&mtl, 0, sizeof mtl);
     }
 }
 
-static nack_texture *nack__mtl_texture_create(const uint8_t *rgba,
+static nack_texture *mtl_texture_create(const uint8_t *rgba,
                                                      int width, int height)
 {
     @autoreleasepool {
         MTLTextureDescriptor *descriptor;
 
-        std::unique_ptr<nack__mtl_texture> texture(
-            new nack__mtl_texture{});
+        std::unique_ptr<mtl_texture> texture(
+            new mtl_texture{});
 
         descriptor = [MTLTextureDescriptor
             texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
@@ -264,9 +266,9 @@ static nack_texture *nack__mtl_texture_create(const uint8_t *rgba,
                                      mipmapped:NO];
         descriptor.usage = MTLTextureUsageShaderRead;
 
-        texture->texture = [nack__mtl.device newTextureWithDescriptor:descriptor];
+        texture->texture = [mtl.device newTextureWithDescriptor:descriptor];
         if (!texture->texture) {
-            nack__c.set_error("cannot create a Metal texture");
+            console_state.set_error("cannot create a Metal texture");
             return NULL;
         }
 
@@ -279,9 +281,9 @@ static nack_texture *nack__mtl_texture_create(const uint8_t *rgba,
     }
 }
 
-static void nack__mtl_texture_destroy(nack_texture *handle)
+static void mtl_texture_destroy(nack_texture *handle)
 {
-    nack__mtl_texture *texture = (nack__mtl_texture *)handle;
+    mtl_texture *texture = (mtl_texture *)handle;
 
     if (!texture)
         return;
@@ -289,7 +291,7 @@ static void nack__mtl_texture_destroy(nack_texture *handle)
     delete texture;
 }
 
-static void nack__mtl_begin_frame(nack_color clear, int fb_width,
+static void mtl_begin_frame(nack_color clear, int fb_width,
                                   int fb_height, int viewport_x,
                                   int viewport_y, int viewport_w,
                                   int viewport_h)
@@ -298,21 +300,21 @@ static void nack__mtl_begin_frame(nack_color clear, int fb_width,
         MTLRenderPassDescriptor *pass;
         MTLViewport viewport;
 
-        if (!nack__mtl.pipeline)
+        if (!mtl.pipeline)
             return;
 
-        if (fb_width != nack__mtl.fb_width || fb_height != nack__mtl.fb_height) {
-            nack__mtl.fb_width = fb_width;
-            nack__mtl.fb_height = fb_height;
-            nack__mtl.layer.drawableSize = CGSizeMake(fb_width, fb_height);
+        if (fb_width != mtl.fb_width || fb_height != mtl.fb_height) {
+            mtl.fb_width = fb_width;
+            mtl.fb_height = fb_height;
+            mtl.layer.drawableSize = CGSizeMake(fb_width, fb_height);
         }
 
-        nack__mtl.drawable = [[nack__mtl.layer nextDrawable] retain];
-        if (!nack__mtl.drawable)
+        mtl.drawable = [[mtl.layer nextDrawable] retain];
+        if (!mtl.drawable)
             return;   /* the window is off screen; skip the frame */
 
         pass = [MTLRenderPassDescriptor renderPassDescriptor];
-        pass.colorAttachments[0].texture = nack__mtl.drawable.texture;
+        pass.colorAttachments[0].texture = mtl.drawable.texture;
         pass.colorAttachments[0].loadAction = MTLLoadActionClear;
         pass.colorAttachments[0].storeAction = MTLStoreActionStore;
         /* The clear fills the whole drawable, so it is the letterbox colour. */
@@ -320,9 +322,9 @@ static void nack__mtl_begin_frame(nack_color clear, int fb_width,
             MTLClearColorMake(clear.r / 255.0, clear.g / 255.0,
                               clear.b / 255.0, 1.0);
 
-        nack__mtl.commands = [[nack__mtl.queue commandBuffer] retain];
-        nack__mtl.encoder =
-            [[nack__mtl.commands renderCommandEncoderWithDescriptor:pass] retain];
+        mtl.commands = [[mtl.queue commandBuffer] retain];
+        mtl.encoder =
+            [[mtl.commands renderCommandEncoderWithDescriptor:pass] retain];
 
         /* Metal's viewport origin is top left, which is where the console
          * layer measures from too, so this needs no flip. */
@@ -332,11 +334,11 @@ static void nack__mtl_begin_frame(nack_color clear, int fb_width,
         viewport.height = viewport_h;
         viewport.znear = 0.0;
         viewport.zfar = 1.0;
-        nack__mtl.viewport_w = viewport_w;
-        nack__mtl.viewport_h = viewport_h;
-        [nack__mtl.encoder setViewport:viewport];
-        [nack__mtl.encoder setRenderPipelineState:nack__mtl.pipeline];
-        [nack__mtl.encoder setFragmentSamplerState:nack__mtl.sampler atIndex:0];
+        mtl.viewport_w = viewport_w;
+        mtl.viewport_h = viewport_h;
+        [mtl.encoder setViewport:viewport];
+        [mtl.encoder setRenderPipelineState:mtl.pipeline];
+        [mtl.encoder setFragmentSamplerState:mtl.sampler atIndex:0];
 
         {
             nack_uniforms uniforms;
@@ -344,112 +346,112 @@ static void nack__mtl_begin_frame(nack_color clear, int fb_width,
             uniforms.viewport[0] = (float)viewport_w;
             uniforms.viewport[1] = (float)viewport_h;
             uniforms.mode = 0;
-            [nack__mtl.encoder setVertexBytes:&uniforms
+            [mtl.encoder setVertexBytes:&uniforms
                                        length:sizeof uniforms
                                       atIndex:1];
-            [nack__mtl.encoder setFragmentBytes:&uniforms
+            [mtl.encoder setFragmentBytes:&uniforms
                                          length:sizeof uniforms
                                         atIndex:1];
         }
     }
 }
 
-static bool nack__reserve(size_t vertex_count)
+static bool reserve(size_t vertex_count)
 {
     size_t bytes;
 
-    if (vertex_count <= nack__mtl.vertex_capacity)
+    if (vertex_count <= mtl.vertex_capacity)
         return true;
 
     bytes = vertex_count * NACK_FLOATS_PER_VERTEX * sizeof(float);
-    [nack__mtl.vertices release];
-    nack__mtl.vertices =
-        [nack__mtl.device newBufferWithLength:bytes
+    [mtl.vertices release];
+    mtl.vertices =
+        [mtl.device newBufferWithLength:bytes
                                       options:MTLResourceStorageModeShared];
-    if (!nack__mtl.vertices) {
-        nack__mtl.vertex_capacity = 0;
-        return nack__c.set_error("cannot allocate a Metal vertex buffer");
+    if (!mtl.vertices) {
+        mtl.vertex_capacity = 0;
+        return console_state.set_error("cannot allocate a Metal vertex buffer");
     }
-    nack__mtl.vertex_capacity = vertex_count;
+    mtl.vertex_capacity = vertex_count;
     return true;
 }
 
-static void nack__mtl_draw(const float *vertices, size_t vertex_count,
+static void mtl_draw(const float *vertices, size_t vertex_count,
                            int mode, nack_texture *handle)
 {
-    nack__mtl_texture *texture = (nack__mtl_texture *)handle;
+    mtl_texture *texture = (mtl_texture *)handle;
     nack_uniforms uniforms;
 
-    if (!nack__mtl.encoder || vertex_count == 0)
+    if (!mtl.encoder || vertex_count == 0)
         return;
-    if (!nack__reserve(vertex_count))
+    if (!reserve(vertex_count))
         return;
 
-    memcpy([nack__mtl.vertices contents], vertices,
+    memcpy([mtl.vertices contents], vertices,
            vertex_count * NACK_FLOATS_PER_VERTEX * sizeof(float));
 
     memset(&uniforms, 0, sizeof uniforms);
-    uniforms.viewport[0] = (float)nack__mtl.viewport_w;
-    uniforms.viewport[1] = (float)nack__mtl.viewport_h;
+    uniforms.viewport[0] = (float)mtl.viewport_w;
+    uniforms.viewport[1] = (float)mtl.viewport_h;
     uniforms.mode = mode;
 
-    [nack__mtl.encoder setVertexBuffer:nack__mtl.vertices offset:0 atIndex:0];
-    [nack__mtl.encoder setVertexBytes:&uniforms length:sizeof uniforms atIndex:1];
-    [nack__mtl.encoder setFragmentBytes:&uniforms length:sizeof uniforms atIndex:1];
+    [mtl.encoder setVertexBuffer:mtl.vertices offset:0 atIndex:0];
+    [mtl.encoder setVertexBytes:&uniforms length:sizeof uniforms atIndex:1];
+    [mtl.encoder setFragmentBytes:&uniforms length:sizeof uniforms atIndex:1];
     if (texture)
-        [nack__mtl.encoder setFragmentTexture:texture->texture atIndex:0];
+        [mtl.encoder setFragmentTexture:texture->texture atIndex:0];
 
-    [nack__mtl.encoder drawPrimitives:MTLPrimitiveTypeTriangle
+    [mtl.encoder drawPrimitives:MTLPrimitiveTypeTriangle
                           vertexStart:0
                           vertexCount:(NSUInteger)vertex_count];
 }
 
-static void nack__mtl_end_frame(void)
+static void mtl_end_frame(void)
 {
     @autoreleasepool {
-        if (!nack__mtl.encoder)
+        if (!mtl.encoder)
             return;
 
-        [nack__mtl.encoder endEncoding];
-        [nack__mtl.commands presentDrawable:nack__mtl.drawable];
-        [nack__mtl.commands commit];
+        [mtl.encoder endEncoding];
+        [mtl.commands presentDrawable:mtl.drawable];
+        [mtl.commands commit];
 
         /* Kept so a readback can wait on this frame rather than stalling
          * every frame that nobody inspects. */
-        [nack__mtl.last_commands release];
-        [nack__mtl.last_texture release];
-        nack__mtl.last_commands = nack__mtl.commands;
-        nack__mtl.last_texture = [nack__mtl.drawable.texture retain];
+        [mtl.last_commands release];
+        [mtl.last_texture release];
+        mtl.last_commands = mtl.commands;
+        mtl.last_texture = [mtl.drawable.texture retain];
 
-        [nack__mtl.encoder release];
-        [nack__mtl.drawable release];
-        nack__mtl.encoder = nil;
-        nack__mtl.drawable = nil;
-        nack__mtl.commands = nil;
+        [mtl.encoder release];
+        [mtl.drawable release];
+        mtl.encoder = nil;
+        mtl.drawable = nil;
+        mtl.commands = nil;
     }
 }
 
-static void nack__mtl_resize(int fb_width, int fb_height)
+static void mtl_resize(int fb_width, int fb_height)
 {
     @autoreleasepool {
-        nack__mtl.fb_width = fb_width;
-        nack__mtl.fb_height = fb_height;
-        if (nack__mtl.layer)
-            nack__mtl.layer.drawableSize = CGSizeMake(fb_width, fb_height);
+        mtl.fb_width = fb_width;
+        mtl.fb_height = fb_height;
+        if (mtl.layer)
+            mtl.layer.drawableSize = CGSizeMake(fb_width, fb_height);
     }
 }
 
-static void nack__mtl_set_vsync(bool vsync)
+static void mtl_set_vsync(bool vsync)
 {
-    nack__mtl.vsync = vsync;
-    if (!nack__mtl.layer)
+    mtl.vsync = vsync;
+    if (!mtl.layer)
         return;
     /* displaySyncEnabled arrived in 10.13; older systems are always synced. */
-    if ([nack__mtl.layer respondsToSelector:@selector(setDisplaySyncEnabled:)])
-        nack__mtl.layer.displaySyncEnabled = vsync ? YES : NO;
+    if ([mtl.layer respondsToSelector:@selector(setDisplaySyncEnabled:)])
+        mtl.layer.displaySyncEnabled = vsync ? YES : NO;
 }
 
-static void nack__mtl_set_capture(bool capture)
+static void mtl_set_capture(bool capture)
 {
     /*
      * Nothing to do: end_frame already retains the drawable's texture so a
@@ -459,36 +461,36 @@ static void nack__mtl_set_capture(bool capture)
     (void)capture;
 }
 
-static bool nack__mtl_read_pixel(int x, int y, uint8_t rgba[4])
+static bool mtl_read_pixel(int x, int y, uint8_t rgba[4])
 {
     @autoreleasepool {
         uint8_t bgra[4] = { 0, 0, 0, 0 };
 
-        if (!nack__mtl.last_texture)
+        if (!mtl.last_texture)
             return false;
         if (x < 0 || y < 0 ||
-            (NSUInteger)x >= [nack__mtl.last_texture width] ||
-            (NSUInteger)y >= [nack__mtl.last_texture height])
+            (NSUInteger)x >= [mtl.last_texture width] ||
+            (NSUInteger)y >= [mtl.last_texture height])
             return false;
 
         /* The frame has to have finished before its pixels can be read. */
-        [nack__mtl.last_commands waitUntilCompleted];
+        [mtl.last_commands waitUntilCompleted];
 
         /*
          * A managed texture, which is what a drawable is on an Intel Mac, has
          * a separate GPU copy that has to be synchronised before the CPU can
          * see it. On Apple silicon the drawable is shared and this is skipped.
          */
-        if ([nack__mtl.last_texture storageMode] == MTLStorageModeManaged) {
-            id<MTLCommandBuffer> blit_commands = [nack__mtl.queue commandBuffer];
+        if ([mtl.last_texture storageMode] == MTLStorageModeManaged) {
+            id<MTLCommandBuffer> blit_commands = [mtl.queue commandBuffer];
             id<MTLBlitCommandEncoder> blit = [blit_commands blitCommandEncoder];
-            [blit synchronizeResource:nack__mtl.last_texture];
+            [blit synchronizeResource:mtl.last_texture];
             [blit endEncoding];
             [blit_commands commit];
             [blit_commands waitUntilCompleted];
         }
 
-        [nack__mtl.last_texture getBytes:bgra
+        [mtl.last_texture getBytes:bgra
                             bytesPerRow:4
                              fromRegion:MTLRegionMake2D((NSUInteger)x,
                                                         (NSUInteger)y, 1, 1)
@@ -516,52 +518,54 @@ public:
 
     bool init(nack_window *window) override
     {
-        return nack__mtl_init(window);
+        return mtl_init(window);
     }
-    void shutdown() override { nack__mtl_shutdown(); }
+    void shutdown() override { mtl_shutdown(); }
 
     nack_texture *texture_create(const uint8_t *rgba, int width,
                                         int height) override
     {
-        return nack__mtl_texture_create(rgba, width, height);
+        return mtl_texture_create(rgba, width, height);
     }
     void texture_destroy(nack_texture *texture) override
     {
-        nack__mtl_texture_destroy(texture);
+        mtl_texture_destroy(texture);
     }
 
     void begin_frame(nack_color clear, int fb_width, int fb_height,
                      int viewport_x, int viewport_y, int viewport_w,
                      int viewport_h) override
     {
-        nack__mtl_begin_frame(clear, fb_width, fb_height, viewport_x,
+        mtl_begin_frame(clear, fb_width, fb_height, viewport_x,
                               viewport_y, viewport_w, viewport_h);
     }
     void draw(const float *vertices, size_t vertex_count, int mode,
               nack_texture *texture) override
     {
-        nack__mtl_draw(vertices, vertex_count, mode, texture);
+        mtl_draw(vertices, vertex_count, mode, texture);
     }
-    void end_frame() override { nack__mtl_end_frame(); }
+    void end_frame() override { mtl_end_frame(); }
 
     void resize(int fb_width, int fb_height) override
     {
-        nack__mtl_resize(fb_width, fb_height);
+        mtl_resize(fb_width, fb_height);
     }
-    void set_vsync(bool vsync) override { nack__mtl_set_vsync(vsync); }
+    void set_vsync(bool vsync) override { mtl_set_vsync(vsync); }
 
-    void set_capture(bool capture) override { nack__mtl_set_capture(capture); }
+    void set_capture(bool capture) override { mtl_set_capture(capture); }
     bool read_pixel(int x, int y, uint8_t rgba[4]) override
     {
-        return nack__mtl_read_pixel(x, y, rgba);
+        return mtl_read_pixel(x, y, rgba);
     }
 };
 
-metal_backend nack__mtl_backend_instance;
+metal_backend mtl_backend_instance;
 
 }   /* namespace */
 
-nack_gfx_backend *nack__gfx_backend_metal(void)
+nack_gfx_backend *gfx_backend_metal(void)
 {
-    return &nack__mtl_backend_instance;
+    return &mtl_backend_instance;
 }
+
+} }   /* namespace nack::detail */

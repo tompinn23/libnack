@@ -10,7 +10,7 @@
  */
 #include "nack_xkb_keys.h"
 
-static const struct { const char *name; nack_key key; } nack__xkb_names[] = {
+static const struct { const char *name; nack_key key; } xkb_names[] = {
     { "TLDE", NACK_KEY_GRAVE },      { "AE01", NACK_KEY_1 },
     { "AE02", NACK_KEY_2 },          { "AE03", NACK_KEY_3 },
     { "AE04", NACK_KEY_4 },          { "AE05", NACK_KEY_5 },
@@ -71,7 +71,7 @@ static const struct { const char *name; nack_key key; } nack__xkb_names[] = {
     { nullptr, NACK_KEY_UNKNOWN }
 };
 
-nack_key nack__key_from_keysym(uint32_t sym)
+nack_key key_from_keysym(uint32_t sym)
 {
     switch (sym) {
     case XKB_KEY_Escape:        return NACK_KEY_ESCAPE;
@@ -146,7 +146,7 @@ nack_key nack__key_from_keysym(uint32_t sym)
     return NACK_KEY_UNKNOWN;
 }
 
-void nack__xkb_build_keycodes(struct xkb_keymap *keymap, nack_key out[256])
+void xkb_build_keycodes(struct xkb_keymap *keymap, nack_key out[256])
 {
     memset(out, 0, sizeof(nack_key) * 256);
     if (!keymap)
@@ -160,9 +160,9 @@ void nack__xkb_build_keycodes(struct xkb_keymap *keymap, nack_key out[256])
     for (xkb_keycode_t kc = min; kc <= max; ++kc) {
         const char *name = xkb_keymap_key_get_name(keymap, kc);
         if (name) {
-            for (size_t i = 0; nack__xkb_names[i].name; ++i) {
-                if (strcmp(name, nack__xkb_names[i].name) == 0) {
-                    out[kc] = nack__xkb_names[i].key;
+            for (size_t i = 0; xkb_names[i].name; ++i) {
+                if (strcmp(name, xkb_names[i].name) == 0) {
+                    out[kc] = xkb_names[i].key;
                     break;
                 }
             }
@@ -179,6 +179,6 @@ void nack__xkb_build_keycodes(struct xkb_keymap *keymap, nack_key out[256])
         const xkb_keysym_t *syms = nullptr;
         int count = xkb_keymap_key_get_syms_by_level(keymap, kc, 0, 0, &syms);
         if (count > 0 && syms)
-            out[kc] = nack__key_from_keysym(syms[0]);
+            out[kc] = key_from_keysym(syms[0]);
     }
 }

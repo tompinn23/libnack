@@ -15,7 +15,9 @@
 #  include <X11/Xlib-xcb.h>
 #endif
 
-nack_xcb_state nack__xcb;
+namespace nack { namespace detail {
+
+nack_xcb_state xcb;
 
 /* ICCCM WM_NORMAL_HINTS flag bits (ICCCM 4.1.2.3). */
 #define NACK_HINT_US_POSITION  (1u << 0)
@@ -32,11 +34,11 @@ nack_xcb_state nack__xcb;
 #define NACK_NET_WM_STATE_REMOVE 0
 #define NACK_NET_WM_STATE_ADD    1
 
-static uint32_t nack__xcb_mods_from_state(void)
+static uint32_t xcb_mods_from_state(void)
 {
-    if (!nack__xcb.xkb_state)
+    if (!xcb.xkb_state)
         return 0;
-    struct xkb_state *xkb = nack__xcb.xkb_state;
+    struct xkb_state *xkb = xcb.xkb_state;
     uint32_t mods = 0;
     if (xkb_state_mod_name_is_active(xkb, XKB_MOD_NAME_SHIFT,
                                      XKB_STATE_MODS_EFFECTIVE) > 0)
@@ -63,57 +65,57 @@ static uint32_t nack__xcb_mods_from_state(void)
 /* xkbcommon setup                                                    */
 /* ------------------------------------------------------------------ */
 
-static void nack__xcb_release_keymap(void)
+static void xcb_release_keymap(void)
 {
-    if (nack__xcb.xkb_state) {
-        xkb_state_unref(nack__xcb.xkb_state);
-        nack__xcb.xkb_state = nullptr;
+    if (xcb.xkb_state) {
+        xkb_state_unref(xcb.xkb_state);
+        xcb.xkb_state = nullptr;
     }
-    if (nack__xcb.xkb_keymap) {
-        xkb_keymap_unref(nack__xcb.xkb_keymap);
-        nack__xcb.xkb_keymap = nullptr;
+    if (xcb.xkb_keymap) {
+        xkb_keymap_unref(xcb.xkb_keymap);
+        xcb.xkb_keymap = nullptr;
     }
 }
 
-static bool nack__xcb_load_keymap(void)
+static bool xcb_load_keymap(void)
 {
-    nack__xcb_release_keymap();
+    xcb_release_keymap();
 
-    nack__xcb.xkb_keymap = xkb_x11_keymap_new_from_device(
-        nack__xcb.xkb_context, nack__xcb.connection, nack__xcb.xkb_device_id,
+    xcb.xkb_keymap = xkb_x11_keymap_new_from_device(
+        xcb.xkb_context, xcb.connection, xcb.xkb_device_id,
         XKB_KEYMAP_COMPILE_NO_FLAGS);
-    if (!nack__xcb.xkb_keymap)
+    if (!xcb.xkb_keymap)
         return false;
 
-    nack__xcb.xkb_state = xkb_x11_state_new_from_device(
-        nack__xcb.xkb_keymap, nack__xcb.connection, nack__xcb.xkb_device_id);
-    if (!nack__xcb.xkb_state) {
-        nack__xcb_release_keymap();
+    xcb.xkb_state = xkb_x11_state_new_from_device(
+        xcb.xkb_keymap, xcb.connection, xcb.xkb_device_id);
+    if (!xcb.xkb_state) {
+        xcb_release_keymap();
         return false;
     }
 
-    nack__xkb_build_keycodes(nack__xcb.xkb_keymap, nack__xcb.keycodes);
+    xkb_build_keycodes(xcb.xkb_keymap, xcb.keycodes);
     return true;
 }
 
-static bool nack__xcb_init_xkb(void)
+static bool xcb_init_xkb(void)
 {
-    nack__xcb.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    if (!nack__xcb.xkb_context)
+    xcb.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    if (!xcb.xkb_context)
         return state.fail(NACK_ERROR_PLATFORM, "xkb_context_new failed");
 
     uint16_t major = XKB_X11_MIN_MAJOR_XKB_VERSION;
     uint16_t minor = XKB_X11_MIN_MINOR_XKB_VERSION;
-    if (!xkb_x11_setup_xkb_extension(nack__xcb.connection, major, minor,
+    if (!xkb_x11_setup_xkb_extension(xcb.connection, major, minor,
                                      XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS,
-                                     nullptr, nullptr, &nack__xcb.xkb_event_base, nullptr))
+                                     nullptr, nullptr, &xcb.xkb_event_base, nullptr))
         return state.fail(NACK_ERROR_PLATFORM, "server has no usable XKB extension");
 
-    nack__xcb.xkb_device_id = xkb_x11_get_core_keyboard_device_id(nack__xcb.connection);
-    if (nack__xcb.xkb_device_id == -1)
+    xcb.xkb_device_id = xkb_x11_get_core_keyboard_device_id(xcb.connection);
+    if (xcb.xkb_device_id == -1)
         return state.fail(NACK_ERROR_PLATFORM, "no core XKB keyboard device");
 
-    if (!nack__xcb_load_keymap())
+    if (!xcb_load_keymap())
         return state.fail(NACK_ERROR_PLATFORM, "failed to build XKB keymap");
 
     /* Ask for map and state changes so the keymap tracks layout switches. */
@@ -126,13 +128,13 @@ static bool nack__xcb_init_xkb(void)
         XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY |
         XCB_XKB_EVENT_TYPE_STATE_NOTIFY;
 
-    xcb_xkb_select_events(nack__xcb.connection, (xcb_xkb_device_spec_t)nack__xcb.xkb_device_id,
+    xcb_xkb_select_events(xcb.connection, (xcb_xkb_device_spec_t)xcb.xkb_device_id,
                           events, 0, events, required, required, nullptr);
 
     /* Detectable auto-repeat turns held keys into press/press instead of the
      * press/release/press pairs a terminal would have to filter itself. */
-    xcb_xkb_per_client_flags(nack__xcb.connection,
-                             (xcb_xkb_device_spec_t)nack__xcb.xkb_device_id,
+    xcb_xkb_per_client_flags(xcb.connection,
+                             (xcb_xkb_device_spec_t)xcb.xkb_device_id,
                              XCB_XKB_PER_CLIENT_FLAG_DETECTABLE_AUTO_REPEAT,
                              XCB_XKB_PER_CLIENT_FLAG_DETECTABLE_AUTO_REPEAT,
                              0, 0, 0);
@@ -143,13 +145,13 @@ static bool nack__xcb_init_xkb(void)
     if (!locale || !*locale) locale = getenv("LANG");
     if (!locale || !*locale) locale = "C";
 
-    nack__xcb.compose_table = xkb_compose_table_new_from_locale(
-        nack__xcb.xkb_context, locale, XKB_COMPOSE_COMPILE_NO_FLAGS);
-    if (nack__xcb.compose_table)
-        nack__xcb.compose_state = xkb_compose_state_new(nack__xcb.compose_table,
+    xcb.compose_table = xkb_compose_table_new_from_locale(
+        xcb.xkb_context, locale, XKB_COMPOSE_COMPILE_NO_FLAGS);
+    if (xcb.compose_table)
+        xcb.compose_state = xkb_compose_state_new(xcb.compose_table,
                                                         XKB_COMPOSE_STATE_NO_FLAGS);
 
-    nack__xcb.xkb_available = true;
+    xcb.xkb_available = true;
     return true;
 }
 
@@ -157,12 +159,12 @@ static bool nack__xcb_init_xkb(void)
 /* Atoms                                                              */
 /* ------------------------------------------------------------------ */
 
-static xcb_atom_t nack__xcb_intern(const char *name)
+static xcb_atom_t xcb_intern(const char *name)
 {
     xcb_intern_atom_cookie_t cookie =
-        xcb_intern_atom(nack__xcb.connection, 0, (uint16_t)strlen(name), name);
+        xcb_intern_atom(xcb.connection, 0, (uint16_t)strlen(name), name);
     xcb_intern_atom_reply_t *reply =
-        xcb_intern_atom_reply(nack__xcb.connection, cookie, nullptr);
+        xcb_intern_atom_reply(xcb.connection, cookie, nullptr);
     /* XCB_ATOM_NONE is an enumerator and reply->atom is an xcb_atom_t, which
      * C++ will not merge into one conditional type on its own. */
     xcb_atom_t atom = reply ? reply->atom : (xcb_atom_t)XCB_ATOM_NONE;
@@ -170,9 +172,9 @@ static xcb_atom_t nack__xcb_intern(const char *name)
     return atom;
 }
 
-static void nack__xcb_intern_atoms(void)
+static void xcb_intern_atoms(void)
 {
-#define NACK_ATOM(field, name) nack__xcb.atom.field = nack__xcb_intern(name)
+#define NACK_ATOM(field, name) xcb.atom.field = xcb_intern(name)
     NACK_ATOM(WM_PROTOCOLS, "WM_PROTOCOLS");
     NACK_ATOM(WM_DELETE_WINDOW, "WM_DELETE_WINDOW");
     NACK_ATOM(WM_STATE, "WM_STATE");
@@ -199,16 +201,16 @@ static void nack__xcb_intern_atoms(void)
     NACK_ATOM(TEXT_PLAIN_UTF8, "text/plain;charset=utf-8");
     NACK_ATOM(NACK_SELECTION, "NACK_SELECTION");
 #undef NACK_ATOM
-    nack__xcb.atom.WM_NORMAL_HINTS = XCB_ATOM_WM_NORMAL_HINTS;
+    xcb.atom.WM_NORMAL_HINTS = XCB_ATOM_WM_NORMAL_HINTS;
 }
 
-static bool nack__xcb_wm_supports(xcb_atom_t atom)
+static bool xcb_wm_supports(xcb_atom_t atom)
 {
     xcb_get_property_cookie_t cookie =
-        xcb_get_property(nack__xcb.connection, 0, nack__xcb.root,
-                         nack__xcb.atom.NET_SUPPORTED, XCB_ATOM_ATOM, 0, 1024);
+        xcb_get_property(xcb.connection, 0, xcb.root,
+                         xcb.atom.NET_SUPPORTED, XCB_ATOM_ATOM, 0, 1024);
     xcb_get_property_reply_t *reply =
-        xcb_get_property_reply(nack__xcb.connection, cookie, nullptr);
+        xcb_get_property_reply(xcb.connection, cookie, nullptr);
     if (!reply)
         return false;
     bool found = false;
@@ -225,7 +227,7 @@ static bool nack__xcb_wm_supports(xcb_atom_t atom)
 /* Window lookup                                                      */
 /* ------------------------------------------------------------------ */
 
-static nack_window *nack__xcb_lookup(xcb_window_t handle)
+static nack_window *xcb_lookup(xcb_window_t handle)
 {
     for (size_t i = 0; i < state.windows.size(); ++i) {
         nack_window *w = state.windows[i];
@@ -242,7 +244,7 @@ static nack_window *nack__xcb_lookup(xcb_window_t handle)
 
 /* Reads Xft.dpi out of the root window's RESOURCE_MANAGER property; that is
  * where every desktop environment records the user's scaling choice. */
-static float nack__xcb_query_scale(void)
+static float xcb_query_scale(void)
 {
     const char *env = getenv("NACK_SCALE");
     if (env && *env) {
@@ -253,10 +255,10 @@ static float nack__xcb_query_scale(void)
 
     float dpi = 0.0f;
     xcb_get_property_cookie_t cookie =
-        xcb_get_property(nack__xcb.connection, 0, nack__xcb.root,
+        xcb_get_property(xcb.connection, 0, xcb.root,
                          XCB_ATOM_RESOURCE_MANAGER, XCB_ATOM_STRING, 0, 16 * 1024);
     xcb_get_property_reply_t *reply =
-        xcb_get_property_reply(nack__xcb.connection, cookie, nullptr);
+        xcb_get_property_reply(xcb.connection, cookie, nullptr);
     if (reply) {
         int len = xcb_get_property_value_length(reply);
         const char *data = (const char *)xcb_get_property_value(reply);
@@ -292,9 +294,9 @@ static float nack__xcb_query_scale(void)
 /* Size hints                                                         */
 /* ------------------------------------------------------------------ */
 
-static void nack__xcb_apply_size_hints(nack_window *w)
+static void xcb_apply_size_hints(nack_window *w)
 {
-    nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = xcb_win(w);
     /* WM_NORMAL_HINTS is 18 CARD32s in the order fixed by ICCCM 4.1.2.3. */
     uint32_t hints[18];
     memset(hints, 0, sizeof hints);
@@ -329,39 +331,39 @@ static void nack__xcb_apply_size_hints(nack_window *w)
     }
 
     hints[0] = flags;
-    xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
-                        nack__xcb.atom.WM_NORMAL_HINTS, XCB_ATOM_WM_SIZE_HINTS,
+    xcb_change_property(xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
+                        xcb.atom.WM_NORMAL_HINTS, XCB_ATOM_WM_SIZE_HINTS,
                         32, 18, hints);
-    xcb_flush(nack__xcb.connection);
+    xcb_flush(xcb.connection);
 }
 
-static void nack__xcb_send_wm_state(nack_window *w, uint32_t action,
+static void xcb_send_wm_state(nack_window *w, uint32_t action,
                                     xcb_atom_t first, xcb_atom_t second)
 {
     xcb_client_message_event_t event;
     memset(&event, 0, sizeof event);
     event.response_type = XCB_CLIENT_MESSAGE;
     event.format = 32;
-    event.window = nack__xcb_win(w)->handle;
-    event.type = nack__xcb.atom.NET_WM_STATE;
+    event.window = xcb_win(w)->handle;
+    event.type = xcb.atom.NET_WM_STATE;
     event.data.data32[0] = action;
     event.data.data32[1] = first;
     event.data.data32[2] = second;
     event.data.data32[3] = 1;   /* normal application source indication */
     event.data.data32[4] = 0;
 
-    xcb_send_event(nack__xcb.connection, 0, nack__xcb.root,
+    xcb_send_event(xcb.connection, 0, xcb.root,
                    XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
                        XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT,
                    (const char *)&event);
-    xcb_flush(nack__xcb.connection);
+    xcb_flush(xcb.connection);
 }
 
 /* ------------------------------------------------------------------ */
 /* Cursors                                                            */
 /* ------------------------------------------------------------------ */
 
-static const char *const nack__xcb_cursor_names[NACK_CURSOR_SHAPE_COUNT][3] = {
+static const char *const xcb_cursor_names[NACK_CURSOR_SHAPE_COUNT][3] = {
     { "default", "left_ptr", nullptr },
     { "text", "xterm", nullptr },
     { "crosshair", "cross", nullptr },
@@ -375,129 +377,129 @@ static const char *const nack__xcb_cursor_names[NACK_CURSOR_SHAPE_COUNT][3] = {
     { "wait", "watch", nullptr },
 };
 
-static xcb_cursor_t nack__xcb_get_cursor(nack_cursor_shape shape)
+static xcb_cursor_t xcb_get_cursor(nack_cursor_shape shape)
 {
-    if (nack__xcb.cursors_loaded[shape])
-        return nack__xcb.cursors[shape];
+    if (xcb.cursors_loaded[shape])
+        return xcb.cursors[shape];
     xcb_cursor_t cursor = XCB_CURSOR_NONE;
-    if (nack__xcb.cursor_context) {
-        for (int i = 0; i < 3 && nack__xcb_cursor_names[shape][i]; ++i) {
-            cursor = xcb_cursor_load_cursor(nack__xcb.cursor_context,
-                                            nack__xcb_cursor_names[shape][i]);
+    if (xcb.cursor_context) {
+        for (int i = 0; i < 3 && xcb_cursor_names[shape][i]; ++i) {
+            cursor = xcb_cursor_load_cursor(xcb.cursor_context,
+                                            xcb_cursor_names[shape][i]);
             if (cursor != XCB_CURSOR_NONE)
                 break;
         }
     }
-    nack__xcb.cursors[shape] = cursor;
-    nack__xcb.cursors_loaded[shape] = true;
+    xcb.cursors[shape] = cursor;
+    xcb.cursors_loaded[shape] = true;
     return cursor;
 }
 
-static xcb_cursor_t nack__xcb_blank_cursor(void)
+static xcb_cursor_t xcb_blank_cursor(void)
 {
-    if (nack__xcb.blank_cursor != XCB_CURSOR_NONE)
-        return nack__xcb.blank_cursor;
+    if (xcb.blank_cursor != XCB_CURSOR_NONE)
+        return xcb.blank_cursor;
 
-    xcb_pixmap_t pixmap = xcb_generate_id(nack__xcb.connection);
-    xcb_create_pixmap(nack__xcb.connection, 1, pixmap, nack__xcb.root, 1, 1);
+    xcb_pixmap_t pixmap = xcb_generate_id(xcb.connection);
+    xcb_create_pixmap(xcb.connection, 1, pixmap, xcb.root, 1, 1);
 
-    xcb_gcontext_t gc = xcb_generate_id(nack__xcb.connection);
+    xcb_gcontext_t gc = xcb_generate_id(xcb.connection);
     uint32_t value = 0;
-    xcb_create_gc(nack__xcb.connection, gc, pixmap, XCB_GC_FOREGROUND, &value);
+    xcb_create_gc(xcb.connection, gc, pixmap, XCB_GC_FOREGROUND, &value);
     xcb_rectangle_t rect = { 0, 0, 1, 1 };
-    xcb_poly_fill_rectangle(nack__xcb.connection, pixmap, gc, 1, &rect);
-    xcb_free_gc(nack__xcb.connection, gc);
+    xcb_poly_fill_rectangle(xcb.connection, pixmap, gc, 1, &rect);
+    xcb_free_gc(xcb.connection, gc);
 
-    xcb_cursor_t cursor = xcb_generate_id(nack__xcb.connection);
-    xcb_create_cursor(nack__xcb.connection, cursor, pixmap, pixmap,
+    xcb_cursor_t cursor = xcb_generate_id(xcb.connection);
+    xcb_create_cursor(xcb.connection, cursor, pixmap, pixmap,
                       0, 0, 0, 0, 0, 0, 0, 0);
-    xcb_free_pixmap(nack__xcb.connection, pixmap);
+    xcb_free_pixmap(xcb.connection, pixmap);
 
-    nack__xcb.blank_cursor = cursor;
+    xcb.blank_cursor = cursor;
     return cursor;
 }
 
-static void nack__xcb_update_cursor(nack_window *w)
+static void xcb_update_cursor(nack_window *w)
 {
-    nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = xcb_win(w);
     xcb_cursor_t cursor = (w->cursor_mode == NACK_CURSOR_MODE_NORMAL)
-                              ? nack__xcb_get_cursor(w->cursor_shape)
-                              : nack__xcb_blank_cursor();
+                              ? xcb_get_cursor(w->cursor_shape)
+                              : xcb_blank_cursor();
     uint32_t value = cursor;
-    xcb_change_window_attributes(nack__xcb.connection, xw->handle, XCB_CW_CURSOR, &value);
-    xcb_flush(nack__xcb.connection);
+    xcb_change_window_attributes(xcb.connection, xw->handle, XCB_CW_CURSOR, &value);
+    xcb_flush(xcb.connection);
 }
 
-static void nack__xcb_set_cursor_shape(nack_window *w,
+static void xcb_set_cursor_shape(nack_window *w,
                                        nack_cursor_shape shape)
 {
     (void)shape;
-    nack__xcb_update_cursor(w);
+    xcb_update_cursor(w);
 }
 
-static void nack__xcb_center_pointer(nack_window *w)
+static void xcb_center_pointer(nack_window *w)
 {
-    nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = xcb_win(w);
     xw->warp_pending = true;
-    xcb_warp_pointer(nack__xcb.connection, XCB_NONE, xw->handle, 0, 0, 0, 0,
+    xcb_warp_pointer(xcb.connection, XCB_NONE, xw->handle, 0, 0, 0, 0,
                      (int16_t)(w->width / 2), (int16_t)(w->height / 2));
-    xcb_flush(nack__xcb.connection);
+    xcb_flush(xcb.connection);
 }
 
-static void nack__xcb_set_cursor_mode(nack_window *w, nack_cursor_mode mode)
+static void xcb_set_cursor_mode(nack_window *w, nack_cursor_mode mode)
 {
-    nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = xcb_win(w);
     if (mode == NACK_CURSOR_MODE_CAPTURED) {
         xw->virtual_x = w->mouse_x;
         xw->virtual_y = w->mouse_y;
         xcb_grab_pointer_cookie_t cookie = xcb_grab_pointer(
-            nack__xcb.connection, 1, xw->handle,
+            xcb.connection, 1, xw->handle,
             XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE |
                 XCB_EVENT_MASK_POINTER_MOTION,
             XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, xw->handle,
-            nack__xcb_blank_cursor(), XCB_CURRENT_TIME);
-        free(xcb_grab_pointer_reply(nack__xcb.connection, cookie, nullptr));
-        nack__xcb_center_pointer(w);
+            xcb_blank_cursor(), XCB_CURRENT_TIME);
+        free(xcb_grab_pointer_reply(xcb.connection, cookie, nullptr));
+        xcb_center_pointer(w);
     } else {
-        xcb_ungrab_pointer(nack__xcb.connection, XCB_CURRENT_TIME);
+        xcb_ungrab_pointer(xcb.connection, XCB_CURRENT_TIME);
     }
-    nack__xcb_update_cursor(w);
+    xcb_update_cursor(w);
 }
 
 /* ------------------------------------------------------------------ */
 /* Keyboard events                                                    */
 /* ------------------------------------------------------------------ */
 
-static void nack__xcb_handle_key(nack_window *w, xcb_keycode_t keycode, bool down)
+static void xcb_handle_key(nack_window *w, xcb_keycode_t keycode, bool down)
 {
-    nack_key key = nack__xcb.keycodes[keycode];
-    uint32_t mods = nack__xcb_mods_from_state();
+    nack_key key = xcb.keycodes[keycode];
+    uint32_t mods = xcb_mods_from_state();
 
     /* With detectable auto-repeat a held key repeats as consecutive presses. */
     bool repeat = down && key > 0 && key < NACK_KEY_COUNT && state.keys[key];
 
     w->emit_key(key, keycode, mods, down, repeat);
 
-    if (!down || !nack__xcb.xkb_state)
+    if (!down || !xcb.xkb_state)
         return;
 
-    xkb_keysym_t sym = xkb_state_key_get_one_sym(nack__xcb.xkb_state, keycode);
+    xkb_keysym_t sym = xkb_state_key_get_one_sym(xcb.xkb_state, keycode);
 
     /* Feed the compose machine first so dead-key sequences resolve. */
-    if (nack__xcb.compose_state) {
-        if (xkb_compose_state_feed(nack__xcb.compose_state, sym) ==
+    if (xcb.compose_state) {
+        if (xkb_compose_state_feed(xcb.compose_state, sym) ==
             XKB_COMPOSE_FEED_ACCEPTED) {
-            switch (xkb_compose_state_get_status(nack__xcb.compose_state)) {
+            switch (xkb_compose_state_get_status(xcb.compose_state)) {
             case XKB_COMPOSE_COMPOSING:
                 return;    /* mid-sequence: produce no text yet */
             case XKB_COMPOSE_CANCELLED:
-                xkb_compose_state_reset(nack__xcb.compose_state);
+                xkb_compose_state_reset(xcb.compose_state);
                 return;
             case XKB_COMPOSE_COMPOSED: {
                 char buffer[32];
-                int n = xkb_compose_state_get_utf8(nack__xcb.compose_state, buffer,
+                int n = xkb_compose_state_get_utf8(xcb.compose_state, buffer,
                                                    sizeof buffer);
-                xkb_compose_state_reset(nack__xcb.compose_state);
+                xkb_compose_state_reset(xcb.compose_state);
                 if (n > 0 && n < (int)sizeof buffer)
                     w->emit_text(buffer);
                 return;
@@ -515,18 +517,18 @@ static void nack__xcb_handle_key(nack_window *w, xcb_keycode_t keycode, bool dow
         return;
 
     char buffer[32];
-    int n = xkb_state_key_get_utf8(nack__xcb.xkb_state, keycode, buffer, sizeof buffer);
+    int n = xkb_state_key_get_utf8(xcb.xkb_state, keycode, buffer, sizeof buffer);
     if (n <= 0 || n >= (int)sizeof buffer)
         return;
 
-    uint32_t codepoint = xkb_state_key_get_utf32(nack__xcb.xkb_state, keycode);
-    if (!nack__codepoint_is_text(codepoint))
+    uint32_t codepoint = xkb_state_key_get_utf32(xcb.xkb_state, keycode);
+    if (!codepoint_is_text(codepoint))
         return;
 
     w->emit_text(buffer);
 }
 
-static void nack__xcb_handle_xkb_event(xcb_generic_event_t *generic)
+static void xcb_handle_xkb_event(xcb_generic_event_t *generic)
 {
     /* All XKB events share a leading xkbType byte after the standard header. */
     struct nack_xkb_any_event {
@@ -539,23 +541,23 @@ static void nack__xcb_handle_xkb_event(xcb_generic_event_t *generic)
 
     const nack_xkb_any_event *any =
         (const nack_xkb_any_event *)generic;
-    if (any->device_id != (uint8_t)nack__xcb.xkb_device_id)
+    if (any->device_id != (uint8_t)xcb.xkb_device_id)
         return;
 
     switch (any->xkb_type) {
     case XCB_XKB_NEW_KEYBOARD_NOTIFY:
     case XCB_XKB_MAP_NOTIFY:
-        nack__xcb_load_keymap();
+        xcb_load_keymap();
         break;
     case XCB_XKB_STATE_NOTIFY: {
         const xcb_xkb_state_notify_event_t *notify =
             (const xcb_xkb_state_notify_event_t *)generic;
-        if (nack__xcb.xkb_state)
-            xkb_state_update_mask(nack__xcb.xkb_state,
+        if (xcb.xkb_state)
+            xkb_state_update_mask(xcb.xkb_state,
                                   notify->baseMods, notify->latchedMods,
                                   notify->lockedMods, notify->baseGroup,
                                   notify->latchedGroup, notify->lockedGroup);
-        state.mods = nack__xcb_mods_from_state();
+        state.mods = xcb_mods_from_state();
         break;
     }
     default:
@@ -567,21 +569,21 @@ static void nack__xcb_handle_xkb_event(xcb_generic_event_t *generic)
 /* Event dispatch                                                     */
 /* ------------------------------------------------------------------ */
 
-void nack__xcb_dispatch(xcb_generic_event_t *generic)
+void xcb_dispatch(xcb_generic_event_t *generic)
 {
     uint8_t type = generic->response_type & 0x7F;
 
-    if (nack__xcb.xkb_available && type == nack__xcb.xkb_event_base) {
-        nack__xcb_handle_xkb_event(generic);
+    if (xcb.xkb_available && type == xcb.xkb_event_base) {
+        xcb_handle_xkb_event(generic);
         return;
     }
 
     switch (type) {
     case XCB_SELECTION_REQUEST:
-        nack__xcb_handle_selection_request((xcb_selection_request_event_t *)generic);
+        xcb_handle_selection_request((xcb_selection_request_event_t *)generic);
         return;
     case XCB_SELECTION_CLEAR:
-        nack__xcb_handle_selection_clear((xcb_selection_clear_event_t *)generic);
+        xcb_handle_selection_clear((xcb_selection_clear_event_t *)generic);
         return;
     default:
         break;
@@ -590,23 +592,23 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
     switch (type) {
     case XCB_CLIENT_MESSAGE: {
         xcb_client_message_event_t *event = (xcb_client_message_event_t *)generic;
-        nack_window *w = nack__xcb_lookup(event->window);
+        nack_window *w = xcb_lookup(event->window);
         if (!w)
             break;
-        if (event->type == nack__xcb.atom.WM_PROTOCOLS) {
+        if (event->type == xcb.atom.WM_PROTOCOLS) {
             xcb_atom_t protocol = (xcb_atom_t)event->data.data32[0];
-            if (protocol == nack__xcb.atom.WM_DELETE_WINDOW) {
+            if (protocol == xcb.atom.WM_DELETE_WINDOW) {
                 w->should_close = true;
                 w->emit_simple(NACK_WIN_EVENT_WINDOW_CLOSE);
-            } else if (protocol == nack__xcb.atom.NET_WM_PING) {
+            } else if (protocol == xcb.atom.NET_WM_PING) {
                 /* Answer the WM's liveness probe, or it marks us as hung. */
                 xcb_client_message_event_t reply = *event;
-                reply.window = nack__xcb.root;
-                xcb_send_event(nack__xcb.connection, 0, nack__xcb.root,
+                reply.window = xcb.root;
+                xcb_send_event(xcb.connection, 0, xcb.root,
                                XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
                                    XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT,
                                (const char *)&reply);
-                xcb_flush(nack__xcb.connection);
+                xcb_flush(xcb.connection);
             }
         }
         break;
@@ -614,7 +616,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_CONFIGURE_NOTIFY: {
         xcb_configure_notify_event_t *event = (xcb_configure_notify_event_t *)generic;
-        nack_window *w = nack__xcb_lookup(event->window);
+        nack_window *w = xcb_lookup(event->window);
         if (!w)
             break;
         w->emit_resize(event->width, event->height, event->width, event->height);
@@ -633,7 +635,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
         xcb_expose_event_t *event = (xcb_expose_event_t *)generic;
         if (event->count != 0)
             break;
-        nack_window *w = nack__xcb_lookup(event->window);
+        nack_window *w = xcb_lookup(event->window);
         if (w)
             w->emit_simple(NACK_WIN_EVENT_WINDOW_EXPOSE);
         break;
@@ -644,11 +646,11 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
         if (event->mode == XCB_NOTIFY_MODE_GRAB ||
             event->mode == XCB_NOTIFY_MODE_UNGRAB)
             break;
-        nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = xcb_lookup(event->event);
         if (!w)
             break;
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED)
-            nack__xcb_set_cursor_mode(w, NACK_CURSOR_MODE_CAPTURED);
+            xcb_set_cursor_mode(w, NACK_CURSOR_MODE_CAPTURED);
         w->emit_focus(true);
         break;
     }
@@ -658,20 +660,20 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
         if (event->mode == XCB_NOTIFY_MODE_GRAB ||
             event->mode == XCB_NOTIFY_MODE_UNGRAB)
             break;
-        nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = xcb_lookup(event->event);
         if (!w)
             break;
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED)
-            xcb_ungrab_pointer(nack__xcb.connection, XCB_CURRENT_TIME);
-        if (nack__xcb.compose_state)
-            xkb_compose_state_reset(nack__xcb.compose_state);
+            xcb_ungrab_pointer(xcb.connection, XCB_CURRENT_TIME);
+        if (xcb.compose_state)
+            xkb_compose_state_reset(xcb.compose_state);
         w->emit_focus(false);
         break;
     }
 
     case XCB_ENTER_NOTIFY: {
         xcb_enter_notify_event_t *event = (xcb_enter_notify_event_t *)generic;
-        nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = xcb_lookup(event->event);
         if (!w)
             break;
         w->mouse_x = event->event_x;
@@ -682,7 +684,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_LEAVE_NOTIFY: {
         xcb_leave_notify_event_t *event = (xcb_leave_notify_event_t *)generic;
-        nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = xcb_lookup(event->event);
         if (w)
             w->emit_simple(NACK_WIN_EVENT_MOUSE_LEAVE);
         break;
@@ -690,10 +692,10 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_MOTION_NOTIFY: {
         xcb_motion_notify_event_t *event = (xcb_motion_notify_event_t *)generic;
-        nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = xcb_lookup(event->event);
         if (!w)
             break;
-        nack_xcb_window *xw = nack__xcb_win(w);
+        nack_xcb_window *xw = xcb_win(w);
         int x = event->event_x, y = event->event_y;
 
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED) {
@@ -715,14 +717,14 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
             ev->data.motion.y = xw->virtual_y;
             ev->data.motion.dx = dx;
             ev->data.motion.dy = dy;
-            ev->data.motion.mods = nack__xcb_mods_from_state();
+            ev->data.motion.mods = xcb_mods_from_state();
             state.push_event(ev);
 
             if (x < w->width / 4 || x > (w->width * 3) / 4 ||
                 y < w->height / 4 || y > (w->height * 3) / 4)
-                nack__xcb_center_pointer(w);
+                xcb_center_pointer(w);
         } else {
-            w->emit_mouse_move(x, y, nack__xcb_mods_from_state());
+            w->emit_mouse_move(x, y, xcb_mods_from_state());
         }
         break;
     }
@@ -730,11 +732,11 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
     case XCB_BUTTON_PRESS:
     case XCB_BUTTON_RELEASE: {
         xcb_button_press_event_t *event = (xcb_button_press_event_t *)generic;
-        nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = xcb_lookup(event->event);
         if (!w)
             break;
         bool down = (type == XCB_BUTTON_PRESS);
-        uint32_t mods = nack__xcb_mods_from_state();
+        uint32_t mods = xcb_mods_from_state();
 
         /* Buttons 4-7 are the classic wheel encoding. */
         if (event->detail >= 4 && event->detail <= 7) {
@@ -767,17 +769,17 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_KEY_PRESS: {
         xcb_key_press_event_t *event = (xcb_key_press_event_t *)generic;
-        nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = xcb_lookup(event->event);
         if (w)
-            nack__xcb_handle_key(w, event->detail, true);
+            xcb_handle_key(w, event->detail, true);
         break;
     }
 
     case XCB_KEY_RELEASE: {
         xcb_key_release_event_t *event = (xcb_key_release_event_t *)generic;
-        nack_window *w = nack__xcb_lookup(event->event);
+        nack_window *w = xcb_lookup(event->event);
         if (w)
-            nack__xcb_handle_key(w, event->detail, false);
+            xcb_handle_key(w, event->detail, false);
         break;
     }
 
@@ -787,18 +789,18 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
         /* A requestor deleting a property is asking for the next chunk of a
          * selection we are serving, and arrives on its window, not ours. */
-        if (nack__xcb_handle_property_notify(event))
+        if (xcb_handle_property_notify(event))
             break;
 
-        w = nack__xcb_lookup(event->window);
-        if (!w || event->atom != nack__xcb.atom.NET_WM_STATE)
+        w = xcb_lookup(event->window);
+        if (!w || event->atom != xcb.atom.NET_WM_STATE)
             break;
 
         xcb_get_property_cookie_t cookie =
-            xcb_get_property(nack__xcb.connection, 0, event->window,
-                             nack__xcb.atom.NET_WM_STATE, XCB_ATOM_ATOM, 0, 128);
+            xcb_get_property(xcb.connection, 0, event->window,
+                             xcb.atom.NET_WM_STATE, XCB_ATOM_ATOM, 0, 128);
         xcb_get_property_reply_t *reply =
-            xcb_get_property_reply(nack__xcb.connection, cookie, nullptr);
+            xcb_get_property_reply(xcb.connection, cookie, nullptr);
         if (!reply)
             break;
 
@@ -806,10 +808,10 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
         xcb_atom_t *atoms = (xcb_atom_t *)xcb_get_property_value(reply);
         int count = xcb_get_property_value_length(reply) / (int)sizeof(xcb_atom_t);
         for (int i = 0; i < count; ++i) {
-            if (atoms[i] == nack__xcb.atom.NET_WM_STATE_FULLSCREEN) fullscreen = true;
-            else if (atoms[i] == nack__xcb.atom.NET_WM_STATE_MAXIMIZED_VERT) max_v = true;
-            else if (atoms[i] == nack__xcb.atom.NET_WM_STATE_MAXIMIZED_HORZ) max_h = true;
-            else if (atoms[i] == nack__xcb.atom.NET_WM_STATE_HIDDEN) hidden = true;
+            if (atoms[i] == xcb.atom.NET_WM_STATE_FULLSCREEN) fullscreen = true;
+            else if (atoms[i] == xcb.atom.NET_WM_STATE_MAXIMIZED_VERT) max_v = true;
+            else if (atoms[i] == xcb.atom.NET_WM_STATE_MAXIMIZED_HORZ) max_h = true;
+            else if (atoms[i] == xcb.atom.NET_WM_STATE_HIDDEN) hidden = true;
         }
         free(reply);
 
@@ -830,7 +832,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_MAP_NOTIFY: {
         xcb_map_notify_event_t *event = (xcb_map_notify_event_t *)generic;
-        nack_window *w = nack__xcb_lookup(event->window);
+        nack_window *w = xcb_lookup(event->window);
         if (w)
             w->visible = true;
         break;
@@ -838,7 +840,7 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
 
     case XCB_UNMAP_NOTIFY: {
         xcb_unmap_notify_event_t *event = (xcb_unmap_notify_event_t *)generic;
-        nack_window *w = nack__xcb_lookup(event->window);
+        nack_window *w = xcb_lookup(event->window);
         if (w)
             w->visible = false;
         break;
@@ -849,29 +851,29 @@ void nack__xcb_dispatch(xcb_generic_event_t *generic)
     }
 }
 
-static void nack__xcb_drain(void)
+static void xcb_drain(void)
 {
     xcb_generic_event_t *event;
-    while ((event = xcb_poll_for_event(nack__xcb.connection)) != nullptr) {
+    while ((event = xcb_poll_for_event(xcb.connection)) != nullptr) {
         if (event->response_type != 0)     /* 0 = error reply, ignore */
-            nack__xcb_dispatch(event);
+            xcb_dispatch(event);
         free(event);
     }
 }
 
-static void nack__xcb_pump_events(double timeout)
+static void xcb_pump_events(double timeout)
 {
-    nack__xcb_drain();
+    xcb_drain();
     if (!state.queue.empty() || timeout == 0.0)
         return;
 
-    xcb_flush(nack__xcb.connection);
+    xcb_flush(xcb.connection);
 
     struct pollfd fds[2];
-    fds[0].fd = xcb_get_file_descriptor(nack__xcb.connection);
+    fds[0].fd = xcb_get_file_descriptor(xcb.connection);
     fds[0].events = POLLIN;
     fds[0].revents = 0;
-    fds[1].fd = nack__xcb.wakeup_pipe[0];
+    fds[1].fd = xcb.wakeup_pipe[0];
     fds[1].events = POLLIN;
     fds[1].revents = 0;
 
@@ -889,20 +891,20 @@ static void nack__xcb_pump_events(double timeout)
 
     if (fds[1].revents & POLLIN) {
         char scratch[64];
-        while (read(nack__xcb.wakeup_pipe[0], scratch, sizeof scratch) > 0)
+        while (read(xcb.wakeup_pipe[0], scratch, sizeof scratch) > 0)
             ;
         state.emit_global(NACK_WIN_EVENT_WAKEUP);
     }
 
-    nack__xcb_drain();
+    xcb_drain();
 }
 
-static void nack__xcb_wakeup(void)
+static void xcb_wakeup(void)
 {
     const char byte = 1;
     ssize_t rc;
     do {
-        rc = write(nack__xcb.wakeup_pipe[1], &byte, 1);
+        rc = write(xcb.wakeup_pipe[1], &byte, 1);
     } while (rc < 0 && errno == EINTR);
     (void)rc;
 }
@@ -911,37 +913,37 @@ static void nack__xcb_wakeup(void)
 /* Window management                                                  */
 /* ------------------------------------------------------------------ */
 
-static void nack__xcb_set_title(nack_window *w, const char *title)
+static void xcb_set_title(nack_window *w, const char *title)
 {
-    nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = xcb_win(w);
     uint32_t len = (uint32_t)strlen(title);
-    xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
-                        nack__xcb.atom.NET_WM_NAME, nack__xcb.atom.UTF8_STRING,
+    xcb_change_property(xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
+                        xcb.atom.NET_WM_NAME, xcb.atom.UTF8_STRING,
                         8, len, title);
-    xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
-                        nack__xcb.atom.NET_WM_ICON_NAME, nack__xcb.atom.UTF8_STRING,
+    xcb_change_property(xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
+                        xcb.atom.NET_WM_ICON_NAME, xcb.atom.UTF8_STRING,
                         8, len, title);
     /* Legacy WM_NAME for window managers that predate _NET_WM_NAME. */
-    xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
+    xcb_change_property(xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
                         XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, len, title);
-    xcb_flush(nack__xcb.connection);
+    xcb_flush(xcb.connection);
 }
 
-static void nack__xcb_set_decorated(nack_window *w, bool decorated)
+static void xcb_set_decorated(nack_window *w, bool decorated)
 {
     if (decorated)
         return;
     /* Motif hints remain the only widely honoured way to drop decorations. */
     uint32_t hints[5] = { 2 /* MWM_HINTS_DECORATIONS */, 0, 0, 0, 0 };
-    xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE,
-                        nack__xcb_win(w)->handle, nack__xcb.atom.MOTIF_WM_HINTS,
-                        nack__xcb.atom.MOTIF_WM_HINTS, 32, 5, hints);
+    xcb_change_property(xcb.connection, XCB_PROP_MODE_REPLACE,
+                        xcb_win(w)->handle, xcb.atom.MOTIF_WM_HINTS,
+                        xcb.atom.MOTIF_WM_HINTS, 32, 5, hints);
 }
 
 /* Finds the depth/visual pairing that matches the EGL config's visual id. */
-static bool nack__xcb_find_visual(xcb_visualid_t visual_id, uint8_t *out_depth)
+static bool xcb_find_visual(xcb_visualid_t visual_id, uint8_t *out_depth)
 {
-    xcb_depth_iterator_t depth = xcb_screen_allowed_depths_iterator(nack__xcb.screen);
+    xcb_depth_iterator_t depth = xcb_screen_allowed_depths_iterator(xcb.screen);
     for (; depth.rem; xcb_depth_next(&depth)) {
         xcb_visualtype_iterator_t visual = xcb_depth_visuals_iterator(depth.data);
         for (; visual.rem; xcb_visualtype_next(&visual)) {
@@ -954,28 +956,28 @@ static bool nack__xcb_find_visual(xcb_visualid_t visual_id, uint8_t *out_depth)
     return false;
 }
 
-static bool nack__xcb_window_create(nack_window *w,
+static bool xcb_window_create(nack_window *w,
                                     const nack_window_desc *desc)
 {
     nack_xcb_window *xw = new nack_xcb_window{};
     xw->surface = EGL_NO_SURFACE;
     w->native = xw;
 
-    xcb_visualid_t visual_id = nack__xcb.screen->root_visual;
+    xcb_visualid_t visual_id = xcb.screen->root_visual;
     uint8_t depth = XCB_COPY_FROM_PARENT;
 
     /* The window's visual has to match the EGL config that will back it, so
      * the config is chosen here rather than at context creation time. */
-    if (nack__egl.initialized) {
+    if (egl.initialized) {
         EGLConfig config;
         EGLint egl_visual = 0;
-        if (nack__egl_choose_config(&w->framebuffer, NACK__GL_PROFILE_CORE, 3,
+        if (egl_choose_config(&w->framebuffer, NACK__GL_PROFILE_CORE, 3,
                                     &config, &egl_visual)) {
             xw->config = config;
             xw->has_config = true;
             if (egl_visual != 0) {
                 uint8_t found_depth = 0;
-                if (nack__xcb_find_visual((xcb_visualid_t)egl_visual, &found_depth)) {
+                if (xcb_find_visual((xcb_visualid_t)egl_visual, &found_depth)) {
                     visual_id = (xcb_visualid_t)egl_visual;
                     depth = found_depth;
                 }
@@ -983,9 +985,9 @@ static bool nack__xcb_window_create(nack_window *w,
         }
     }
 
-    xw->colormap = xcb_generate_id(nack__xcb.connection);
-    xcb_create_colormap(nack__xcb.connection, XCB_COLORMAP_ALLOC_NONE, xw->colormap,
-                        nack__xcb.root, visual_id);
+    xw->colormap = xcb_generate_id(xcb.connection);
+    xcb_create_colormap(xcb.connection, XCB_COLORMAP_ALLOC_NONE, xw->colormap,
+                        xcb.root, visual_id);
 
     const uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL |
                           XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
@@ -1001,14 +1003,14 @@ static bool nack__xcb_window_create(nack_window *w,
         xw->colormap
     };
 
-    xw->handle = xcb_generate_id(nack__xcb.connection);
+    xw->handle = xcb_generate_id(xcb.connection);
     xcb_void_cookie_t cookie = xcb_create_window_checked(
-        nack__xcb.connection, depth, xw->handle, nack__xcb.root,
+        xcb.connection, depth, xw->handle, xcb.root,
         0, 0, (uint16_t)w->width, (uint16_t)w->height, 0,
         XCB_WINDOW_CLASS_INPUT_OUTPUT, visual_id, mask, values);
 
     nack::c_ptr<xcb_generic_error_t> error(
-        xcb_request_check(nack__xcb.connection, cookie));
+        xcb_request_check(xcb.connection, cookie));
     if (error) {
         uint8_t code = error->error_code;
         delete xw;
@@ -1019,14 +1021,14 @@ static bool nack__xcb_window_create(nack_window *w,
 
     xw->egl_native = xw->handle;
 
-    xcb_atom_t protocols[2] = { nack__xcb.atom.WM_DELETE_WINDOW,
-                                nack__xcb.atom.NET_WM_PING };
-    xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
-                        nack__xcb.atom.WM_PROTOCOLS, XCB_ATOM_ATOM, 32, 2, protocols);
+    xcb_atom_t protocols[2] = { xcb.atom.WM_DELETE_WINDOW,
+                                xcb.atom.NET_WM_PING };
+    xcb_change_property(xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
+                        xcb.atom.WM_PROTOCOLS, XCB_ATOM_ATOM, 32, 2, protocols);
 
     uint32_t pid = (uint32_t)getpid();
-    xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
-                        nack__xcb.atom.NET_WM_PID, XCB_ATOM_CARDINAL, 32, 1, &pid);
+    xcb_change_property(xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
+                        xcb.atom.NET_WM_PID, XCB_ATOM_CARDINAL, 32, 1, &pid);
 
     /* WM_CLASS is instance\0class\0, both taken from the app id. */
     {
@@ -1034,181 +1036,181 @@ static bool nack__xcb_window_create(nack_window *w,
         wm_class.push_back('\0');
         wm_class += state.app_id;
         wm_class.push_back('\0');
-        xcb_change_property(nack__xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
+        xcb_change_property(xcb.connection, XCB_PROP_MODE_REPLACE, xw->handle,
                             XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8,
                             (uint32_t)wm_class.size(), wm_class.data());
     }
 
-    nack__xcb_set_title(w, w->title.c_str());
-    nack__xcb_set_decorated(w, w->decorated);
-    nack__xcb_apply_size_hints(w);
+    xcb_set_title(w, w->title.c_str());
+    xcb_set_decorated(w, w->decorated);
+    xcb_apply_size_hints(w);
 
-    w->scale = nack__xcb.scale;
+    w->scale = xcb.scale;
     w->fb_width = w->width;
     w->fb_height = w->height;
 
-    xcb_flush(nack__xcb.connection);
+    xcb_flush(xcb.connection);
     return true;
 }
 
-static void nack__xcb_window_destroy(nack_window *w)
+static void xcb_window_destroy(nack_window *w)
 {
-    nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = xcb_win(w);
     if (!xw)
         return;
     if (xw->surface != EGL_NO_SURFACE)
-        eglDestroySurface(nack__egl.display, xw->surface);
+        eglDestroySurface(egl.display, xw->surface);
     if (xw->handle) {
-        xcb_destroy_window(nack__xcb.connection, xw->handle);
+        xcb_destroy_window(xcb.connection, xw->handle);
         xw->handle = XCB_WINDOW_NONE;
     }
     if (xw->colormap)
-        xcb_free_colormap(nack__xcb.connection, xw->colormap);
-    xcb_flush(nack__xcb.connection);
+        xcb_free_colormap(xcb.connection, xw->colormap);
+    xcb_flush(xcb.connection);
     delete xw;
     w->native = nullptr;
 }
 
-static void nack__xcb_window_show(nack_window *w, bool show)
+static void xcb_window_show(nack_window *w, bool show)
 {
-    nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = xcb_win(w);
     if (show)
-        xcb_map_window(nack__xcb.connection, xw->handle);
+        xcb_map_window(xcb.connection, xw->handle);
     else
-        xcb_unmap_window(nack__xcb.connection, xw->handle);
-    xcb_flush(nack__xcb.connection);
+        xcb_unmap_window(xcb.connection, xw->handle);
+    xcb_flush(xcb.connection);
 }
 
-static void nack__xcb_window_focus(nack_window *w)
+static void xcb_window_focus(nack_window *w)
 {
-    nack_xcb_window *xw = nack__xcb_win(w);
-    if (nack__xcb_wm_supports(nack__xcb.atom.NET_ACTIVE_WINDOW)) {
+    nack_xcb_window *xw = xcb_win(w);
+    if (xcb_wm_supports(xcb.atom.NET_ACTIVE_WINDOW)) {
         xcb_client_message_event_t event;
         memset(&event, 0, sizeof event);
         event.response_type = XCB_CLIENT_MESSAGE;
         event.format = 32;
         event.window = xw->handle;
-        event.type = nack__xcb.atom.NET_ACTIVE_WINDOW;
+        event.type = xcb.atom.NET_ACTIVE_WINDOW;
         event.data.data32[0] = 1;
         event.data.data32[1] = XCB_CURRENT_TIME;
-        xcb_send_event(nack__xcb.connection, 0, nack__xcb.root,
+        xcb_send_event(xcb.connection, 0, xcb.root,
                        XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
                            XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT,
                        (const char *)&event);
     } else {
         uint32_t values[] = { XCB_STACK_MODE_ABOVE };
-        xcb_configure_window(nack__xcb.connection, xw->handle,
+        xcb_configure_window(xcb.connection, xw->handle,
                              XCB_CONFIG_WINDOW_STACK_MODE, values);
-        xcb_set_input_focus(nack__xcb.connection, XCB_INPUT_FOCUS_PARENT,
+        xcb_set_input_focus(xcb.connection, XCB_INPUT_FOCUS_PARENT,
                             xw->handle, XCB_CURRENT_TIME);
     }
-    xcb_flush(nack__xcb.connection);
+    xcb_flush(xcb.connection);
 }
 
-static void nack__xcb_window_set_size(nack_window *w, int width, int height)
+static void xcb_window_set_size(nack_window *w, int width, int height)
 {
     if (!w->resizable) {
         w->width = width;
         w->height = height;
-        nack__xcb_apply_size_hints(w);
+        xcb_apply_size_hints(w);
     }
     uint32_t values[2] = { (uint32_t)width, (uint32_t)height };
-    xcb_configure_window(nack__xcb.connection, nack__xcb_win(w)->handle,
+    xcb_configure_window(xcb.connection, xcb_win(w)->handle,
                          XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
-    xcb_flush(nack__xcb.connection);
+    xcb_flush(xcb.connection);
 }
 
-static void nack__xcb_window_set_position(nack_window *w, int x, int y)
+static void xcb_window_set_position(nack_window *w, int x, int y)
 {
     uint32_t values[2] = { (uint32_t)x, (uint32_t)y };
-    xcb_configure_window(nack__xcb.connection, nack__xcb_win(w)->handle,
+    xcb_configure_window(xcb.connection, xcb_win(w)->handle,
                          XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, values);
-    xcb_flush(nack__xcb.connection);
+    xcb_flush(xcb.connection);
 }
 
-static void nack__xcb_window_set_fullscreen(nack_window *w, bool fullscreen)
+static void xcb_window_set_fullscreen(nack_window *w, bool fullscreen)
 {
-    if (!nack__xcb_wm_supports(nack__xcb.atom.NET_WM_STATE_FULLSCREEN)) {
+    if (!xcb_wm_supports(xcb.atom.NET_WM_STATE_FULLSCREEN)) {
         state.fail(NACK_ERROR_UNSUPPORTED, "window manager has no fullscreen support");
         return;
     }
-    nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = xcb_win(w);
     if (fullscreen && !w->fullscreen) {
         xw->restore_x = w->pos_x;
         xw->restore_y = w->pos_y;
         xw->restore_w = w->width;
         xw->restore_h = w->height;
     }
-    nack__xcb_send_wm_state(w, fullscreen ? NACK_NET_WM_STATE_ADD
+    xcb_send_wm_state(w, fullscreen ? NACK_NET_WM_STATE_ADD
                                           : NACK_NET_WM_STATE_REMOVE,
-                            nack__xcb.atom.NET_WM_STATE_FULLSCREEN, XCB_ATOM_NONE);
+                            xcb.atom.NET_WM_STATE_FULLSCREEN, XCB_ATOM_NONE);
     w->fullscreen = fullscreen;
 }
 
-static void nack__xcb_window_minimize(nack_window *w)
+static void xcb_window_minimize(nack_window *w)
 {
     /* ICCCM: iconify by sending WM_CHANGE_STATE with IconicState. */
     xcb_client_message_event_t event;
     memset(&event, 0, sizeof event);
     event.response_type = XCB_CLIENT_MESSAGE;
     event.format = 32;
-    event.window = nack__xcb_win(w)->handle;
-    event.type = nack__xcb.atom.WM_CHANGE_STATE;
+    event.window = xcb_win(w)->handle;
+    event.type = xcb.atom.WM_CHANGE_STATE;
     event.data.data32[0] = 3;   /* IconicState */
-    xcb_send_event(nack__xcb.connection, 0, nack__xcb.root,
+    xcb_send_event(xcb.connection, 0, xcb.root,
                    XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
                        XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT,
                    (const char *)&event);
-    xcb_flush(nack__xcb.connection);
+    xcb_flush(xcb.connection);
 }
 
-static void nack__xcb_window_maximize(nack_window *w)
+static void xcb_window_maximize(nack_window *w)
 {
-    nack__xcb_send_wm_state(w, NACK_NET_WM_STATE_ADD,
-                            nack__xcb.atom.NET_WM_STATE_MAXIMIZED_VERT,
-                            nack__xcb.atom.NET_WM_STATE_MAXIMIZED_HORZ);
+    xcb_send_wm_state(w, NACK_NET_WM_STATE_ADD,
+                            xcb.atom.NET_WM_STATE_MAXIMIZED_VERT,
+                            xcb.atom.NET_WM_STATE_MAXIMIZED_HORZ);
 }
 
-static void nack__xcb_window_restore(nack_window *w)
+static void xcb_window_restore(nack_window *w)
 {
     if (w->fullscreen)
-        nack__xcb_window_set_fullscreen(w, false);
+        xcb_window_set_fullscreen(w, false);
     if (w->maximized)
-        nack__xcb_send_wm_state(w, NACK_NET_WM_STATE_REMOVE,
-                                nack__xcb.atom.NET_WM_STATE_MAXIMIZED_VERT,
-                                nack__xcb.atom.NET_WM_STATE_MAXIMIZED_HORZ);
+        xcb_send_wm_state(w, NACK_NET_WM_STATE_REMOVE,
+                                xcb.atom.NET_WM_STATE_MAXIMIZED_VERT,
+                                xcb.atom.NET_WM_STATE_MAXIMIZED_HORZ);
     if (w->minimized)
-        xcb_map_window(nack__xcb.connection, nack__xcb_win(w)->handle);
-    xcb_flush(nack__xcb.connection);
+        xcb_map_window(xcb.connection, xcb_win(w)->handle);
+    xcb_flush(xcb.connection);
 }
 
-static void nack__xcb_window_request_attention(nack_window *w)
+static void xcb_window_request_attention(nack_window *w)
 {
-    nack__xcb_send_wm_state(w, NACK_NET_WM_STATE_ADD,
-                            nack__xcb.atom.NET_WM_STATE_DEMANDS_ATTENTION,
+    xcb_send_wm_state(w, NACK_NET_WM_STATE_ADD,
+                            xcb.atom.NET_WM_STATE_DEMANDS_ATTENTION,
                             XCB_ATOM_NONE);
 }
 
-static void nack__xcb_window_request_redraw(nack_window *w)
+static void xcb_window_request_redraw(nack_window *w)
 {
     xcb_expose_event_t event;
     memset(&event, 0, sizeof event);
     event.response_type = XCB_EXPOSE;
-    event.window = nack__xcb_win(w)->handle;
+    event.window = xcb_win(w)->handle;
     event.width = (uint16_t)w->width;
     event.height = (uint16_t)w->height;
     event.count = 0;
-    xcb_send_event(nack__xcb.connection, 0, nack__xcb_win(w)->handle,
+    xcb_send_event(xcb.connection, 0, xcb_win(w)->handle,
                    XCB_EVENT_MASK_EXPOSURE, (const char *)&event);
-    xcb_flush(nack__xcb.connection);
+    xcb_flush(xcb.connection);
 }
 
-static void nack__xcb_window_get_native(const nack_window *w,
+static void xcb_window_get_native(const nack_window *w,
                                         nack_native_window *out)
 {
     nack_xcb_window *xw = (nack_xcb_window *)w->native;
-    out->display = nack__xcb.connection;
-    out->surface = nack__xcb.xlib_display;   /* NULL on the pure-XCB path */
+    out->display = xcb.connection;
+    out->surface = xcb.xlib_display;   /* NULL on the pure-XCB path */
     out->handle = xw ? (uintptr_t)xw->handle : 0;
 }
 
@@ -1217,72 +1219,72 @@ static void nack__xcb_window_get_native(const nack_window *w,
 /* ------------------------------------------------------------------ */
 
 
-static bool nack__xcb_ensure_surface(nack_window *w, EGLConfig config)
+static bool xcb_ensure_surface(nack_window *w, EGLConfig config)
 {
-    nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = xcb_win(w);
     if (xw->surface != EGL_NO_SURFACE)
         return true;
 
     /* With EGL_EXT_platform_xcb the native window is a *pointer* to an
      * xcb_window_t; the legacy entry point takes the id by value. */
-    bool use_pointer = (nack__xcb.xlib_display == nullptr) &&
-                       nack__egl.create_platform_window_surface != nullptr;
+    bool use_pointer = (xcb.xlib_display == nullptr) &&
+                       egl.create_platform_window_surface != nullptr;
     void *native = use_pointer ? (void *)&xw->egl_native
                                : (void *)(uintptr_t)xw->handle;
 
-    xw->surface = nack__egl_create_window_surface(config, native, use_pointer,
+    xw->surface = egl_create_window_surface(config, native, use_pointer,
                                                   w->framebuffer.srgb);
     return xw->surface != EGL_NO_SURFACE;
 }
 
-static nack_gl_context *nack__xcb_gl_create(nack_backend_vt *vt,
+static nack_gl_context *xcb_gl_create(nack_backend_vt *vt,
                                                   nack_window *w,
-                                                   const nack__gl_desc *desc)
+                                                   const gl_desc *desc)
 {
-    if (!nack__egl.initialized) {
+    if (!egl.initialized) {
         state.fail(NACK_ERROR_UNSUPPORTED, "EGL is not available");
         return nullptr;
     }
-    nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = xcb_win(w);
     if (!xw->has_config) {
         state.fail(NACK_ERROR_NO_PIXEL_FORMAT,
                    "window was created without a usable EGL config");
         return nullptr;
     }
-    if (!nack__xcb_ensure_surface(w, xw->config))
+    if (!xcb_ensure_surface(w, xw->config))
         return nullptr;
-    return nack__egl_create_context(w, desc, xw->config, vt);
+    return egl_create_context(w, desc, xw->config, vt);
 }
 
-static void nack__xcb_gl_destroy(nack_gl_context *ctx)
+static void xcb_gl_destroy(nack_gl_context *ctx)
 {
-    nack__egl_destroy_context(ctx);
+    egl_destroy_context(ctx);
 }
 
-static bool nack__xcb_gl_make_current(nack_window *w, nack_gl_context *ctx)
+static bool xcb_gl_make_current(nack_window *w, nack_gl_context *ctx)
 {
     if (!ctx)
-        return nack__egl_make_current(EGL_NO_SURFACE, nullptr);
+        return egl_make_current(EGL_NO_SURFACE, nullptr);
     if (!w)
         return state.fail(NACK_ERROR_INVALID_ARGUMENT,
                           "gl_make_current needs a window for this context");
-    nack_xcb_window *xw = nack__xcb_win(w);
+    nack_xcb_window *xw = xcb_win(w);
     if (xw->surface == EGL_NO_SURFACE &&
-        !nack__xcb_ensure_surface(w, ((nack_egl_context *)ctx->native)->config))
+        !xcb_ensure_surface(w, ((nack_egl_context *)ctx->native)->config))
         return false;
-    return nack__egl_make_current(xw->surface, ctx);
+    return egl_make_current(xw->surface, ctx);
 }
 
-static void nack__xcb_gl_swap_buffers(nack_window *w)
+static void xcb_gl_swap_buffers(nack_window *w)
 {
-    nack__egl_swap_buffers(nack__xcb_win(w)->surface);
+    egl_swap_buffers(xcb_win(w)->surface);
 }
 
 /* ------------------------------------------------------------------ */
 /* Init / shutdown                                                    */
 /* ------------------------------------------------------------------ */
 
-static bool nack__xcb_egl_client_has(const char *name)
+static bool xcb_egl_client_has(const char *name)
 {
     const char *exts = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
     if (!exts)
@@ -1298,156 +1300,156 @@ static bool nack__xcb_egl_client_has(const char *name)
     return false;
 }
 
-static bool nack__xcb_connect(void)
+static bool xcb_open_connection(void)
 {
     /*
      * EGL_EXT_platform_xcb lets us stay on a pure XCB connection. Without it
      * (notably on the NVIDIA driver) EGL needs an Xlib Display*, so open one
      * and borrow its XCB connection rather than running two connections.
      */
-    bool want_xcb_platform = nack__xcb_egl_client_has("EGL_EXT_platform_xcb");
+    bool want_xcb_platform = xcb_egl_client_has("EGL_EXT_platform_xcb");
 
 #if defined(NACK_XCB_XLIB_FALLBACK)
     if (!want_xcb_platform) {
         Display *display = XOpenDisplay(nullptr);
         if (display) {
-            nack__xcb.xlib_display = display;
-            nack__xcb.connection = XGetXCBConnection(display);
-            if (nack__xcb.connection) {
+            xcb.xlib_display = display;
+            xcb.connection = XGetXCBConnection(display);
+            if (xcb.connection) {
                 /* Xlib must not consume events we want to read through XCB. */
                 XSetEventQueueOwner(display, XCBOwnsEventQueue);
-                nack__xcb.screen_number = DefaultScreen(display);
+                xcb.screen_number = DefaultScreen(display);
                 return true;
             }
             XCloseDisplay(display);
-            nack__xcb.xlib_display = nullptr;
+            xcb.xlib_display = nullptr;
         }
     }
 #else
     (void)want_xcb_platform;
 #endif
 
-    nack__xcb.connection = xcb_connect(nullptr, &nack__xcb.screen_number);
-    if (!nack__xcb.connection || xcb_connection_has_error(nack__xcb.connection)) {
-        if (nack__xcb.connection) {
-            xcb_disconnect(nack__xcb.connection);
-            nack__xcb.connection = nullptr;
+    xcb.connection = xcb_connect(nullptr, &xcb.screen_number);
+    if (!xcb.connection || xcb_connection_has_error(xcb.connection)) {
+        if (xcb.connection) {
+            xcb_disconnect(xcb.connection);
+            xcb.connection = nullptr;
         }
         return false;
     }
     return true;
 }
 
-static bool nack__xcb_init(const nack_win_init_desc *desc)
+static bool xcb_init(const nack_win_init_desc *desc)
 {
     (void)desc;
-    nack__xcb = nack_xcb_state{};
-    nack__xcb.wakeup_pipe[0] = nack__xcb.wakeup_pipe[1] = -1;
+    xcb = nack_xcb_state{};
+    xcb.wakeup_pipe[0] = xcb.wakeup_pipe[1] = -1;
 
     setlocale(LC_CTYPE, "");
 
-    if (!nack__xcb_connect())
+    if (!xcb_open_connection())
         return state.fail(NACK_ERROR_NO_BACKEND, "cannot connect to X display '%s'",
                           getenv("DISPLAY") ? getenv("DISPLAY") : "(unset)");
 
     /* Walk the setup to the screen this connection defaulted to. */
-    const xcb_setup_t *setup = xcb_get_setup(nack__xcb.connection);
+    const xcb_setup_t *setup = xcb_get_setup(xcb.connection);
     xcb_screen_iterator_t iter = xcb_setup_roots_iterator(setup);
-    for (int i = 0; i < nack__xcb.screen_number && iter.rem; ++i)
+    for (int i = 0; i < xcb.screen_number && iter.rem; ++i)
         xcb_screen_next(&iter);
     if (!iter.rem) {
-        xcb_disconnect(nack__xcb.connection);
-        nack__xcb.connection = nullptr;
+        xcb_disconnect(xcb.connection);
+        xcb.connection = nullptr;
         return state.fail(NACK_ERROR_NO_BACKEND, "X screen %d does not exist",
-                          nack__xcb.screen_number);
+                          xcb.screen_number);
     }
-    nack__xcb.screen = iter.data;
-    nack__xcb.root = nack__xcb.screen->root;
+    xcb.screen = iter.data;
+    xcb.root = xcb.screen->root;
 
-    if (pipe(nack__xcb.wakeup_pipe) != 0) {
-        xcb_disconnect(nack__xcb.connection);
-        nack__xcb.connection = nullptr;
+    if (pipe(xcb.wakeup_pipe) != 0) {
+        xcb_disconnect(xcb.connection);
+        xcb.connection = nullptr;
         return state.fail(NACK_ERROR_PLATFORM, "pipe() failed: %s", strerror(errno));
     }
     for (int i = 0; i < 2; ++i) {
-        int flags = fcntl(nack__xcb.wakeup_pipe[i], F_GETFL, 0);
-        fcntl(nack__xcb.wakeup_pipe[i], F_SETFL, flags | O_NONBLOCK);
-        flags = fcntl(nack__xcb.wakeup_pipe[i], F_GETFD, 0);
-        fcntl(nack__xcb.wakeup_pipe[i], F_SETFD, flags | FD_CLOEXEC);
+        int flags = fcntl(xcb.wakeup_pipe[i], F_GETFL, 0);
+        fcntl(xcb.wakeup_pipe[i], F_SETFL, flags | O_NONBLOCK);
+        flags = fcntl(xcb.wakeup_pipe[i], F_GETFD, 0);
+        fcntl(xcb.wakeup_pipe[i], F_SETFD, flags | FD_CLOEXEC);
     }
 
-    nack__xcb_intern_atoms();
-    nack__xcb.scale = nack__xcb_query_scale();
+    xcb_intern_atoms();
+    xcb.scale = xcb_query_scale();
 
-    if (!nack__xcb_init_xkb())
+    if (!xcb_init_xkb())
         nack_log("nack: XKB unavailable, keyboard input will be limited");
 
-    if (xcb_cursor_context_new(nack__xcb.connection, nack__xcb.screen,
-                               &nack__xcb.cursor_context) < 0)
-        nack__xcb.cursor_context = nullptr;
+    if (xcb_cursor_context_new(xcb.connection, xcb.screen,
+                               &xcb.cursor_context) < 0)
+        xcb.cursor_context = nullptr;
 
     /* Unmapped InputOnly window that holds selection ownership, so clipboard
      * contents outlive any particular application window. */
-    nack__xcb.helper = xcb_generate_id(nack__xcb.connection);
+    xcb.helper = xcb_generate_id(xcb.connection);
     uint32_t helper_mask = XCB_EVENT_MASK_PROPERTY_CHANGE;
-    xcb_create_window(nack__xcb.connection, XCB_COPY_FROM_PARENT, nack__xcb.helper,
-                      nack__xcb.root, -1, -1, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_ONLY,
+    xcb_create_window(xcb.connection, XCB_COPY_FROM_PARENT, xcb.helper,
+                      xcb.root, -1, -1, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_ONLY,
                       XCB_COPY_FROM_PARENT, XCB_CW_EVENT_MASK, &helper_mask);
 
     /* EGL: pure XCB where supported, Xlib display where it is not. */
     bool egl_ok = false;
-    if (!nack__xcb.xlib_display) {
+    if (!xcb.xlib_display) {
         EGLAttrib attribs[] = { EGL_PLATFORM_XCB_SCREEN_EXT,
-                                (EGLAttrib)nack__xcb.screen_number, EGL_NONE };
-        egl_ok = nack__egl_init(EGL_PLATFORM_XCB_EXT, nack__xcb.connection, attribs);
+                                (EGLAttrib)xcb.screen_number, EGL_NONE };
+        egl_ok = egl_init(EGL_PLATFORM_XCB_EXT, xcb.connection, attribs);
     }
-    if (!egl_ok && nack__xcb.xlib_display)
-        egl_ok = nack__egl_init(EGL_PLATFORM_X11_KHR, nack__xcb.xlib_display, nullptr);
+    if (!egl_ok && xcb.xlib_display)
+        egl_ok = egl_init(EGL_PLATFORM_X11_KHR, xcb.xlib_display, nullptr);
     if (!egl_ok)
         nack_log("nack: EGL unavailable; windows will have no OpenGL support");
 
-    xcb_flush(nack__xcb.connection);
+    xcb_flush(xcb.connection);
     return true;
 }
 
-static void nack__xcb_shutdown(void)
+static void xcb_shutdown(void)
 {
-    if (!nack__xcb.connection)
+    if (!xcb.connection)
         return;
 
-    nack__xcb_clipboard_shutdown();
-    nack__egl_terminate();
+    xcb_clipboard_shutdown();
+    egl_terminate();
 
     for (int i = 0; i < NACK_CURSOR_SHAPE_COUNT; ++i) {
-        if (nack__xcb.cursors_loaded[i] && nack__xcb.cursors[i] != XCB_CURSOR_NONE)
-            xcb_free_cursor(nack__xcb.connection, nack__xcb.cursors[i]);
+        if (xcb.cursors_loaded[i] && xcb.cursors[i] != XCB_CURSOR_NONE)
+            xcb_free_cursor(xcb.connection, xcb.cursors[i]);
     }
-    if (nack__xcb.blank_cursor != XCB_CURSOR_NONE)
-        xcb_free_cursor(nack__xcb.connection, nack__xcb.blank_cursor);
-    if (nack__xcb.cursor_context)
-        xcb_cursor_context_free(nack__xcb.cursor_context);
-    if (nack__xcb.helper)
-        xcb_destroy_window(nack__xcb.connection, nack__xcb.helper);
+    if (xcb.blank_cursor != XCB_CURSOR_NONE)
+        xcb_free_cursor(xcb.connection, xcb.blank_cursor);
+    if (xcb.cursor_context)
+        xcb_cursor_context_free(xcb.cursor_context);
+    if (xcb.helper)
+        xcb_destroy_window(xcb.connection, xcb.helper);
 
-    if (nack__xcb.compose_state) xkb_compose_state_unref(nack__xcb.compose_state);
-    if (nack__xcb.compose_table) xkb_compose_table_unref(nack__xcb.compose_table);
-    nack__xcb_release_keymap();
-    if (nack__xcb.xkb_context) xkb_context_unref(nack__xcb.xkb_context);
+    if (xcb.compose_state) xkb_compose_state_unref(xcb.compose_state);
+    if (xcb.compose_table) xkb_compose_table_unref(xcb.compose_table);
+    xcb_release_keymap();
+    if (xcb.xkb_context) xkb_context_unref(xcb.xkb_context);
 
-    if (nack__xcb.wakeup_pipe[0] >= 0) close(nack__xcb.wakeup_pipe[0]);
-    if (nack__xcb.wakeup_pipe[1] >= 0) close(nack__xcb.wakeup_pipe[1]);
+    if (xcb.wakeup_pipe[0] >= 0) close(xcb.wakeup_pipe[0]);
+    if (xcb.wakeup_pipe[1] >= 0) close(xcb.wakeup_pipe[1]);
 
-    xcb_flush(nack__xcb.connection);
+    xcb_flush(xcb.connection);
 #if defined(NACK_XCB_XLIB_FALLBACK)
-    if (nack__xcb.xlib_display)
-        XCloseDisplay((Display *)nack__xcb.xlib_display);
+    if (xcb.xlib_display)
+        XCloseDisplay((Display *)xcb.xlib_display);
     else
-        xcb_disconnect(nack__xcb.connection);
+        xcb_disconnect(xcb.connection);
 #else
-    xcb_disconnect(nack__xcb.connection);
+    xcb_disconnect(xcb.connection);
 #endif
 
-    nack__xcb = nack_xcb_state{};
+    xcb = nack_xcb_state{};
 }
 
 /* ------------------------------------------------------------------ */
@@ -1461,136 +1463,138 @@ public:
 
     bool init(const nack_win_init_desc *desc) override
     {
-        return nack__xcb_init(desc);
+        return xcb_init(desc);
     }
     void shutdown() override
     {
-        nack__xcb_shutdown();
+        xcb_shutdown();
     }
     bool window_create(nack_window *w, const nack_window_desc *desc) override
     {
-        return nack__xcb_window_create(w, desc);
+        return xcb_window_create(w, desc);
     }
     void window_destroy(nack_window *w) override
     {
-        nack__xcb_window_destroy(w);
+        xcb_window_destroy(w);
     }
     void window_show(nack_window *w, bool show) override
     {
-        nack__xcb_window_show(w, show);
+        xcb_window_show(w, show);
     }
     void window_set_title(nack_window *w, const char *title) override
     {
-        nack__xcb_set_title(w, title);
+        xcb_set_title(w, title);
     }
     void window_set_size(nack_window *w, int width, int height) override
     {
-        nack__xcb_window_set_size(w, width, height);
+        xcb_window_set_size(w, width, height);
     }
     void window_apply_size_hints(nack_window *w) override
     {
-        nack__xcb_apply_size_hints(w);
+        xcb_apply_size_hints(w);
     }
     void window_set_fullscreen(nack_window *w, bool fullscreen) override
     {
-        nack__xcb_window_set_fullscreen(w, fullscreen);
+        xcb_window_set_fullscreen(w, fullscreen);
     }
     void window_minimize(nack_window *w) override
     {
-        nack__xcb_window_minimize(w);
+        xcb_window_minimize(w);
     }
     void window_maximize(nack_window *w) override
     {
-        nack__xcb_window_maximize(w);
+        xcb_window_maximize(w);
     }
     void window_restore(nack_window *w) override
     {
-        nack__xcb_window_restore(w);
+        xcb_window_restore(w);
     }
     void window_request_redraw(nack_window *w) override
     {
-        nack__xcb_window_request_redraw(w);
+        xcb_window_request_redraw(w);
     }
     void window_set_cursor_shape(nack_window *w, nack_cursor_shape shape) override
     {
-        nack__xcb_set_cursor_shape(w, shape);
+        xcb_set_cursor_shape(w, shape);
     }
     void window_set_cursor_mode(nack_window *w, nack_cursor_mode mode) override
     {
-        nack__xcb_set_cursor_mode(w, mode);
+        xcb_set_cursor_mode(w, mode);
     }
     void window_get_native(const nack_window *w, nack_native_window *out) override
     {
-        nack__xcb_window_get_native(w, out);
+        xcb_window_get_native(w, out);
     }
     void window_focus(nack_window *w) override
     {
-        nack__xcb_window_focus(w);
+        xcb_window_focus(w);
     }
     void window_set_position(nack_window *w, int x, int y) override
     {
-        nack__xcb_window_set_position(w, x, y);
+        xcb_window_set_position(w, x, y);
     }
     void window_request_attention(nack_window *w) override
     {
-        nack__xcb_window_request_attention(w);
+        xcb_window_request_attention(w);
     }
     void pump_events(double timeout) override
     {
-        nack__xcb_pump_events(timeout);
+        xcb_pump_events(timeout);
     }
     void wakeup() override
     {
-        nack__xcb_wakeup();
+        xcb_wakeup();
     }
-    nack_gl_context *gl_create(nack_window *w, const nack__gl_desc *desc) override
+    nack_gl_context *gl_create(nack_window *w, const gl_desc *desc) override
     {
-        return nack__xcb_gl_create(this, w, desc);
+        return xcb_gl_create(this, w, desc);
     }
     void gl_destroy(nack_gl_context *ctx) override
     {
-        nack__xcb_gl_destroy(ctx);
+        xcb_gl_destroy(ctx);
     }
     bool gl_make_current(nack_window *w, nack_gl_context *ctx) override
     {
-        return nack__xcb_gl_make_current(w, ctx);
+        return xcb_gl_make_current(w, ctx);
     }
     void gl_swap_buffers(nack_window *w) override
     {
-        nack__xcb_gl_swap_buffers(w);
+        xcb_gl_swap_buffers(w);
     }
     void gl_set_swap_interval(int interval) override
     {
-        nack__egl_set_swap_interval(interval);
+        egl_set_swap_interval(interval);
     }
     void *gl_get_proc_address(const char *name) override
     {
-        return nack__egl_get_proc_address(name);
+        return egl_get_proc_address(name);
     }
     bool clipboard_set(const char *utf8) override
     {
-        return nack__xcb_clipboard_set(utf8);
+        return xcb_clipboard_set(utf8);
     }
     const char *clipboard_get() override
     {
-        return nack__xcb_clipboard_get();
+        return xcb_clipboard_get();
     }
     bool primary_set(const char *utf8) override
     {
-        return nack__xcb_primary_set(utf8);
+        return xcb_primary_set(utf8);
     }
     const char *primary_get() override
     {
-        return nack__xcb_primary_get();
+        return xcb_primary_get();
     }
 };
 
-xcb_backend nack__xcb_backend_instance;
+xcb_backend xcb_backend_instance;
 
 }   /* namespace */
 
 
-nack_backend_vt *nack__backend_x11(void)
+nack_backend_vt *backend_x11(void)
 {
-    return &nack__xcb_backend_instance;
+    return &xcb_backend_instance;
 }
+
+} }   /* namespace nack::detail */

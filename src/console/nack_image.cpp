@@ -19,17 +19,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-static char nack__image_error[256];
+static char image_error[256];
 
-static uint8_t *nack__image_fail(const char **error, const char *fmt, ...)
+static uint8_t *image_fail(const char **error, const char *fmt, ...)
 {
     va_list args;
 
     va_start(args, fmt);
-    vsnprintf(nack__image_error, sizeof nack__image_error, fmt, args);
+    vsnprintf(image_error, sizeof image_error, fmt, args);
     va_end(args);
     if (error)
-        *error = nack__image_error;
+        *error = image_error;
     return nullptr;
 }
 
@@ -42,9 +42,9 @@ uint8_t *nack__image_decode(const void *data, size_t size, int *width,
     if (error)
         *error = nullptr;
     if (!data || size == 0)
-        return nack__image_fail(error, "the image is empty");
+        return image_fail(error, "the image is empty");
     if (size > (size_t)INT_MAX)
-        return nack__image_fail(error, "the image is implausibly large");
+        return image_fail(error, "the image is implausibly large");
 
     /*
      * Asking for four channels is what makes the rest of the library simple:
@@ -56,12 +56,12 @@ uint8_t *nack__image_decode(const void *data, size_t size, int *width,
                                  &w, &h, &channels, 4);
     if (!rgba) {
         const char *why = stbi_failure_reason();
-        return nack__image_fail(error, "%s", why ? why : "cannot be decoded");
+        return image_fail(error, "%s", why ? why : "cannot be decoded");
     }
 
     if (w <= 0 || h <= 0) {
         stbi_image_free(rgba);
-        return nack__image_fail(error, "image has an unusable size %dx%d",
+        return image_fail(error, "image has an unusable size %dx%d",
                                 w, h);
     }
 

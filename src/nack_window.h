@@ -15,8 +15,8 @@
  *
  * Threading: unless documented otherwise, every function and method must be
  * called from the thread that called nack_state::init(). The exceptions are
- * nack_state::wakeup() and nack__win_time_ns()/nack__win_time_seconds(), which
- * are safe from any thread.
+ * nack_state::wakeup() and nack::detail::win_time_ns()/win_time_seconds(),
+ * which are safe from any thread.
  */
 #ifndef NACK_WINDOW_H_INCLUDED
 #define NACK_WINDOW_H_INCLUDED
@@ -106,11 +106,24 @@ enum nack_cursor_mode {
     NACK_CURSOR_MODE_CAPTURED    /* hidden + confined, relative motion only */
 };
 
-enum nack__gl_profile {
+namespace nack { namespace detail {
+
+enum gl_profile {
     NACK__GL_PROFILE_CORE = 0,
     NACK__GL_PROFILE_COMPAT,
     NACK__GL_PROFILE_ES
 };
+
+} }   /* namespace nack::detail */
+
+/*
+ * Every nack__-prefixed name below this point lives in nack::detail - a real
+ * C++ namespace rather than a name-mangled-by-hand prefix - and is brought in
+ * unqualified from here on by this using-directive. Fine for an
+ * implementation header nothing outside the library includes; a public one
+ * would never do this.
+ */
+using namespace nack::detail;
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -200,15 +213,19 @@ struct nack_window_desc {
     void *user_data = nullptr;
 };
 
+namespace nack { namespace detail {
+
 /* Context attributes. The framebuffer format comes from the window. */
-struct nack__gl_desc {
+struct gl_desc {
     int major = 3, minor = 3;     /* 0 = "any", library picks a sane default */
-    nack__gl_profile profile = NACK__GL_PROFILE_CORE;
+    gl_profile profile = NACK__GL_PROFILE_CORE;
     bool debug = false;
     bool forward_compatible = false;
     bool robust = false;
     nack_gl_context *share = nullptr;
 };
+
+} }   /* namespace nack::detail */
 
 /* -------------------------------------------------------------------------- */
 /* Free-standing utilities                                                    */
@@ -219,12 +236,17 @@ struct nack__gl_desc {
 /* lookup, and the OS clock, none of which touch any library state.          */
 /* -------------------------------------------------------------------------- */
 
-const char *nack__win_backend_name(nack_backend backend);
-const char *nack_key_get_name(nack_key key);
+namespace nack { namespace detail {
+
+const char *win_backend_name(nack_backend backend);
 
 /* Safe from any thread, unlike everything that touches nack_state. */
-uint64_t nack__win_time_ns(void);
-double   nack__win_time_seconds(void);
+uint64_t win_time_ns(void);
+double   win_time_seconds(void);
+
+} }   /* namespace nack::detail */
+
+const char *nack_key_get_name(nack_key key);
 
 /* -------------------------------------------------------------------------- */
 /* Native handles (for interop; fields are backend-specific)                  */

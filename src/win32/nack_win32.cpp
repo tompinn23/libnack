@@ -5,7 +5,9 @@
 
 #include <stdio.h>
 
-nack_win32_state nack__win32;
+namespace nack { namespace detail {
+
+nack_win32_state win32;
 
 #define NACK_DEFAULT_DPI 96
 
@@ -13,7 +15,7 @@ nack_win32_state nack__win32;
 /* String conversion                                                  */
 /* ------------------------------------------------------------------ */
 
-std::optional<std::wstring> nack__win32_utf8_to_wide(const char *utf8)
+std::optional<std::wstring> win32_utf8_to_wide(const char *utf8)
 {
     if (!utf8)
         return std::nullopt;
@@ -27,7 +29,7 @@ std::optional<std::wstring> nack__win32_utf8_to_wide(const char *utf8)
     return wide;
 }
 
-std::optional<std::string> nack__win32_wide_to_utf8(const WCHAR *wide)
+std::optional<std::string> win32_wide_to_utf8(const WCHAR *wide)
 {
     if (!wide)
         return std::nullopt;
@@ -48,140 +50,140 @@ std::optional<std::string> nack__win32_wide_to_utf8(const WCHAR *wide)
 /*
  * Indexed by set-1 scan code, so the mapping follows the key's position and
  * not the active layout. Extended keys (the 0xE0 prefix) are resolved
- * separately in nack__win32_key_from_message.
+ * separately in win32_key_from_message.
  */
-static nack_key nack__win32_scancodes[512];
+static nack_key win32_scancodes[512];
 
-static void nack__win32_build_keycodes(void)
+static void win32_build_keycodes(void)
 {
-    memset(nack__win32_scancodes, 0, sizeof nack__win32_scancodes);
+    memset(win32_scancodes, 0, sizeof win32_scancodes);
 
-    nack__win32_scancodes[0x01] = NACK_KEY_ESCAPE;
-    nack__win32_scancodes[0x02] = NACK_KEY_1;
-    nack__win32_scancodes[0x03] = NACK_KEY_2;
-    nack__win32_scancodes[0x04] = NACK_KEY_3;
-    nack__win32_scancodes[0x05] = NACK_KEY_4;
-    nack__win32_scancodes[0x06] = NACK_KEY_5;
-    nack__win32_scancodes[0x07] = NACK_KEY_6;
-    nack__win32_scancodes[0x08] = NACK_KEY_7;
-    nack__win32_scancodes[0x09] = NACK_KEY_8;
-    nack__win32_scancodes[0x0A] = NACK_KEY_9;
-    nack__win32_scancodes[0x0B] = NACK_KEY_0;
-    nack__win32_scancodes[0x0C] = NACK_KEY_MINUS;
-    nack__win32_scancodes[0x0D] = NACK_KEY_EQUAL;
-    nack__win32_scancodes[0x0E] = NACK_KEY_BACKSPACE;
-    nack__win32_scancodes[0x0F] = NACK_KEY_TAB;
-    nack__win32_scancodes[0x10] = NACK_KEY_Q;
-    nack__win32_scancodes[0x11] = NACK_KEY_W;
-    nack__win32_scancodes[0x12] = NACK_KEY_E;
-    nack__win32_scancodes[0x13] = NACK_KEY_R;
-    nack__win32_scancodes[0x14] = NACK_KEY_T;
-    nack__win32_scancodes[0x15] = NACK_KEY_Y;
-    nack__win32_scancodes[0x16] = NACK_KEY_U;
-    nack__win32_scancodes[0x17] = NACK_KEY_I;
-    nack__win32_scancodes[0x18] = NACK_KEY_O;
-    nack__win32_scancodes[0x19] = NACK_KEY_P;
-    nack__win32_scancodes[0x1A] = NACK_KEY_LEFT_BRACKET;
-    nack__win32_scancodes[0x1B] = NACK_KEY_RIGHT_BRACKET;
-    nack__win32_scancodes[0x1C] = NACK_KEY_ENTER;
-    nack__win32_scancodes[0x1D] = NACK_KEY_LEFT_CTRL;
-    nack__win32_scancodes[0x1E] = NACK_KEY_A;
-    nack__win32_scancodes[0x1F] = NACK_KEY_S;
-    nack__win32_scancodes[0x20] = NACK_KEY_D;
-    nack__win32_scancodes[0x21] = NACK_KEY_F;
-    nack__win32_scancodes[0x22] = NACK_KEY_G;
-    nack__win32_scancodes[0x23] = NACK_KEY_H;
-    nack__win32_scancodes[0x24] = NACK_KEY_J;
-    nack__win32_scancodes[0x25] = NACK_KEY_K;
-    nack__win32_scancodes[0x26] = NACK_KEY_L;
-    nack__win32_scancodes[0x27] = NACK_KEY_SEMICOLON;
-    nack__win32_scancodes[0x28] = NACK_KEY_APOSTROPHE;
-    nack__win32_scancodes[0x29] = NACK_KEY_GRAVE;
-    nack__win32_scancodes[0x2A] = NACK_KEY_LEFT_SHIFT;
-    nack__win32_scancodes[0x2B] = NACK_KEY_BACKSLASH;
-    nack__win32_scancodes[0x2C] = NACK_KEY_Z;
-    nack__win32_scancodes[0x2D] = NACK_KEY_X;
-    nack__win32_scancodes[0x2E] = NACK_KEY_C;
-    nack__win32_scancodes[0x2F] = NACK_KEY_V;
-    nack__win32_scancodes[0x30] = NACK_KEY_B;
-    nack__win32_scancodes[0x31] = NACK_KEY_N;
-    nack__win32_scancodes[0x32] = NACK_KEY_M;
-    nack__win32_scancodes[0x33] = NACK_KEY_COMMA;
-    nack__win32_scancodes[0x34] = NACK_KEY_PERIOD;
-    nack__win32_scancodes[0x35] = NACK_KEY_SLASH;
-    nack__win32_scancodes[0x36] = NACK_KEY_RIGHT_SHIFT;
-    nack__win32_scancodes[0x37] = NACK_KEY_KP_MULTIPLY;
-    nack__win32_scancodes[0x38] = NACK_KEY_LEFT_ALT;
-    nack__win32_scancodes[0x39] = NACK_KEY_SPACE;
-    nack__win32_scancodes[0x3A] = NACK_KEY_CAPS_LOCK;
-    nack__win32_scancodes[0x3B] = NACK_KEY_F1;
-    nack__win32_scancodes[0x3C] = NACK_KEY_F2;
-    nack__win32_scancodes[0x3D] = NACK_KEY_F3;
-    nack__win32_scancodes[0x3E] = NACK_KEY_F4;
-    nack__win32_scancodes[0x3F] = NACK_KEY_F5;
-    nack__win32_scancodes[0x40] = NACK_KEY_F6;
-    nack__win32_scancodes[0x41] = NACK_KEY_F7;
-    nack__win32_scancodes[0x42] = NACK_KEY_F8;
-    nack__win32_scancodes[0x43] = NACK_KEY_F9;
-    nack__win32_scancodes[0x44] = NACK_KEY_F10;
-    nack__win32_scancodes[0x45] = NACK_KEY_NUM_LOCK;
-    nack__win32_scancodes[0x46] = NACK_KEY_SCROLL_LOCK;
-    nack__win32_scancodes[0x47] = NACK_KEY_KP_7;
-    nack__win32_scancodes[0x48] = NACK_KEY_KP_8;
-    nack__win32_scancodes[0x49] = NACK_KEY_KP_9;
-    nack__win32_scancodes[0x4A] = NACK_KEY_KP_SUBTRACT;
-    nack__win32_scancodes[0x4B] = NACK_KEY_KP_4;
-    nack__win32_scancodes[0x4C] = NACK_KEY_KP_5;
-    nack__win32_scancodes[0x4D] = NACK_KEY_KP_6;
-    nack__win32_scancodes[0x4E] = NACK_KEY_KP_ADD;
-    nack__win32_scancodes[0x4F] = NACK_KEY_KP_1;
-    nack__win32_scancodes[0x50] = NACK_KEY_KP_2;
-    nack__win32_scancodes[0x51] = NACK_KEY_KP_3;
-    nack__win32_scancodes[0x52] = NACK_KEY_KP_0;
-    nack__win32_scancodes[0x53] = NACK_KEY_KP_DECIMAL;
-    nack__win32_scancodes[0x56] = NACK_KEY_NON_US_BACKSLASH;
-    nack__win32_scancodes[0x57] = NACK_KEY_F11;
-    nack__win32_scancodes[0x58] = NACK_KEY_F12;
-    nack__win32_scancodes[0x64] = NACK_KEY_F13;
-    nack__win32_scancodes[0x65] = NACK_KEY_F14;
-    nack__win32_scancodes[0x66] = NACK_KEY_F15;
-    nack__win32_scancodes[0x67] = NACK_KEY_F16;
-    nack__win32_scancodes[0x68] = NACK_KEY_F17;
-    nack__win32_scancodes[0x69] = NACK_KEY_F18;
-    nack__win32_scancodes[0x6A] = NACK_KEY_F19;
-    nack__win32_scancodes[0x6B] = NACK_KEY_F20;
-    nack__win32_scancodes[0x6C] = NACK_KEY_F21;
-    nack__win32_scancodes[0x6D] = NACK_KEY_F22;
-    nack__win32_scancodes[0x6E] = NACK_KEY_F23;
-    nack__win32_scancodes[0x76] = NACK_KEY_F24;
+    win32_scancodes[0x01] = NACK_KEY_ESCAPE;
+    win32_scancodes[0x02] = NACK_KEY_1;
+    win32_scancodes[0x03] = NACK_KEY_2;
+    win32_scancodes[0x04] = NACK_KEY_3;
+    win32_scancodes[0x05] = NACK_KEY_4;
+    win32_scancodes[0x06] = NACK_KEY_5;
+    win32_scancodes[0x07] = NACK_KEY_6;
+    win32_scancodes[0x08] = NACK_KEY_7;
+    win32_scancodes[0x09] = NACK_KEY_8;
+    win32_scancodes[0x0A] = NACK_KEY_9;
+    win32_scancodes[0x0B] = NACK_KEY_0;
+    win32_scancodes[0x0C] = NACK_KEY_MINUS;
+    win32_scancodes[0x0D] = NACK_KEY_EQUAL;
+    win32_scancodes[0x0E] = NACK_KEY_BACKSPACE;
+    win32_scancodes[0x0F] = NACK_KEY_TAB;
+    win32_scancodes[0x10] = NACK_KEY_Q;
+    win32_scancodes[0x11] = NACK_KEY_W;
+    win32_scancodes[0x12] = NACK_KEY_E;
+    win32_scancodes[0x13] = NACK_KEY_R;
+    win32_scancodes[0x14] = NACK_KEY_T;
+    win32_scancodes[0x15] = NACK_KEY_Y;
+    win32_scancodes[0x16] = NACK_KEY_U;
+    win32_scancodes[0x17] = NACK_KEY_I;
+    win32_scancodes[0x18] = NACK_KEY_O;
+    win32_scancodes[0x19] = NACK_KEY_P;
+    win32_scancodes[0x1A] = NACK_KEY_LEFT_BRACKET;
+    win32_scancodes[0x1B] = NACK_KEY_RIGHT_BRACKET;
+    win32_scancodes[0x1C] = NACK_KEY_ENTER;
+    win32_scancodes[0x1D] = NACK_KEY_LEFT_CTRL;
+    win32_scancodes[0x1E] = NACK_KEY_A;
+    win32_scancodes[0x1F] = NACK_KEY_S;
+    win32_scancodes[0x20] = NACK_KEY_D;
+    win32_scancodes[0x21] = NACK_KEY_F;
+    win32_scancodes[0x22] = NACK_KEY_G;
+    win32_scancodes[0x23] = NACK_KEY_H;
+    win32_scancodes[0x24] = NACK_KEY_J;
+    win32_scancodes[0x25] = NACK_KEY_K;
+    win32_scancodes[0x26] = NACK_KEY_L;
+    win32_scancodes[0x27] = NACK_KEY_SEMICOLON;
+    win32_scancodes[0x28] = NACK_KEY_APOSTROPHE;
+    win32_scancodes[0x29] = NACK_KEY_GRAVE;
+    win32_scancodes[0x2A] = NACK_KEY_LEFT_SHIFT;
+    win32_scancodes[0x2B] = NACK_KEY_BACKSLASH;
+    win32_scancodes[0x2C] = NACK_KEY_Z;
+    win32_scancodes[0x2D] = NACK_KEY_X;
+    win32_scancodes[0x2E] = NACK_KEY_C;
+    win32_scancodes[0x2F] = NACK_KEY_V;
+    win32_scancodes[0x30] = NACK_KEY_B;
+    win32_scancodes[0x31] = NACK_KEY_N;
+    win32_scancodes[0x32] = NACK_KEY_M;
+    win32_scancodes[0x33] = NACK_KEY_COMMA;
+    win32_scancodes[0x34] = NACK_KEY_PERIOD;
+    win32_scancodes[0x35] = NACK_KEY_SLASH;
+    win32_scancodes[0x36] = NACK_KEY_RIGHT_SHIFT;
+    win32_scancodes[0x37] = NACK_KEY_KP_MULTIPLY;
+    win32_scancodes[0x38] = NACK_KEY_LEFT_ALT;
+    win32_scancodes[0x39] = NACK_KEY_SPACE;
+    win32_scancodes[0x3A] = NACK_KEY_CAPS_LOCK;
+    win32_scancodes[0x3B] = NACK_KEY_F1;
+    win32_scancodes[0x3C] = NACK_KEY_F2;
+    win32_scancodes[0x3D] = NACK_KEY_F3;
+    win32_scancodes[0x3E] = NACK_KEY_F4;
+    win32_scancodes[0x3F] = NACK_KEY_F5;
+    win32_scancodes[0x40] = NACK_KEY_F6;
+    win32_scancodes[0x41] = NACK_KEY_F7;
+    win32_scancodes[0x42] = NACK_KEY_F8;
+    win32_scancodes[0x43] = NACK_KEY_F9;
+    win32_scancodes[0x44] = NACK_KEY_F10;
+    win32_scancodes[0x45] = NACK_KEY_NUM_LOCK;
+    win32_scancodes[0x46] = NACK_KEY_SCROLL_LOCK;
+    win32_scancodes[0x47] = NACK_KEY_KP_7;
+    win32_scancodes[0x48] = NACK_KEY_KP_8;
+    win32_scancodes[0x49] = NACK_KEY_KP_9;
+    win32_scancodes[0x4A] = NACK_KEY_KP_SUBTRACT;
+    win32_scancodes[0x4B] = NACK_KEY_KP_4;
+    win32_scancodes[0x4C] = NACK_KEY_KP_5;
+    win32_scancodes[0x4D] = NACK_KEY_KP_6;
+    win32_scancodes[0x4E] = NACK_KEY_KP_ADD;
+    win32_scancodes[0x4F] = NACK_KEY_KP_1;
+    win32_scancodes[0x50] = NACK_KEY_KP_2;
+    win32_scancodes[0x51] = NACK_KEY_KP_3;
+    win32_scancodes[0x52] = NACK_KEY_KP_0;
+    win32_scancodes[0x53] = NACK_KEY_KP_DECIMAL;
+    win32_scancodes[0x56] = NACK_KEY_NON_US_BACKSLASH;
+    win32_scancodes[0x57] = NACK_KEY_F11;
+    win32_scancodes[0x58] = NACK_KEY_F12;
+    win32_scancodes[0x64] = NACK_KEY_F13;
+    win32_scancodes[0x65] = NACK_KEY_F14;
+    win32_scancodes[0x66] = NACK_KEY_F15;
+    win32_scancodes[0x67] = NACK_KEY_F16;
+    win32_scancodes[0x68] = NACK_KEY_F17;
+    win32_scancodes[0x69] = NACK_KEY_F18;
+    win32_scancodes[0x6A] = NACK_KEY_F19;
+    win32_scancodes[0x6B] = NACK_KEY_F20;
+    win32_scancodes[0x6C] = NACK_KEY_F21;
+    win32_scancodes[0x6D] = NACK_KEY_F22;
+    win32_scancodes[0x6E] = NACK_KEY_F23;
+    win32_scancodes[0x76] = NACK_KEY_F24;
 
     /* Extended keys, stored at 0x100 + scancode. */
-    nack__win32_scancodes[0x100 + 0x1C] = NACK_KEY_KP_ENTER;
-    nack__win32_scancodes[0x100 + 0x1D] = NACK_KEY_RIGHT_CTRL;
-    nack__win32_scancodes[0x100 + 0x35] = NACK_KEY_KP_DIVIDE;
-    nack__win32_scancodes[0x100 + 0x37] = NACK_KEY_PRINT_SCREEN;
-    nack__win32_scancodes[0x100 + 0x38] = NACK_KEY_RIGHT_ALT;
-    nack__win32_scancodes[0x100 + 0x45] = NACK_KEY_NUM_LOCK;
-    nack__win32_scancodes[0x100 + 0x46] = NACK_KEY_PAUSE;
-    nack__win32_scancodes[0x100 + 0x47] = NACK_KEY_HOME;
-    nack__win32_scancodes[0x100 + 0x48] = NACK_KEY_UP;
-    nack__win32_scancodes[0x100 + 0x49] = NACK_KEY_PAGE_UP;
-    nack__win32_scancodes[0x100 + 0x4B] = NACK_KEY_LEFT;
-    nack__win32_scancodes[0x100 + 0x4D] = NACK_KEY_RIGHT;
-    nack__win32_scancodes[0x100 + 0x4F] = NACK_KEY_END;
-    nack__win32_scancodes[0x100 + 0x50] = NACK_KEY_DOWN;
-    nack__win32_scancodes[0x100 + 0x51] = NACK_KEY_PAGE_DOWN;
-    nack__win32_scancodes[0x100 + 0x52] = NACK_KEY_INSERT;
-    nack__win32_scancodes[0x100 + 0x53] = NACK_KEY_DELETE;
-    nack__win32_scancodes[0x100 + 0x5B] = NACK_KEY_LEFT_SUPER;
-    nack__win32_scancodes[0x100 + 0x5C] = NACK_KEY_RIGHT_SUPER;
-    nack__win32_scancodes[0x100 + 0x5D] = NACK_KEY_APPLICATION;
-    nack__win32_scancodes[0x100 + 0x20] = NACK_KEY_MUTE;
-    nack__win32_scancodes[0x100 + 0x2E] = NACK_KEY_VOLUME_DOWN;
-    nack__win32_scancodes[0x100 + 0x30] = NACK_KEY_VOLUME_UP;
+    win32_scancodes[0x100 + 0x1C] = NACK_KEY_KP_ENTER;
+    win32_scancodes[0x100 + 0x1D] = NACK_KEY_RIGHT_CTRL;
+    win32_scancodes[0x100 + 0x35] = NACK_KEY_KP_DIVIDE;
+    win32_scancodes[0x100 + 0x37] = NACK_KEY_PRINT_SCREEN;
+    win32_scancodes[0x100 + 0x38] = NACK_KEY_RIGHT_ALT;
+    win32_scancodes[0x100 + 0x45] = NACK_KEY_NUM_LOCK;
+    win32_scancodes[0x100 + 0x46] = NACK_KEY_PAUSE;
+    win32_scancodes[0x100 + 0x47] = NACK_KEY_HOME;
+    win32_scancodes[0x100 + 0x48] = NACK_KEY_UP;
+    win32_scancodes[0x100 + 0x49] = NACK_KEY_PAGE_UP;
+    win32_scancodes[0x100 + 0x4B] = NACK_KEY_LEFT;
+    win32_scancodes[0x100 + 0x4D] = NACK_KEY_RIGHT;
+    win32_scancodes[0x100 + 0x4F] = NACK_KEY_END;
+    win32_scancodes[0x100 + 0x50] = NACK_KEY_DOWN;
+    win32_scancodes[0x100 + 0x51] = NACK_KEY_PAGE_DOWN;
+    win32_scancodes[0x100 + 0x52] = NACK_KEY_INSERT;
+    win32_scancodes[0x100 + 0x53] = NACK_KEY_DELETE;
+    win32_scancodes[0x100 + 0x5B] = NACK_KEY_LEFT_SUPER;
+    win32_scancodes[0x100 + 0x5C] = NACK_KEY_RIGHT_SUPER;
+    win32_scancodes[0x100 + 0x5D] = NACK_KEY_APPLICATION;
+    win32_scancodes[0x100 + 0x20] = NACK_KEY_MUTE;
+    win32_scancodes[0x100 + 0x2E] = NACK_KEY_VOLUME_DOWN;
+    win32_scancodes[0x100 + 0x30] = NACK_KEY_VOLUME_UP;
 }
 
-static nack_key nack__win32_key_from_message(WPARAM wparam, LPARAM lparam)
+static nack_key win32_key_from_message(WPARAM wparam, LPARAM lparam)
 {
     UINT scancode = (UINT)((lparam >> 16) & 0x1FF);   /* includes the 0x100 bit */
 
@@ -192,8 +194,8 @@ static nack_key nack__win32_key_from_message(WPARAM wparam, LPARAM lparam)
     if (wparam == VK_NUMLOCK)
         return NACK_KEY_NUM_LOCK;
 
-    if (scancode < 512 && nack__win32_scancodes[scancode] != NACK_KEY_UNKNOWN)
-        return nack__win32_scancodes[scancode];
+    if (scancode < 512 && win32_scancodes[scancode] != NACK_KEY_UNKNOWN)
+        return win32_scancodes[scancode];
 
     /* Fall back to the virtual key for anything the table misses. */
     switch (wparam) {
@@ -207,7 +209,7 @@ static nack_key nack__win32_key_from_message(WPARAM wparam, LPARAM lparam)
     return NACK_KEY_UNKNOWN;
 }
 
-static uint32_t nack__win32_mods(void)
+static uint32_t win32_mods(void)
 {
     uint32_t mods = 0;
     if (GetKeyState(VK_SHIFT) & 0x8000)   mods |= NACK_MOD_SHIFT;
@@ -224,10 +226,10 @@ static uint32_t nack__win32_mods(void)
 /* DPI                                                                */
 /* ------------------------------------------------------------------ */
 
-static UINT nack__win32_dpi_for_window(HWND hwnd)
+static UINT win32_dpi_for_window(HWND hwnd)
 {
-    if (nack__win32.GetDpiForWindow_)
-        return nack__win32.GetDpiForWindow_(hwnd);
+    if (win32.GetDpiForWindow_)
+        return win32.GetDpiForWindow_(hwnd);
 
     HDC hdc = GetDC(hwnd);
     UINT dpi = hdc ? (UINT)GetDeviceCaps(hdc, LOGPIXELSX) : NACK_DEFAULT_DPI;
@@ -236,17 +238,17 @@ static UINT nack__win32_dpi_for_window(HWND hwnd)
     return dpi ? dpi : NACK_DEFAULT_DPI;
 }
 
-static void nack__win32_adjust_rect(nack_window *w, RECT *rect, DWORD style,
+static void win32_adjust_rect(nack_window *w, RECT *rect, DWORD style,
                                     DWORD ex_style, UINT dpi)
 {
     (void)w;
-    if (nack__win32.AdjustWindowRectExForDpi_)
-        nack__win32.AdjustWindowRectExForDpi_(rect, style, FALSE, ex_style, dpi);
+    if (win32.AdjustWindowRectExForDpi_)
+        win32.AdjustWindowRectExForDpi_(rect, style, FALSE, ex_style, dpi);
     else
         AdjustWindowRectEx(rect, style, FALSE, ex_style);
 }
 
-static DWORD nack__win32_style(const nack_window *w)
+static DWORD win32_style(const nack_window *w)
 {
     DWORD style = WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
     if (!w->decorated)
@@ -257,7 +259,7 @@ static DWORD nack__win32_style(const nack_window *w)
     return style;
 }
 
-static DWORD nack__win32_ex_style(const nack_window *w)
+static DWORD win32_ex_style(const nack_window *w)
 {
     DWORD ex_style = WS_EX_APPWINDOW;
     if (w->transparent)
@@ -269,33 +271,33 @@ static DWORD nack__win32_ex_style(const nack_window *w)
 /* Cursors                                                            */
 /* ------------------------------------------------------------------ */
 
-static const LPCWSTR nack__win32_cursor_ids[NACK_CURSOR_SHAPE_COUNT] = {
+static const LPCWSTR win32_cursor_ids[NACK_CURSOR_SHAPE_COUNT] = {
     IDC_ARROW, IDC_IBEAM, IDC_CROSS, IDC_HAND,
     IDC_SIZEWE, IDC_SIZENS, IDC_SIZENWSE, IDC_SIZENESW,
     IDC_SIZEALL, IDC_NO, IDC_WAIT,
 };
 
-static HCURSOR nack__win32_get_cursor(nack_cursor_shape shape)
+static HCURSOR win32_get_cursor(nack_cursor_shape shape)
 {
-    if (!nack__win32.cursors_loaded[shape]) {
-        nack__win32.cursors[shape] =
-            LoadCursorW(NULL, nack__win32_cursor_ids[shape]);
-        nack__win32.cursors_loaded[shape] = true;
+    if (!win32.cursors_loaded[shape]) {
+        win32.cursors[shape] =
+            LoadCursorW(NULL, win32_cursor_ids[shape]);
+        win32.cursors_loaded[shape] = true;
     }
-    return nack__win32.cursors[shape];
+    return win32.cursors[shape];
 }
 
-static void nack__win32_apply_cursor(nack_window *w)
+static void win32_apply_cursor(nack_window *w)
 {
     if (w->cursor_mode == NACK_CURSOR_MODE_NORMAL)
-        SetCursor(nack__win32_get_cursor(w->cursor_shape));
+        SetCursor(win32_get_cursor(w->cursor_shape));
     else
         SetCursor(NULL);
 }
 
-static void nack__win32_clip_cursor(nack_window *w, bool clip)
+static void win32_clip_cursor(nack_window *w, bool clip)
 {
-    nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = win32_win(w);
     if (clip) {
         RECT rect;
         GetClientRect(ww->hwnd, &rect);
@@ -312,27 +314,27 @@ static void nack__win32_clip_cursor(nack_window *w, bool clip)
     }
 }
 
-static void nack__win32_set_cursor_mode(nack_window *w,
+static void win32_set_cursor_mode(nack_window *w,
                                         nack_cursor_mode mode)
 {
-    nack__win32_clip_cursor(w, mode == NACK_CURSOR_MODE_CAPTURED);
-    nack__win32_apply_cursor(w);
+    win32_clip_cursor(w, mode == NACK_CURSOR_MODE_CAPTURED);
+    win32_apply_cursor(w);
 }
 
-static void nack__win32_set_cursor_shape(nack_window *w,
+static void win32_set_cursor_shape(nack_window *w,
                                          nack_cursor_shape shape)
 {
     (void)shape;
-    nack__win32_apply_cursor(w);
+    win32_apply_cursor(w);
 }
 
 /* ------------------------------------------------------------------ */
 /* Window procedure                                                   */
 /* ------------------------------------------------------------------ */
 
-static void nack__win32_track_mouse_leave(nack_window *w)
+static void win32_track_mouse_leave(nack_window *w)
 {
-    nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = win32_win(w);
     if (ww->cursor_tracked)
         return;
     TRACKMOUSEEVENT track;
@@ -344,9 +346,9 @@ static void nack__win32_track_mouse_leave(nack_window *w)
     ww->cursor_tracked = true;
 }
 
-static void nack__win32_update_size(nack_window *w)
+static void win32_update_size(nack_window *w)
 {
-    nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = win32_win(w);
     RECT rect;
     GetClientRect(ww->hwnd, &rect);
     int width = rect.right - rect.left;
@@ -356,7 +358,7 @@ static void nack__win32_update_size(nack_window *w)
     w->emit_resize(width, height, width, height);
 }
 
-static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+static LRESULT CALLBACK win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
                                             LPARAM lparam)
 {
     nack_window *w = (nack_window *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
@@ -364,13 +366,13 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
         if (msg == WM_NCCREATE) {
             /* Opt the non-client area into per-monitor DPI scaling before the
              * frame is created, or the caption is sized for the wrong DPI. */
-            if (nack__win32.EnableNonClientDpiScaling_)
-                nack__win32.EnableNonClientDpiScaling_(hwnd);
+            if (win32.EnableNonClientDpiScaling_)
+                win32.EnableNonClientDpiScaling_(hwnd);
         }
         return DefWindowProcW(hwnd, msg, wparam, lparam);
     }
 
-    nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = win32_win(w);
 
     switch (msg) {
     case WM_CLOSE:
@@ -392,18 +394,18 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
     case WM_SETFOCUS:
         w->emit_focus(true);
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED)
-            nack__win32_clip_cursor(w, true);
+            win32_clip_cursor(w, true);
         return 0;
 
     case WM_KILLFOCUS:
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED)
-            nack__win32_clip_cursor(w, false);
+            win32_clip_cursor(w, false);
         w->emit_focus(false);
         return 0;
 
     case WM_SETCURSOR:
         if (LOWORD(lparam) == HTCLIENT) {
-            nack__win32_apply_cursor(w);
+            win32_apply_cursor(w);
             return TRUE;
         }
         break;
@@ -426,7 +428,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
             w->emit_resize(width, height, width, height);
         }
         if (w->cursor_mode == NACK_CURSOR_MODE_CAPTURED)
-            nack__win32_clip_cursor(w, true);
+            win32_clip_cursor(w, true);
         return 0;
     }
 
@@ -461,19 +463,19 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 
     case WM_TIMER:
         if (wparam == 1 && ww->in_size_move) {
-            nack__win32_update_size(w);
+            win32_update_size(w);
             w->emit_simple(NACK_WIN_EVENT_WINDOW_EXPOSE);
         }
         return 0;
 
     case WM_GETMINMAXINFO: {
         MINMAXINFO *info = (MINMAXINFO *)lparam;
-        DWORD style = nack__win32_style(w);
-        DWORD ex_style = nack__win32_ex_style(w);
+        DWORD style = win32_style(w);
+        DWORD ex_style = win32_ex_style(w);
 
         if (w->min_width > 0 || w->min_height > 0) {
             RECT rect = { 0, 0, w->min_width, w->min_height };
-            nack__win32_adjust_rect(w, &rect, style, ex_style, ww->dpi);
+            win32_adjust_rect(w, &rect, style, ex_style, ww->dpi);
             info->ptMinTrackSize.x = rect.right - rect.left;
             info->ptMinTrackSize.y = rect.bottom - rect.top;
         }
@@ -481,7 +483,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
             RECT rect = { 0, 0,
                           w->max_width > 0 ? w->max_width : 65535,
                           w->max_height > 0 ? w->max_height : 65535 };
-            nack__win32_adjust_rect(w, &rect, style, ex_style, ww->dpi);
+            win32_adjust_rect(w, &rect, style, ex_style, ww->dpi);
             info->ptMaxTrackSize.x = rect.right - rect.left;
             info->ptMaxTrackSize.y = rect.bottom - rect.top;
         }
@@ -498,8 +500,8 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 
         RECT *rect = (RECT *)lparam;
         RECT frame = { 0, 0, 0, 0 };
-        nack__win32_adjust_rect(w, &frame, nack__win32_style(w),
-                                nack__win32_ex_style(w), ww->dpi);
+        win32_adjust_rect(w, &frame, win32_style(w),
+                                win32_ex_style(w), ww->dpi);
         int frame_w = frame.right - frame.left;
         int frame_h = frame.bottom - frame.top;
 
@@ -563,7 +565,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
     case WM_SYSKEYUP: {
         bool down = (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN);
         bool repeat = down && ((lparam >> 30) & 1) != 0;
-        nack_key key = nack__win32_key_from_message(wparam, lparam);
+        nack_key key = win32_key_from_message(wparam, lparam);
         UINT scancode = (UINT)((lparam >> 16) & 0x1FF);
 
         if (wparam == VK_SHIFT && !down) {
@@ -574,15 +576,15 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
             if (state.keys[NACK_KEY_LEFT_SHIFT] &&
                 !(GetKeyState(VK_LSHIFT) & 0x8000))
                 w->emit_key(NACK_KEY_LEFT_SHIFT, scancode,
-                               nack__win32_mods(), false, false);
+                               win32_mods(), false, false);
             if (state.keys[NACK_KEY_RIGHT_SHIFT] &&
                 !(GetKeyState(VK_RSHIFT) & 0x8000))
                 w->emit_key(NACK_KEY_RIGHT_SHIFT, scancode,
-                               nack__win32_mods(), false, false);
+                               win32_mods(), false, false);
             return 0;
         }
 
-        w->emit_key(key, scancode, nack__win32_mods(), down, repeat);
+        w->emit_key(key, scancode, win32_mods(), down, repeat);
 
         /* Alt and F10 open the window menu unless we swallow them. */
         if (msg == WM_SYSKEYDOWN || msg == WM_SYSKEYUP)
@@ -613,10 +615,10 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
             codepoint = unit;
         }
 
-        if ((nack__win32_mods() & (NACK_MOD_CTRL | NACK_MOD_SUPER)) == 0 &&
-            nack__codepoint_is_text(codepoint)) {
+        if ((win32_mods() & (NACK_MOD_CTRL | NACK_MOD_SUPER)) == 0 &&
+            codepoint_is_text(codepoint)) {
             char utf8[5];
-            nack__utf8_encode(codepoint, utf8);
+            utf8_encode(codepoint, utf8);
             w->emit_text(utf8);
         }
         if (msg == WM_SYSCHAR)
@@ -627,9 +629,9 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
     case WM_UNICHAR:
         if (wparam == UNICODE_NOCHAR)
             return TRUE;   /* tell the sender we accept WM_UNICHAR */
-        if (nack__codepoint_is_text((uint32_t)wparam)) {
+        if (codepoint_is_text((uint32_t)wparam)) {
             char utf8[5];
-            nack__utf8_encode((uint32_t)wparam, utf8);
+            utf8_encode((uint32_t)wparam, utf8);
             w->emit_text(utf8);
         }
         return 0;
@@ -639,7 +641,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
         int y = GET_Y_LPARAM(lparam);
 
         if (!ww->cursor_tracked) {
-            nack__win32_track_mouse_leave(w);
+            win32_track_mouse_leave(w);
             w->emit_simple(NACK_WIN_EVENT_MOUSE_ENTER);
         }
 
@@ -658,14 +660,14 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
             ev->data.motion.y = w->mouse_y;
             ev->data.motion.dx = dx;
             ev->data.motion.dy = dy;
-            ev->data.motion.mods = nack__win32_mods();
+            ev->data.motion.mods = win32_mods();
             state.push_event(ev);
 
             SetCursorPos(ww->captured_center_x, ww->captured_center_y);
             return 0;
         }
 
-        w->emit_mouse_move(x, y, nack__win32_mods());
+        w->emit_mouse_move(x, y, win32_mods());
         return 0;
     }
 
@@ -704,7 +706,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
         }
 
         w->emit_mouse_button(button, down, GET_X_LPARAM(lparam),
-                                GET_Y_LPARAM(lparam), nack__win32_mods());
+                                GET_Y_LPARAM(lparam), win32_mods());
 
         if (!down) {
             if (!state.mouse_buttons[NACK_MOUSE_LEFT] &&
@@ -721,13 +723,13 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
     case WM_MOUSEWHEEL:
         w->emit_scroll(0.0,
                           (double)GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA,
-                          nack__win32_mods(), false);
+                          win32_mods(), false);
         return 0;
 
     case WM_MOUSEHWHEEL:
         /* Windows reports horizontal wheel with the opposite sign to ours. */
         w->emit_scroll(-(double)GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA,
-                      0.0, nack__win32_mods(), false);
+                      0.0, win32_mods(), false);
         return 0;
 
     case WM_SYSCOMMAND:
@@ -760,7 +762,7 @@ static LRESULT CALLBACK nack__win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
 /* Window management                                                  */
 /* ------------------------------------------------------------------ */
 
-static bool nack__win32_window_create(nack_window *w,
+static bool win32_window_create(nack_window *w,
                                       const nack_window_desc *desc)
 {
     (void)desc;
@@ -768,19 +770,19 @@ static bool nack__win32_window_create(nack_window *w,
     ww->dpi = NACK_DEFAULT_DPI;
     w->native = ww;
 
-    DWORD style = nack__win32_style(w);
-    DWORD ex_style = nack__win32_ex_style(w);
+    DWORD style = win32_style(w);
+    DWORD ex_style = win32_ex_style(w);
 
     RECT rect = { 0, 0, w->width, w->height };
-    nack__win32_adjust_rect(w, &rect, style, ex_style, NACK_DEFAULT_DPI);
+    win32_adjust_rect(w, &rect, style, ex_style, NACK_DEFAULT_DPI);
 
-    std::optional<std::wstring> title = nack__win32_utf8_to_wide(w->title.c_str());
+    std::optional<std::wstring> title = win32_utf8_to_wide(w->title.c_str());
 
     ww->hwnd = CreateWindowExW(ex_style, NACK_WIN32_CLASS_NAME,
                                title ? title->c_str() : L"libnack", style,
                                CW_USEDEFAULT, CW_USEDEFAULT,
                                rect.right - rect.left, rect.bottom - rect.top,
-                               NULL, NULL, nack__win32.instance, NULL);
+                               NULL, NULL, win32.instance, NULL);
 
     if (!ww->hwnd) {
         delete ww;
@@ -799,7 +801,7 @@ static bool nack__win32_window_create(nack_window *w,
         return state.fail(NACK_ERROR_PLATFORM, "GetDC failed");
     }
 
-    ww->dpi = nack__win32_dpi_for_window(ww->hwnd);
+    ww->dpi = win32_dpi_for_window(ww->hwnd);
     w->scale = w->high_dpi ? (float)ww->dpi / (float)NACK_DEFAULT_DPI : 1.0f;
 
     /* Re-apply the size at the real DPI: the window was created before we
@@ -808,7 +810,7 @@ static bool nack__win32_window_create(nack_window *w,
         RECT scaled = { 0, 0,
                         (int)(w->width * w->scale),
                         (int)(w->height * w->scale) };
-        nack__win32_adjust_rect(w, &scaled, style, ex_style, ww->dpi);
+        win32_adjust_rect(w, &scaled, style, ex_style, ww->dpi);
         SetWindowPos(ww->hwnd, NULL, 0, 0,
                      scaled.right - scaled.left, scaled.bottom - scaled.top,
                      SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
@@ -826,7 +828,7 @@ static bool nack__win32_window_create(nack_window *w,
 
     /* The pixel format has to be set on the DC before any GL context uses it,
      * and it can only be set once per window. */
-    if (nack__wgl_choose_pixel_format(w, ww->hdc, &ww->pixel_format)) {
+    if (wgl_choose_pixel_format(w, ww->hdc, &ww->pixel_format)) {
         PIXELFORMATDESCRIPTOR pfd;
         memset(&pfd, 0, sizeof pfd);
         pfd.nSize = sizeof pfd;
@@ -839,9 +841,9 @@ static bool nack__win32_window_create(nack_window *w,
     return true;
 }
 
-static void nack__win32_window_destroy(nack_window *w)
+static void win32_window_destroy(nack_window *w)
 {
-    nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = win32_win(w);
     if (!ww)
         return;
     if (ww->cursor_clipped)
@@ -856,52 +858,52 @@ static void nack__win32_window_destroy(nack_window *w)
     w->native = NULL;
 }
 
-static void nack__win32_window_show(nack_window *w, bool show)
+static void win32_window_show(nack_window *w, bool show)
 {
-    ShowWindow(nack__win32_win(w)->hwnd, show ? SW_SHOWNA : SW_HIDE);
+    ShowWindow(win32_win(w)->hwnd, show ? SW_SHOWNA : SW_HIDE);
 }
 
-static void nack__win32_window_focus(nack_window *w)
+static void win32_window_focus(nack_window *w)
 {
-    nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = win32_win(w);
     BringWindowToTop(ww->hwnd);
     SetForegroundWindow(ww->hwnd);
     SetFocus(ww->hwnd);
 }
 
-static void nack__win32_window_set_title(nack_window *w, const char *title)
+static void win32_window_set_title(nack_window *w, const char *title)
 {
-    std::optional<std::wstring> wide = nack__win32_utf8_to_wide(title);
+    std::optional<std::wstring> wide = win32_utf8_to_wide(title);
     if (wide)
-        SetWindowTextW(nack__win32_win(w)->hwnd, wide->c_str());
+        SetWindowTextW(win32_win(w)->hwnd, wide->c_str());
 }
 
-static void nack__win32_window_set_size(nack_window *w, int width, int height)
+static void win32_window_set_size(nack_window *w, int width, int height)
 {
-    nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = win32_win(w);
     RECT rect = { 0, 0, width, height };
-    nack__win32_adjust_rect(w, &rect, nack__win32_style(w),
-                            nack__win32_ex_style(w), ww->dpi);
+    win32_adjust_rect(w, &rect, win32_style(w),
+                            win32_ex_style(w), ww->dpi);
     SetWindowPos(ww->hwnd, HWND_TOP, 0, 0,
                  rect.right - rect.left, rect.bottom - rect.top,
                  SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOMOVE | SWP_NOZORDER);
 }
 
-static void nack__win32_window_set_position(nack_window *w, int x, int y)
+static void win32_window_set_position(nack_window *w, int x, int y)
 {
-    nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = win32_win(w);
     RECT rect = { x, y, x, y };
-    nack__win32_adjust_rect(w, &rect, nack__win32_style(w),
-                            nack__win32_ex_style(w), ww->dpi);
+    win32_adjust_rect(w, &rect, win32_style(w),
+                            win32_ex_style(w), ww->dpi);
     SetWindowPos(ww->hwnd, NULL, rect.left, rect.top, 0, 0,
                  SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOSIZE);
 }
 
-static void nack__win32_apply_size_hints(nack_window *w)
+static void win32_apply_size_hints(nack_window *w)
 {
     /* Limits are enforced from WM_GETMINMAXINFO and WM_SIZING; nudge the
      * window manager into asking again. */
-    nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = win32_win(w);
     RECT rect;
     GetWindowRect(ww->hwnd, &rect);
     SetWindowPos(ww->hwnd, NULL, rect.left, rect.top,
@@ -909,9 +911,9 @@ static void nack__win32_apply_size_hints(nack_window *w)
                  SWP_NOACTIVATE | SWP_NOZORDER | SWP_FRAMECHANGED);
 }
 
-static void nack__win32_window_set_fullscreen(nack_window *w, bool fullscreen)
+static void win32_window_set_fullscreen(nack_window *w, bool fullscreen)
 {
-    nack_win32_window *ww = nack__win32_win(w);
+    nack_win32_window *ww = win32_win(w);
 
     if (fullscreen && !w->fullscreen) {
         ww->restore_style = (DWORD)GetWindowLongPtrW(ww->hwnd, GWL_STYLE);
@@ -946,40 +948,40 @@ static void nack__win32_window_set_fullscreen(nack_window *w, bool fullscreen)
     }
 }
 
-static void nack__win32_window_minimize(nack_window *w)
+static void win32_window_minimize(nack_window *w)
 {
-    ShowWindow(nack__win32_win(w)->hwnd, SW_MINIMIZE);
+    ShowWindow(win32_win(w)->hwnd, SW_MINIMIZE);
 }
 
-static void nack__win32_window_maximize(nack_window *w)
+static void win32_window_maximize(nack_window *w)
 {
-    ShowWindow(nack__win32_win(w)->hwnd, SW_MAXIMIZE);
+    ShowWindow(win32_win(w)->hwnd, SW_MAXIMIZE);
 }
 
-static void nack__win32_window_restore(nack_window *w)
+static void win32_window_restore(nack_window *w)
 {
     if (w->fullscreen)
-        nack__win32_window_set_fullscreen(w, false);
-    ShowWindow(nack__win32_win(w)->hwnd, SW_RESTORE);
+        win32_window_set_fullscreen(w, false);
+    ShowWindow(win32_win(w)->hwnd, SW_RESTORE);
 }
 
-static void nack__win32_window_request_attention(nack_window *w)
+static void win32_window_request_attention(nack_window *w)
 {
     FLASHWINFO flash;
     memset(&flash, 0, sizeof flash);
     flash.cbSize = sizeof flash;
-    flash.hwnd = nack__win32_win(w)->hwnd;
+    flash.hwnd = win32_win(w)->hwnd;
     flash.dwFlags = FLASHW_TRAY;
     flash.uCount = 3;
     FlashWindowEx(&flash);
 }
 
-static void nack__win32_window_request_redraw(nack_window *w)
+static void win32_window_request_redraw(nack_window *w)
 {
-    InvalidateRect(nack__win32_win(w)->hwnd, NULL, FALSE);
+    InvalidateRect(win32_win(w)->hwnd, NULL, FALSE);
 }
 
-static void nack__win32_window_get_native(const nack_window *w,
+static void win32_window_get_native(const nack_window *w,
                                           nack_native_window *out)
 {
     nack_win32_window *ww = (nack_win32_window *)w->native;
@@ -992,7 +994,7 @@ static void nack__win32_window_get_native(const nack_window *w,
 /* Event loop                                                         */
 /* ------------------------------------------------------------------ */
 
-static void nack__win32_drain(void)
+static void win32_drain(void)
 {
     MSG msg;
     while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
@@ -1017,9 +1019,9 @@ static void nack__win32_drain(void)
     }
 }
 
-static void nack__win32_pump_events(double timeout)
+static void win32_pump_events(double timeout)
 {
-    nack__win32_drain();
+    win32_drain();
     if (!state.queue.empty() || timeout == 0.0)
         return;
 
@@ -1033,20 +1035,20 @@ static void nack__win32_pump_events(double timeout)
 
     /* Sleep until a message arrives rather than spinning on PeekMessage. */
     MsgWaitForMultipleObjects(0, NULL, FALSE, ms, QS_ALLINPUT);
-    nack__win32_drain();
+    win32_drain();
 }
 
-static void nack__win32_wakeup(void)
+static void win32_wakeup(void)
 {
     /* Safe from any thread: this only queues a message. */
-    PostThreadMessageW(nack__win32.main_thread, NACK_WM_WAKEUP, 0, 0);
+    PostThreadMessageW(win32.main_thread, NACK_WM_WAKEUP, 0, 0);
 }
 
 /* ------------------------------------------------------------------ */
 /* Clipboard                                                          */
 /* ------------------------------------------------------------------ */
 
-static HWND nack__win32_any_window(void)
+static HWND win32_any_window(void)
 {
     for (size_t i = 0; i < state.windows.size(); ++i) {
         nack_win32_window *ww = (nack_win32_window *)state.windows[i]->native;
@@ -1056,9 +1058,9 @@ static HWND nack__win32_any_window(void)
     return NULL;
 }
 
-static bool nack__win32_clipboard_set(const char *utf8)
+static bool win32_clipboard_set(const char *utf8)
 {
-    std::optional<std::wstring> wide = nack__win32_utf8_to_wide(utf8);
+    std::optional<std::wstring> wide = win32_utf8_to_wide(utf8);
     if (!wide)
         return state.fail(NACK_ERROR_INVALID_ARGUMENT, "clipboard text is not UTF-8");
 
@@ -1075,7 +1077,7 @@ static bool nack__win32_clipboard_set(const char *utf8)
     memcpy(locked, wide->c_str(), count * sizeof(WCHAR));
     GlobalUnlock(handle);
 
-    if (!OpenClipboard(nack__win32_any_window())) {
+    if (!OpenClipboard(win32_any_window())) {
         GlobalFree(handle);
         return state.fail(NACK_ERROR_PLATFORM, "OpenClipboard failed");
     }
@@ -1090,11 +1092,11 @@ static bool nack__win32_clipboard_set(const char *utf8)
     return true;
 }
 
-static const char *nack__win32_clipboard_get(void)
+static const char *win32_clipboard_get(void)
 {
     if (!IsClipboardFormatAvailable(CF_UNICODETEXT))
         return NULL;
-    if (!OpenClipboard(nack__win32_any_window()))
+    if (!OpenClipboard(win32_any_window()))
         return NULL;
 
     HANDLE handle = GetClipboardData(CF_UNICODETEXT);
@@ -1110,69 +1112,69 @@ static const char *nack__win32_clipboard_get(void)
         return NULL;
     }
 
-    nack__win32.clipboard_text = nack__win32_wide_to_utf8(wide);
+    win32.clipboard_text = win32_wide_to_utf8(wide);
 
     GlobalUnlock((HGLOBAL)handle);
     CloseClipboard();
-    return nack__win32.clipboard_text ? nack__win32.clipboard_text->c_str() : NULL;
+    return win32.clipboard_text ? win32.clipboard_text->c_str() : NULL;
 }
 
 /* ------------------------------------------------------------------ */
 /* Init / shutdown                                                    */
 /* ------------------------------------------------------------------ */
 
-static void nack__win32_load_dpi_functions(void)
+static void win32_load_dpi_functions(void)
 {
-    nack__win32.user32 = LoadLibraryA("user32.dll");
-    if (nack__win32.user32) {
-        nack__win32.GetDpiForWindow_ = (UINT (WINAPI *)(HWND))(void *)
-            GetProcAddress(nack__win32.user32, "GetDpiForWindow");
-        nack__win32.AdjustWindowRectExForDpi_ =
+    win32.user32 = LoadLibraryA("user32.dll");
+    if (win32.user32) {
+        win32.GetDpiForWindow_ = (UINT (WINAPI *)(HWND))(void *)
+            GetProcAddress(win32.user32, "GetDpiForWindow");
+        win32.AdjustWindowRectExForDpi_ =
             (BOOL (WINAPI *)(LPRECT, DWORD, BOOL, DWORD, UINT))(void *)
-                GetProcAddress(nack__win32.user32, "AdjustWindowRectExForDpi");
-        nack__win32.EnableNonClientDpiScaling_ = (BOOL (WINAPI *)(HWND))(void *)
-            GetProcAddress(nack__win32.user32, "EnableNonClientDpiScaling");
-        nack__win32.SetProcessDpiAwarenessContext_ = (BOOL (WINAPI *)(void *))(void *)
-            GetProcAddress(nack__win32.user32, "SetProcessDpiAwarenessContext");
+                GetProcAddress(win32.user32, "AdjustWindowRectExForDpi");
+        win32.EnableNonClientDpiScaling_ = (BOOL (WINAPI *)(HWND))(void *)
+            GetProcAddress(win32.user32, "EnableNonClientDpiScaling");
+        win32.SetProcessDpiAwarenessContext_ = (BOOL (WINAPI *)(void *))(void *)
+            GetProcAddress(win32.user32, "SetProcessDpiAwarenessContext");
     }
 
-    nack__win32.shcore = LoadLibraryA("shcore.dll");
-    if (nack__win32.shcore)
-        nack__win32.SetProcessDpiAwareness_ = (HRESULT (WINAPI *)(int))(void *)
-            GetProcAddress(nack__win32.shcore, "SetProcessDpiAwareness");
+    win32.shcore = LoadLibraryA("shcore.dll");
+    if (win32.shcore)
+        win32.SetProcessDpiAwareness_ = (HRESULT (WINAPI *)(int))(void *)
+            GetProcAddress(win32.shcore, "SetProcessDpiAwareness");
 
     /* Per-monitor v2 where available, then the older APIs, so the window is
      * not bitmap-stretched on a high DPI display. */
-    if (nack__win32.SetProcessDpiAwarenessContext_) {
+    if (win32.SetProcessDpiAwarenessContext_) {
         /* DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 */
-        nack__win32.SetProcessDpiAwarenessContext_((void *)-4);
-    } else if (nack__win32.SetProcessDpiAwareness_) {
-        nack__win32.SetProcessDpiAwareness_(2);   /* PROCESS_PER_MONITOR_DPI_AWARE */
+        win32.SetProcessDpiAwarenessContext_((void *)-4);
+    } else if (win32.SetProcessDpiAwareness_) {
+        win32.SetProcessDpiAwareness_(2);   /* PROCESS_PER_MONITOR_DPI_AWARE */
     } else {
         SetProcessDPIAware();
     }
 }
 
-static bool nack__win32_init(const nack_win_init_desc *desc)
+static bool win32_init(const nack_win_init_desc *desc)
 {
     (void)desc;
-    nack__win32 = nack_win32_state{};
+    win32 = nack_win32_state{};
 
-    nack__win32.instance = GetModuleHandleW(NULL);
-    nack__win32.main_thread = GetCurrentThreadId();
+    win32.instance = GetModuleHandleW(NULL);
+    win32.main_thread = GetCurrentThreadId();
 
-    nack__win32_load_dpi_functions();
-    nack__win32_build_keycodes();
+    win32_load_dpi_functions();
+    win32_build_keycodes();
 
     WNDCLASSEXW wc;
     memset(&wc, 0, sizeof wc);
     wc.cbSize = sizeof wc;
     wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    wc.lpfnWndProc = nack__win32_wndproc;
-    wc.hInstance = nack__win32.instance;
+    wc.lpfnWndProc = win32_wndproc;
+    wc.hInstance = win32.instance;
     wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
     wc.lpszClassName = NACK_WIN32_CLASS_NAME;
-    wc.hIcon = (HICON)LoadImageW(nack__win32.instance, L"NACK_ICON", IMAGE_ICON,
+    wc.hIcon = (HICON)LoadImageW(win32.instance, L"NACK_ICON", IMAGE_ICON,
                                  0, 0, LR_DEFAULTSIZE | LR_SHARED);
     if (!wc.hIcon)
         wc.hIcon = (HICON)LoadImageW(NULL, IDI_APPLICATION, IMAGE_ICON, 0, 0,
@@ -1181,24 +1183,24 @@ static bool nack__win32_init(const nack_win_init_desc *desc)
     if (!RegisterClassExW(&wc))
         return state.fail(NACK_ERROR_PLATFORM, "RegisterClassEx failed (error %lu)",
                           GetLastError());
-    nack__win32.class_registered = true;
+    win32.class_registered = true;
 
-    nack__wgl_init();   /* soft failure: windows still work without GL */
+    wgl_init();   /* soft failure: windows still work without GL */
 
     return true;
 }
 
-static void nack__win32_shutdown(void)
+static void win32_shutdown(void)
 {
-    nack__wgl_terminate();
+    wgl_terminate();
 
-    if (nack__win32.class_registered)
-        UnregisterClassW(NACK_WIN32_CLASS_NAME, nack__win32.instance);
+    if (win32.class_registered)
+        UnregisterClassW(NACK_WIN32_CLASS_NAME, win32.instance);
 
-    if (nack__win32.user32) FreeLibrary(nack__win32.user32);
-    if (nack__win32.shcore) FreeLibrary(nack__win32.shcore);
+    if (win32.user32) FreeLibrary(win32.user32);
+    if (win32.shcore) FreeLibrary(win32.shcore);
 
-    nack__win32 = nack_win32_state{};
+    win32 = nack_win32_state{};
 }
 
 /* ------------------------------------------------------------------ */
@@ -1212,129 +1214,131 @@ public:
 
     bool init(const nack_win_init_desc *desc) override
     {
-        return nack__win32_init(desc);
+        return win32_init(desc);
     }
     void shutdown() override
     {
-        nack__win32_shutdown();
+        win32_shutdown();
     }
     bool window_create(nack_window *w, const nack_window_desc *desc) override
     {
-        return nack__win32_window_create(w, desc);
+        return win32_window_create(w, desc);
     }
     void window_destroy(nack_window *w) override
     {
-        nack__win32_window_destroy(w);
+        win32_window_destroy(w);
     }
     void window_show(nack_window *w, bool show) override
     {
-        nack__win32_window_show(w, show);
+        win32_window_show(w, show);
     }
     void window_set_title(nack_window *w, const char *title) override
     {
-        nack__win32_window_set_title(w, title);
+        win32_window_set_title(w, title);
     }
     void window_set_size(nack_window *w, int width, int height) override
     {
-        nack__win32_window_set_size(w, width, height);
+        win32_window_set_size(w, width, height);
     }
     void window_apply_size_hints(nack_window *w) override
     {
-        nack__win32_apply_size_hints(w);
+        win32_apply_size_hints(w);
     }
     void window_set_fullscreen(nack_window *w, bool fullscreen) override
     {
-        nack__win32_window_set_fullscreen(w, fullscreen);
+        win32_window_set_fullscreen(w, fullscreen);
     }
     void window_minimize(nack_window *w) override
     {
-        nack__win32_window_minimize(w);
+        win32_window_minimize(w);
     }
     void window_maximize(nack_window *w) override
     {
-        nack__win32_window_maximize(w);
+        win32_window_maximize(w);
     }
     void window_restore(nack_window *w) override
     {
-        nack__win32_window_restore(w);
+        win32_window_restore(w);
     }
     void window_request_redraw(nack_window *w) override
     {
-        nack__win32_window_request_redraw(w);
+        win32_window_request_redraw(w);
     }
     void window_set_cursor_shape(nack_window *w, nack_cursor_shape shape) override
     {
-        nack__win32_set_cursor_shape(w, shape);
+        win32_set_cursor_shape(w, shape);
     }
     void window_set_cursor_mode(nack_window *w, nack_cursor_mode mode) override
     {
-        nack__win32_set_cursor_mode(w, mode);
+        win32_set_cursor_mode(w, mode);
     }
     void window_get_native(const nack_window *w, nack_native_window *out) override
     {
-        nack__win32_window_get_native(w, out);
+        win32_window_get_native(w, out);
     }
     void window_focus(nack_window *w) override
     {
-        nack__win32_window_focus(w);
+        win32_window_focus(w);
     }
     void window_set_position(nack_window *w, int x, int y) override
     {
-        nack__win32_window_set_position(w, x, y);
+        win32_window_set_position(w, x, y);
     }
     void window_request_attention(nack_window *w) override
     {
-        nack__win32_window_request_attention(w);
+        win32_window_request_attention(w);
     }
     void pump_events(double timeout) override
     {
-        nack__win32_pump_events(timeout);
+        win32_pump_events(timeout);
     }
     void wakeup() override
     {
-        nack__win32_wakeup();
+        win32_wakeup();
     }
     nack_gl_context *gl_create(nack_window *w,
-                                      const nack__gl_desc *desc) override
+                                      const gl_desc *desc) override
     {
-        return nack__wgl_create_context(w, desc, this);
+        return wgl_create_context(w, desc, this);
     }
     void gl_destroy(nack_gl_context *ctx) override
     {
-        nack__wgl_destroy_context(ctx);
+        wgl_destroy_context(ctx);
     }
     bool gl_make_current(nack_window *w, nack_gl_context *ctx) override
     {
-        return nack__wgl_make_current(w, ctx);
+        return wgl_make_current(w, ctx);
     }
     void gl_swap_buffers(nack_window *w) override
     {
-        nack__wgl_swap_buffers(w);
+        wgl_swap_buffers(w);
     }
     void gl_set_swap_interval(int interval) override
     {
-        nack__wgl_set_swap_interval(interval);
+        wgl_set_swap_interval(interval);
     }
     void *gl_get_proc_address(const char *name) override
     {
-        return nack__wgl_get_proc_address(name);
+        return wgl_get_proc_address(name);
     }
     bool clipboard_set(const char *utf8) override
     {
-        return nack__win32_clipboard_set(utf8);
+        return win32_clipboard_set(utf8);
     }
     const char *clipboard_get() override
     {
-        return nack__win32_clipboard_get();
+        return win32_clipboard_get();
     }
 };
 
-win32_backend nack__win32_backend_instance;
+win32_backend win32_backend_instance;
 
 }   /* namespace */
 
 
-nack_backend_vt *nack__backend_win32(void)
+nack_backend_vt *backend_win32(void)
 {
-    return &nack__win32_backend_instance;
+    return &win32_backend_instance;
 }
+
+} }   /* namespace nack::detail */

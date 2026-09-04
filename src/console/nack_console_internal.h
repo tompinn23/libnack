@@ -119,10 +119,14 @@ struct nack_console {
                 float bg_alpha) const;
 };
 
+namespace nack { namespace detail {
+
 /* Decodes one codepoint and advances the cursor. Invalid bytes yield U+FFFD
  * and consume one byte, so bad input cannot stall the loop. Not a method:
  * it walks a raw cursor, not a console. */
-uint32_t nack__utf8_next(const char **cursor);
+uint32_t utf8_next(const char **cursor);
+
+} }   /* namespace nack::detail */
 
 struct nack_console_state {
     bool initialized = false;
@@ -200,11 +204,13 @@ struct nack_console_state {
     const char *last_error() const;
 };
 
-extern nack_console_state nack__c;
+namespace nack { namespace detail {
+
+extern nack_console_state console_state;
 
 /* nack_render.c */
-void nack__render_console(const nack_console *console);
-void nack__render_update_viewport();
+void render_console(const nack_console *console);
+void render_update_viewport();
 
 /*
  * Reads one pixel back out of the framebuffer. Exists so the tests can check
@@ -212,12 +218,12 @@ void nack__render_update_viewport();
  * it is deliberately not part of the public API.
  */
 /*
- * Turns on keeping a copy of each presented frame, which nack__debug_read_pixel
+ * Turns on keeping a copy of each presented frame, which debug_read_pixel
  * then reads from. Off by default because it costs a framebuffer read per
  * frame; the tests turn it on right after constructing an app.
  */
-void nack__debug_capture_frames(bool capture);
-bool nack__debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4]);
+void debug_capture_frames(bool capture);
+bool debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4]);
 
 /*
  * Makes the next `count` texture creations fail. The cleanup that runs when a
@@ -226,6 +232,8 @@ bool nack__debug_read_pixel(int cell_x, int cell_y, uint8_t rgba[4]);
  * path where a half-built tileset has to be released. Test-only, like
  * NACK_RENDERER=test-fail.
  */
-void nack__debug_fail_next_textures(int count);
+void debug_fail_next_textures(int count);
+
+} }   /* namespace nack::detail */
 
 #endif /* NACK_CONSOLE_INTERNAL_H_INCLUDED */

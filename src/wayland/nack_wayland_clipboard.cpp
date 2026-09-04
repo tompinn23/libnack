@@ -33,7 +33,9 @@
  * data in arbitrarily many chunks, and a source that never writes must not
  * hang the caller, so the read is non-blocking with a deadline.
  */
-static std::optional<std::string> nack__wl_read_pipe(int raw_fd)
+namespace nack { namespace detail {
+
+static std::optional<std::string> wl_read_pipe(int raw_fd)
 {
     nack::unique_fd fd(raw_fd);
     int flags = fcntl(fd.get(), F_GETFL, 0);
@@ -43,7 +45,7 @@ static std::optional<std::string> nack__wl_read_pipe(int raw_fd)
 
     std::string buffer;
     char chunk[4096];
-    double deadline = nack__win_time_seconds() + NACK_WL_READ_TIMEOUT_MS / 1000.0;
+    double deadline = win_time_seconds() + NACK_WL_READ_TIMEOUT_MS / 1000.0;
 
     for (;;) {
         ssize_t n = read(fd.get(), chunk, sizeof chunk);
@@ -58,7 +60,7 @@ static std::optional<std::string> nack__wl_read_pipe(int raw_fd)
         if (errno != EAGAIN && errno != EWOULDBLOCK)
             break;
 
-        double remaining = deadline - nack__win_time_seconds();
+        double remaining = deadline - win_time_seconds();
         if (remaining <= 0.0)
             break;
         struct pollfd pfd = { fd.get(), POLLIN, 0 };
@@ -81,7 +83,7 @@ static void data_offer_offer(void *data, struct wl_data_offer *offer,
         strcmp(mime_type, "UTF8_STRING") == 0 ||
         strcmp(mime_type, "STRING") == 0 ||
         strcmp(mime_type, "TEXT") == 0)
-        nack__wl.offer_has_text = true;
+        wl.offer_has_text = true;
 }
 
 static void data_offer_source_actions(void *data, struct wl_data_offer *offer,
@@ -95,7 +97,7 @@ static void data_offer_action(void *data, struct wl_data_offer *offer, uint32_t 
     (void)data; (void)offer; (void)action;
 }
 
-static const struct wl_data_offer_listener nack__wl_data_offer_listener = {
+static const struct wl_data_offer_listener wl_data_offer_listener = {
     .offer = data_offer_offer,
     .source_actions = data_offer_source_actions,
     .action = data_offer_action,
@@ -105,19 +107,19 @@ static void data_device_data_offer(void *data, struct wl_data_device *device,
                                    struct wl_data_offer *offer)
 {
     (void)data; (void)device;
-    nack__wl.offer_has_text = false;
-    wl_data_offer_add_listener(offer, &nack__wl_data_offer_listener, nullptr);
+    wl.offer_has_text = false;
+    wl_data_offer_add_listener(offer, &wl_data_offer_listener, nullptr);
 }
 
 static void data_device_selection(void *data, struct wl_data_device *device,
                                   struct wl_data_offer *offer)
 {
     (void)data; (void)device;
-    if (nack__wl.pending_offer)
-        wl_data_offer_destroy(nack__wl.pending_offer);
-    nack__wl.pending_offer = offer;
+    if (wl.pending_offer)
+        wl_data_offer_destroy(wl.pending_offer);
+    wl.pending_offer = offer;
     if (!offer)
-        nack__wl.offer_has_text = false;
+        wl.offer_has_text = false;
 }
 
 static void data_device_enter(void *data, struct wl_data_device *device, uint32_t serial,
@@ -146,7 +148,7 @@ static void data_device_drop(void *data, struct wl_data_device *device)
     (void)data; (void)device;
 }
 
-static const struct wl_data_device_listener nack__wl_data_device_listener = {
+static const struct wl_data_device_listener wl_data_device_listener = {
     .data_offer = data_device_data_offer,
     .enter = data_device_enter,
     .leave = data_device_leave,
@@ -231,10 +233,10 @@ static void data_source_send(void *data, struct wl_data_source *source,
 static void data_source_cancelled(void *data, struct wl_data_source *source)
 {
     (void)data;
-    if (nack__wl.data_source == source) {
+    if (wl.data_source == source) {
         wl_data_source_destroy(source);
-        nack__wl.data_source = nullptr;
-        nack__wl.clipboard_offered.reset();
+        wl.data_source = nullptr;
+        wl.clipboard_offered.reset();
     }
 }
 
@@ -254,7 +256,7 @@ static void data_source_action(void *data, struct wl_data_source *source,
     (void)data; (void)source; (void)action;
 }
 
-static const struct wl_data_source_listener nack__wl_data_source_listener = {
+static const struct wl_data_source_listener wl_data_source_listener = {
     .target = data_source_target,
     .send = data_source_send,
     .cancelled = data_source_cancelled,
@@ -276,10 +278,10 @@ static void primary_offer_offer(void *data,
         strcmp(mime_type, NACK_WL_MIME_PLAIN) == 0 ||
         strcmp(mime_type, "UTF8_STRING") == 0 ||
         strcmp(mime_type, "STRING") == 0)
-        nack__wl.primary_offer_has_text = true;
+        wl.primary_offer_has_text = true;
 }
 
-static const struct zwp_primary_selection_offer_v1_listener nack__wl_primary_offer_listener = {
+static const struct zwp_primary_selection_offer_v1_listener wl_primary_offer_listener = {
     .offer = primary_offer_offer,
 };
 
@@ -288,9 +290,9 @@ static void primary_device_data_offer(void *data,
                                       struct zwp_primary_selection_offer_v1 *offer)
 {
     (void)data; (void)device;
-    nack__wl.primary_offer_has_text = false;
+    wl.primary_offer_has_text = false;
     zwp_primary_selection_offer_v1_add_listener(offer,
-                                                &nack__wl_primary_offer_listener, nullptr);
+                                                &wl_primary_offer_listener, nullptr);
 }
 
 static void primary_device_selection(void *data,
@@ -298,14 +300,14 @@ static void primary_device_selection(void *data,
                                      struct zwp_primary_selection_offer_v1 *offer)
 {
     (void)data; (void)device;
-    if (nack__wl.pending_primary_offer)
-        zwp_primary_selection_offer_v1_destroy(nack__wl.pending_primary_offer);
-    nack__wl.pending_primary_offer = offer;
+    if (wl.pending_primary_offer)
+        zwp_primary_selection_offer_v1_destroy(wl.pending_primary_offer);
+    wl.pending_primary_offer = offer;
     if (!offer)
-        nack__wl.primary_offer_has_text = false;
+        wl.primary_offer_has_text = false;
 }
 
-static const struct zwp_primary_selection_device_v1_listener nack__wl_primary_device_listener = {
+static const struct zwp_primary_selection_device_v1_listener wl_primary_device_listener = {
     .data_offer = primary_device_data_offer,
     .selection = primary_device_selection,
 };
@@ -322,14 +324,14 @@ static void primary_source_cancelled(void *data,
                                      struct zwp_primary_selection_source_v1 *source)
 {
     (void)data;
-    if (nack__wl.primary_source == source) {
+    if (wl.primary_source == source) {
         zwp_primary_selection_source_v1_destroy(source);
-        nack__wl.primary_source = nullptr;
-        nack__wl.primary_offered.reset();
+        wl.primary_source = nullptr;
+        wl.primary_offered.reset();
     }
 }
 
-static const struct zwp_primary_selection_source_v1_listener nack__wl_primary_source_listener = {
+static const struct zwp_primary_selection_source_v1_listener wl_primary_source_listener = {
     .send = primary_source_send,
     .cancelled = primary_source_cancelled,
 };
@@ -338,165 +340,167 @@ static const struct zwp_primary_selection_source_v1_listener nack__wl_primary_so
 /* Public entry points                                                */
 /* ------------------------------------------------------------------ */
 
-void nack__wl_data_device_bind(void)
+void wl_data_device_bind(void)
 {
-    if (nack__wl.data_device_manager && nack__wl.seat && !nack__wl.data_device) {
-        nack__wl.data_device = wl_data_device_manager_get_data_device(
-            nack__wl.data_device_manager, nack__wl.seat);
-        wl_data_device_add_listener(nack__wl.data_device,
-                                    &nack__wl_data_device_listener, nullptr);
+    if (wl.data_device_manager && wl.seat && !wl.data_device) {
+        wl.data_device = wl_data_device_manager_get_data_device(
+            wl.data_device_manager, wl.seat);
+        wl_data_device_add_listener(wl.data_device,
+                                    &wl_data_device_listener, nullptr);
     }
-    if (nack__wl.primary_manager && nack__wl.seat && !nack__wl.primary_device) {
-        nack__wl.primary_device =
+    if (wl.primary_manager && wl.seat && !wl.primary_device) {
+        wl.primary_device =
             zwp_primary_selection_device_manager_v1_get_device(
-                nack__wl.primary_manager, nack__wl.seat);
+                wl.primary_manager, wl.seat);
         zwp_primary_selection_device_v1_add_listener(
-            nack__wl.primary_device, &nack__wl_primary_device_listener, nullptr);
+            wl.primary_device, &wl_primary_device_listener, nullptr);
     }
 }
 
-bool nack__wl_clipboard_set(const char *utf8)
+bool wl_clipboard_set(const char *utf8)
 {
-    nack__wl_data_device_bind();   /* the seat may have appeared since init */
+    wl_data_device_bind();   /* the seat may have appeared since init */
 
-    if (!nack__wl.data_device_manager)
+    if (!wl.data_device_manager)
         return state.fail(NACK_ERROR_UNSUPPORTED,
                           "compositor does not offer wl_data_device_manager");
-    if (!nack__wl.seat)
+    if (!wl.seat)
         return state.fail(NACK_ERROR_UNSUPPORTED,
                           "compositor has no wl_seat; selections need one");
-    if (!nack__wl.data_device)
+    if (!wl.data_device)
         return state.fail(NACK_ERROR_PLATFORM, "no wl_data_device for the seat");
 
-    if (nack__wl.data_source)
-        wl_data_source_destroy(nack__wl.data_source);
-    nack__wl.clipboard_offered = utf8;
+    if (wl.data_source)
+        wl_data_source_destroy(wl.data_source);
+    wl.clipboard_offered = utf8;
 
-    nack__wl.data_source = wl_data_device_manager_create_data_source(
-        nack__wl.data_device_manager);
-    if (!nack__wl.data_source)
+    wl.data_source = wl_data_device_manager_create_data_source(
+        wl.data_device_manager);
+    if (!wl.data_source)
         return state.fail(NACK_ERROR_PLATFORM, "create_data_source failed");
 
     wl_data_source_add_listener(
-        nack__wl.data_source, &nack__wl_data_source_listener,
-        const_cast<char *>(nack__wl.clipboard_offered->c_str()));
-    wl_data_source_offer(nack__wl.data_source, NACK_WL_MIME_UTF8);
-    wl_data_source_offer(nack__wl.data_source, NACK_WL_MIME_PLAIN);
-    wl_data_source_offer(nack__wl.data_source, "UTF8_STRING");
-    wl_data_source_offer(nack__wl.data_source, "STRING");
-    wl_data_source_offer(nack__wl.data_source, "TEXT");
+        wl.data_source, &wl_data_source_listener,
+        const_cast<char *>(wl.clipboard_offered->c_str()));
+    wl_data_source_offer(wl.data_source, NACK_WL_MIME_UTF8);
+    wl_data_source_offer(wl.data_source, NACK_WL_MIME_PLAIN);
+    wl_data_source_offer(wl.data_source, "UTF8_STRING");
+    wl_data_source_offer(wl.data_source, "STRING");
+    wl_data_source_offer(wl.data_source, "TEXT");
 
-    wl_data_device_set_selection(nack__wl.data_device, nack__wl.data_source,
-                                 nack__wl.last_serial);
-    wl_display_flush(nack__wl.display);
+    wl_data_device_set_selection(wl.data_device, wl.data_source,
+                                 wl.last_serial);
+    wl_display_flush(wl.display);
     return true;
 }
 
-const char *nack__wl_clipboard_get(void)
+const char *wl_clipboard_get(void)
 {
-    nack__wl_data_device_bind();
+    wl_data_device_bind();
 
     /* We own the selection: no round trip needed. */
-    if (nack__wl.data_source && nack__wl.clipboard_offered) {
-        nack__wl.clipboard_text = nack__wl.clipboard_offered;
-        return nack__wl.clipboard_text->c_str();
+    if (wl.data_source && wl.clipboard_offered) {
+        wl.clipboard_text = wl.clipboard_offered;
+        return wl.clipboard_text->c_str();
     }
 
-    if (!nack__wl.pending_offer || !nack__wl.offer_has_text)
+    if (!wl.pending_offer || !wl.offer_has_text)
         return nullptr;
 
     int fds[2];
     if (pipe(fds) != 0)
         return nullptr;
 
-    wl_data_offer_receive(nack__wl.pending_offer, NACK_WL_MIME_UTF8, fds[1]);
+    wl_data_offer_receive(wl.pending_offer, NACK_WL_MIME_UTF8, fds[1]);
     close(fds[1]);
     /* The compositor only acts on the receive once it is flushed. */
-    wl_display_roundtrip(nack__wl.display);
+    wl_display_roundtrip(wl.display);
 
-    nack__wl.clipboard_text = nack__wl_read_pipe(fds[0]);
-    return nack__wl.clipboard_text ? nack__wl.clipboard_text->c_str() : nullptr;
+    wl.clipboard_text = wl_read_pipe(fds[0]);
+    return wl.clipboard_text ? wl.clipboard_text->c_str() : nullptr;
 }
 
-bool nack__wl_primary_set(const char *utf8)
+bool wl_primary_set(const char *utf8)
 {
-    nack__wl_data_device_bind();
-    if (!nack__wl.primary_manager || !nack__wl.primary_device)
+    wl_data_device_bind();
+    if (!wl.primary_manager || !wl.primary_device)
         return false;
 
-    if (nack__wl.primary_source)
-        zwp_primary_selection_source_v1_destroy(nack__wl.primary_source);
-    nack__wl.primary_offered = utf8;
+    if (wl.primary_source)
+        zwp_primary_selection_source_v1_destroy(wl.primary_source);
+    wl.primary_offered = utf8;
 
-    nack__wl.primary_source =
-        zwp_primary_selection_device_manager_v1_create_source(nack__wl.primary_manager);
-    if (!nack__wl.primary_source)
+    wl.primary_source =
+        zwp_primary_selection_device_manager_v1_create_source(wl.primary_manager);
+    if (!wl.primary_source)
         return false;
 
     zwp_primary_selection_source_v1_add_listener(
-        nack__wl.primary_source, &nack__wl_primary_source_listener,
-        const_cast<char *>(nack__wl.primary_offered->c_str()));
-    zwp_primary_selection_source_v1_offer(nack__wl.primary_source, NACK_WL_MIME_UTF8);
-    zwp_primary_selection_source_v1_offer(nack__wl.primary_source, NACK_WL_MIME_PLAIN);
-    zwp_primary_selection_source_v1_offer(nack__wl.primary_source, "UTF8_STRING");
-    zwp_primary_selection_source_v1_offer(nack__wl.primary_source, "STRING");
+        wl.primary_source, &wl_primary_source_listener,
+        const_cast<char *>(wl.primary_offered->c_str()));
+    zwp_primary_selection_source_v1_offer(wl.primary_source, NACK_WL_MIME_UTF8);
+    zwp_primary_selection_source_v1_offer(wl.primary_source, NACK_WL_MIME_PLAIN);
+    zwp_primary_selection_source_v1_offer(wl.primary_source, "UTF8_STRING");
+    zwp_primary_selection_source_v1_offer(wl.primary_source, "STRING");
 
-    zwp_primary_selection_device_v1_set_selection(nack__wl.primary_device,
-                                                  nack__wl.primary_source,
-                                                  nack__wl.last_serial);
-    wl_display_flush(nack__wl.display);
+    zwp_primary_selection_device_v1_set_selection(wl.primary_device,
+                                                  wl.primary_source,
+                                                  wl.last_serial);
+    wl_display_flush(wl.display);
     return true;
 }
 
-const char *nack__wl_primary_get(void)
+const char *wl_primary_get(void)
 {
-    if (nack__wl.primary_source && nack__wl.primary_offered) {
-        nack__wl.primary_text = nack__wl.primary_offered;
-        return nack__wl.primary_text->c_str();
+    if (wl.primary_source && wl.primary_offered) {
+        wl.primary_text = wl.primary_offered;
+        return wl.primary_text->c_str();
     }
 
-    if (!nack__wl.pending_primary_offer || !nack__wl.primary_offer_has_text)
+    if (!wl.pending_primary_offer || !wl.primary_offer_has_text)
         return nullptr;
 
     int fds[2];
     if (pipe(fds) != 0)
         return nullptr;
 
-    zwp_primary_selection_offer_v1_receive(nack__wl.pending_primary_offer,
+    zwp_primary_selection_offer_v1_receive(wl.pending_primary_offer,
                                            NACK_WL_MIME_UTF8, fds[1]);
     close(fds[1]);
-    wl_display_roundtrip(nack__wl.display);
+    wl_display_roundtrip(wl.display);
 
-    nack__wl.primary_text = nack__wl_read_pipe(fds[0]);
-    return nack__wl.primary_text ? nack__wl.primary_text->c_str() : nullptr;
+    wl.primary_text = wl_read_pipe(fds[0]);
+    return wl.primary_text ? wl.primary_text->c_str() : nullptr;
 }
 
-void nack__wl_clipboard_shutdown(void)
+void wl_clipboard_shutdown(void)
 {
-    if (nack__wl.data_source)    wl_data_source_destroy(nack__wl.data_source);
-    if (nack__wl.primary_source)
-        zwp_primary_selection_source_v1_destroy(nack__wl.primary_source);
-    if (nack__wl.pending_offer)  wl_data_offer_destroy(nack__wl.pending_offer);
-    if (nack__wl.pending_primary_offer)
-        zwp_primary_selection_offer_v1_destroy(nack__wl.pending_primary_offer);
-    if (nack__wl.data_device)    wl_data_device_destroy(nack__wl.data_device);
-    if (nack__wl.primary_device)
-        zwp_primary_selection_device_v1_destroy(nack__wl.primary_device);
-    if (nack__wl.data_device_manager)
-        wl_data_device_manager_destroy(nack__wl.data_device_manager);
-    if (nack__wl.primary_manager)
-        zwp_primary_selection_device_manager_v1_destroy(nack__wl.primary_manager);
+    if (wl.data_source)    wl_data_source_destroy(wl.data_source);
+    if (wl.primary_source)
+        zwp_primary_selection_source_v1_destroy(wl.primary_source);
+    if (wl.pending_offer)  wl_data_offer_destroy(wl.pending_offer);
+    if (wl.pending_primary_offer)
+        zwp_primary_selection_offer_v1_destroy(wl.pending_primary_offer);
+    if (wl.data_device)    wl_data_device_destroy(wl.data_device);
+    if (wl.primary_device)
+        zwp_primary_selection_device_v1_destroy(wl.primary_device);
+    if (wl.data_device_manager)
+        wl_data_device_manager_destroy(wl.data_device_manager);
+    if (wl.primary_manager)
+        zwp_primary_selection_device_manager_v1_destroy(wl.primary_manager);
 
-    nack__wl.data_source = nullptr;
-    nack__wl.primary_source = nullptr;
-    nack__wl.pending_offer = nullptr;
-    nack__wl.pending_primary_offer = nullptr;
-    nack__wl.data_device = nullptr;
-    nack__wl.primary_device = nullptr;
-    nack__wl.data_device_manager = nullptr;
-    nack__wl.primary_manager = nullptr;
-    nack__wl.clipboard_text.reset();
-    nack__wl.primary_text.reset();
-    nack__wl.clipboard_offered.reset();
-    nack__wl.primary_offered.reset();
+    wl.data_source = nullptr;
+    wl.primary_source = nullptr;
+    wl.pending_offer = nullptr;
+    wl.pending_primary_offer = nullptr;
+    wl.data_device = nullptr;
+    wl.primary_device = nullptr;
+    wl.data_device_manager = nullptr;
+    wl.primary_manager = nullptr;
+    wl.clipboard_text.reset();
+    wl.primary_text.reset();
+    wl.clipboard_offered.reset();
+    wl.primary_offered.reset();
 }
+
+} }   /* namespace nack::detail */

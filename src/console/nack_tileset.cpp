@@ -18,7 +18,7 @@
  * codepoint drawn by tile n, which is what lets a CP437 sheet render box
  * drawing characters written as UTF-8 in source.
  */
-static const uint16_t nack__cp437[256] = {
+static const uint16_t cp437[256] = {
     0x0000, 0x263A, 0x263B, 0x2665, 0x2666, 0x2663, 0x2660, 0x2022,
     0x25D8, 0x25CB, 0x25D9, 0x2642, 0x2640, 0x266A, 0x266B, 0x263C,
     0x25BA, 0x25C4, 0x2195, 0x203C, 0x00B6, 0x00A7, 0x25AC, 0x21A8,
@@ -57,17 +57,17 @@ static const uint16_t nack__cp437[256] = {
 /* Codepoint mapping                                                  */
 /* ------------------------------------------------------------------ */
 
-static bool nack__codepoint_before(const nack_codepoint_map &entry,
+static bool codepoint_before(const nack_codepoint_map &entry,
                                    uint32_t codepoint)
 {
     return entry.codepoint < codepoint;
 }
 
-static bool nack__sparse_set(nack_tileset *tileset, uint32_t codepoint,
+static bool sparse_set(nack_tileset *tileset, uint32_t codepoint,
                              int index)
 {
     auto at = std::lower_bound(tileset->sparse.begin(), tileset->sparse.end(),
-                               codepoint, nack__codepoint_before);
+                               codepoint, codepoint_before);
 
     if (at != tileset->sparse.end() && at->codepoint == codepoint) {
         at->index = index;
@@ -85,7 +85,7 @@ int nack_tileset::index_for(uint32_t codepoint) const
     }
 
     auto at = std::lower_bound(sparse.begin(), sparse.end(), codepoint,
-                               nack__codepoint_before);
+                               codepoint_before);
     if (at != sparse.end() && at->codepoint == codepoint)
         return at->index;
     return -1;
@@ -94,13 +94,13 @@ int nack_tileset::index_for(uint32_t codepoint) const
 bool nack_tileset::map(uint32_t codepoint, int index)
 {
     if (index < 0 || index >= count)
-        return nack__c.set_error("tile index %d is outside the tileset", index);
+        return console_state.set_error("tile index %d is outside the tileset", index);
     if (codepoint < 256) {
         direct[codepoint] = index;
         return true;
     }
     return nack::guarded("cannot map a codepoint",
-                         [&] { return nack__sparse_set(this, codepoint, index); },
+                         [&] { return sparse_set(this, codepoint, index); },
                          false);
 }
 
@@ -110,7 +110,7 @@ bool nack_tileset::map_range(uint32_t first, uint32_t last, int first_index)
     int index = first_index;
 
     if (last < first)
-        return nack__c.set_error("bad codepoint range");
+        return console_state.set_error("bad codepoint range");
     for (codepoint = first; codepoint <= last; ++codepoint, ++index) {
         if (!map(codepoint, index))
             return false;
@@ -127,7 +127,7 @@ bool nack_tileset::map_range(uint32_t first, uint32_t last, int first_index)
  * shape is all it carries, so the cell's foreground colour supplies the rest.
  * Anything with real colour in it is artwork and is drawn as it is.
  */
-static bool nack__looks_like_font(const uint8_t *rgba, int width, int height)
+static bool looks_like_font(const uint8_t *rgba, int width, int height)
 {
     int i, count = width * height;
     for (i = 0; i < count; ++i) {
@@ -145,7 +145,7 @@ static bool nack__looks_like_font(const uint8_t *rgba, int width, int height)
  * treat every font the same way whether it arrived as black-on-white,
  * white-on-black or white-on-transparent.
  */
-static void nack__normalize_font(uint8_t *rgba, int width, int height)
+static void normalize_font(uint8_t *rgba, int width, int height)
 {
     int i, count = width * height;
     bool has_alpha = false;
@@ -175,7 +175,7 @@ static void nack__normalize_font(uint8_t *rgba, int width, int height)
  */
 nack_tileset::~nack_tileset()
 {
-    nack__gfx_texture_destroy(texture);
+    gfx_texture_destroy(texture);
 }
 
 nack_tileset *nack_tileset::from_rgba(uint8_t *rgba, int width,
@@ -192,7 +192,7 @@ nack_tileset *nack_tileset::from_rgba(uint8_t *rgba, int width,
     }
     if (tile_width <= 0 || tile_height <= 0 ||
         width % tile_width || height % tile_height) {
-        nack__c.set_error(
+        console_state.set_error(
             "tileset is %dx%d, which does not divide into %dx%d tiles",
             width, height, tile_width, tile_height);
         return nullptr;
@@ -206,10 +206,10 @@ nack_tileset *nack_tileset::from_rgba(uint8_t *rgba, int width,
     tileset->columns = width / tile_width;
     tileset->rows = height / tile_height;
     tileset->count = tileset->columns * tileset->rows;
-    tileset->is_font = nack__looks_like_font(rgba, width, height);
+    tileset->is_font = looks_like_font(rgba, width, height);
 
     if (tileset->is_font)
-        nack__normalize_font(rgba, width, height);
+        normalize_font(rgba, width, height);
 
     tileset->direct.fill(-1);
 
@@ -219,7 +219,7 @@ nack_tileset *nack_tileset::from_rgba(uint8_t *rgba, int width,
             int index = i;
             if (layout == NACK_LAYOUT_TCOD)
                 index = (i % 16) * 16 + i / 16;
-            tileset->map(nack__cp437[i], index);
+            tileset->map(cp437[i], index);
         }
         /* ASCII is also reachable by its own codepoint, which is the same
          * thing for CP437 but keeps plain ASCII working on odd sheets. */
@@ -231,14 +231,14 @@ nack_tileset *nack_tileset::from_rgba(uint8_t *rgba, int width,
         for (i = 0; i < 256 && i < tileset->count; ++i) {
             int index = (i % tileset->rows) * tileset->columns + (i / tileset->rows);
             if (index < tileset->count)
-                tileset->map(nack__cp437[i], index);
+                tileset->map(cp437[i], index);
         }
     } else {
         for (i = 0; i < 256 && i < tileset->count; ++i)
             tileset->direct[i] = i;
     }
 
-    tileset->texture = nack__gfx_texture_create(rgba, width, height);
+    tileset->texture = gfx_texture_create(rgba, width, height);
     if (!tileset->texture)
         return nullptr;
 
@@ -261,7 +261,7 @@ nack_tileset *nack_tileset::builtin()
     int glyph;
 
     if (!owner) {
-        nack__c.set_error("out of memory");
+        console_state.set_error("out of memory");
         return nullptr;
     }
     rgba = owner.get();
@@ -271,7 +271,7 @@ nack_tileset *nack_tileset::builtin()
         int oy = (glyph / across) * tile;
         int y;
         for (y = 0; y < tile; ++y) {
-            uint8_t bits = nack__builtin_font[glyph][y];
+            uint8_t bits = builtin_font[glyph][y];
             int x;
             for (x = 0; x < tile; ++x) {
                 uint8_t on = (bits & (1u << x)) ? 255 : 0;
@@ -299,15 +299,15 @@ nack_tileset *nack_tileset::load_memory(const void *data, size_t size,
     const char *error = nullptr;
     int width = 0, height = 0;
 
-    if (!nack__c.initialized) {
-        nack__c.set_error("nack_init has not been called");
+    if (!console_state.initialized) {
+        console_state.set_error("nack_init has not been called");
         return nullptr;
     }
 
     nack::owned<uint8_t, nack__image_free> rgba(
         nack__image_decode(data, size, &width, &height, &error));
     if (!rgba) {
-        nack__c.set_error("cannot decode tileset: %s",
+        console_state.set_error("cannot decode tileset: %s",
                           error ? error : "unknown");
         return nullptr;
     }
@@ -323,30 +323,30 @@ nack_tileset *nack_tileset::load(const char *path, int tile_width,
     long size;
 
     if (!path) {
-        nack__c.set_error("no tileset path given");
+        console_state.set_error("no tileset path given");
         return nullptr;
     }
 
     nack::file_ptr file(fopen(path, "rb"));
     if (!file) {
-        nack__c.set_error("cannot open tileset '%s'", path);
+        console_state.set_error("cannot open tileset '%s'", path);
         return nullptr;
     }
     fseek(file.get(), 0, SEEK_END);
     size = ftell(file.get());
     fseek(file.get(), 0, SEEK_SET);
     if (size <= 0) {
-        nack__c.set_error("tileset '%s' is empty", path);
+        console_state.set_error("tileset '%s' is empty", path);
         return nullptr;
     }
 
     nack::c_ptr<char> data((char *)malloc((size_t)size));
     if (!data) {
-        nack__c.set_error("out of memory");
+        console_state.set_error("out of memory");
         return nullptr;
     }
     if (fread(data.get(), 1, (size_t)size, file.get()) != (size_t)size) {
-        nack__c.set_error("cannot read tileset '%s'", path);
+        console_state.set_error("cannot read tileset '%s'", path);
         return nullptr;
     }
 
@@ -356,7 +356,7 @@ nack_tileset *nack_tileset::load(const char *path, int tile_width,
 
 void nack_tileset::destroy(nack_tileset *tileset)
 {
-    if (!tileset || tileset == nack__c.builtin_font)
+    if (!tileset || tileset == console_state.builtin_font)
         return;
     tileset->untrack();
     delete tileset;
@@ -364,13 +364,13 @@ void nack_tileset::destroy(nack_tileset *tileset)
 
 void nack_tileset::track()
 {
-    nack__c.tilesets.push_back(this);
+    console_state.tilesets.push_back(this);
 }
 
 void nack_tileset::untrack()
 {
-    auto at = std::find(nack__c.tilesets.begin(), nack__c.tilesets.end(),
+    auto at = std::find(console_state.tilesets.begin(), console_state.tilesets.end(),
                         this);
-    if (at != nack__c.tilesets.end())
-        nack__c.tilesets.erase(at);
+    if (at != console_state.tilesets.end())
+        console_state.tilesets.erase(at);
 }

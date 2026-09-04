@@ -64,7 +64,9 @@ nack_result nack_state::last_error(const char **message) const
     return error_code;
 }
 
-uint32_t nack__utf8_encode(uint32_t cp, char out[5])
+namespace nack { namespace detail {
+
+uint32_t utf8_encode(uint32_t cp, char out[5])
 {
     if (cp < 0x80) {
         out[0] = (char)cp;
@@ -94,7 +96,7 @@ uint32_t nack__utf8_encode(uint32_t cp, char out[5])
 
 /* Filters out control characters that arrive as "text" on some platforms;
  * a terminal wants those as key events, not as pasted glyphs. */
-bool nack__codepoint_is_text(uint32_t cp)
+bool codepoint_is_text(uint32_t cp)
 {
     if (cp < 0x20 || cp == 0x7F)
         return false;
@@ -114,7 +116,7 @@ bool nack__codepoint_is_text(uint32_t cp)
 /* Time                                                               */
 /* ------------------------------------------------------------------ */
 
-uint64_t nack__win_time_ns(void)
+uint64_t win_time_ns(void)
 {
 #if defined(NACK_PLATFORM_WIN32)
     static int64_t frequency;
@@ -149,10 +151,12 @@ uint64_t nack__win_time_ns(void)
 #endif
 }
 
-double nack__win_time_seconds(void)
+double win_time_seconds(void)
 {
-    return (double)nack__win_time_ns() / 1e9;
+    return (double)win_time_ns() / 1e9;
 }
+
+} }   /* namespace nack::detail */
 
 /* ------------------------------------------------------------------ */
 /* Event queue                                                        */
@@ -180,7 +184,7 @@ nack_win_event *nack_state::event_begin(nack_win_event_type type,
     memset(&scratch, 0, sizeof scratch);
     scratch.type = type;
     scratch.window = w;
-    scratch.time_ns = nack__win_time_ns();
+    scratch.time_ns = win_time_ns();
     return &scratch;
 }
 
@@ -190,7 +194,9 @@ void nack_state::emit_global(nack_win_event_type type)
     push_event(ev);
 }
 
-static bool nack__pop(nack_win_event *out)
+namespace nack { namespace detail {
+
+static bool pop(nack_win_event *out)
 {
     if (state.queue.empty())
         return false;
@@ -198,6 +204,8 @@ static bool nack__pop(nack_win_event *out)
     state.queue.pop_front();
     return true;
 }
+
+} }   /* namespace nack::detail */
 
 /* ------------------------------------------------------------------ */
 /* Event emitters                                                     */
@@ -322,7 +330,7 @@ void nack_window::emit_mouse_button(int button, bool down, double x, double y,
 
     int clicks = 1;
     if (down) {
-        uint64_t now = nack__win_time_ns();
+        uint64_t now = win_time_ns();
         double ddx = x - last_click_x;
         double ddy = y - last_click_y;
         /* Not named `near`: windows.h still defines that as a macro. */
@@ -381,8 +389,10 @@ void nack_window::unregister_self()
         state.windows.erase(at);
 }
 
+namespace nack { namespace detail {
+
 /* Drop queued events referring to a window that is going away. */
-static void nack__purge_window_events(nack_window *w)
+static void purge_window_events(nack_window *w)
 {
     auto stale = [w](const nack_win_event &ev) { return ev.window == w; };
     state.queue.erase(std::remove_if(state.queue.begin(),
@@ -390,11 +400,15 @@ static void nack__purge_window_events(nack_window *w)
                         state.queue.end());
 }
 
+} }   /* namespace nack::detail */
+
 /* ------------------------------------------------------------------ */
 /* Backend selection                                                  */
 /* ------------------------------------------------------------------ */
 
-const char *nack__win_backend_name(nack_backend backend)
+namespace nack { namespace detail {
+
+const char *win_backend_name(nack_backend backend)
 {
     switch (backend) {
     case NACK_BACKEND_WIN32:   return "win32";
@@ -405,14 +419,14 @@ const char *nack__win_backend_name(nack_backend backend)
     }
 }
 
-static nack_backend_vt *nack__select_backend(nack_backend preferred)
+static nack_backend_vt *select_backend(nack_backend preferred)
 {
 #if defined(NACK_PLATFORM_WIN32)
     (void)preferred;
-    return nack__backend_win32();
+    return backend_win32();
 #elif defined(NACK_PLATFORM_COCOA)
     (void)preferred;
-    return nack__backend_cocoa();
+    return backend_cocoa();
 #elif defined(NACK_HAS_WAYLAND) && defined(NACK_HAS_X11)
     const char *env = getenv("NACK_BACKEND");
     if (env && *env) {
@@ -423,22 +437,22 @@ static nack_backend_vt *nack__select_backend(nack_backend preferred)
     }
 
     if (preferred == NACK_BACKEND_X11)
-        return nack__backend_x11();
+        return backend_x11();
     if (preferred == NACK_BACKEND_WAYLAND)
-        return nack__backend_wayland();
+        return backend_wayland();
 
     /* Auto: a compositor socket in the environment means a Wayland session,
      * even when an Xwayland DISPLAY is also present. */
     const char *wayland_display = getenv("WAYLAND_DISPLAY");
     if (wayland_display && *wayland_display)
-        return nack__backend_wayland();
-    return nack__backend_x11();
+        return backend_wayland();
+    return backend_x11();
 #elif defined(NACK_HAS_WAYLAND)
     (void)preferred;
-    return nack__backend_wayland();
+    return backend_wayland();
 #elif defined(NACK_HAS_X11)
     (void)preferred;
-    return nack__backend_x11();
+    return backend_x11();
 #else
     (void)preferred;
     return NULL;
@@ -446,18 +460,18 @@ static nack_backend_vt *nack__select_backend(nack_backend preferred)
 }
 
 /* Try each available Unix backend in order until one initializes. */
-static bool nack__try_init_backends(const nack_win_init_desc *desc)
+static bool try_init_backends(const nack_win_init_desc *desc)
 {
 #if defined(NACK_PLATFORM_UNIX)
     nack_backend_vt *order[2] = { nullptr, nullptr };
     size_t n = 0;
-    nack_backend_vt *first = nack__select_backend(desc->backend);
+    nack_backend_vt *first = select_backend(desc->backend);
     if (!first)
         return state.fail(NACK_ERROR_NO_BACKEND, "no display backend compiled in");
     order[n++] = first;
 #if defined(NACK_HAS_WAYLAND) && defined(NACK_HAS_X11)
-    order[n++] = (first->id() == NACK_BACKEND_WAYLAND) ? nack__backend_x11()
-                                                     : nack__backend_wayland();
+    order[n++] = (first->id() == NACK_BACKEND_WAYLAND) ? backend_x11()
+                                                     : backend_wayland();
 #endif
     for (size_t i = 0; i < n; ++i) {
         if (!order[i])
@@ -472,7 +486,7 @@ static bool nack__try_init_backends(const nack_win_init_desc *desc)
     return state.fail(NACK_ERROR_NO_BACKEND,
                       "no usable display backend (tried wayland/x11)");
 #else
-    nack_backend_vt *vt = nack__select_backend(desc->backend);
+    nack_backend_vt *vt = select_backend(desc->backend);
     if (!vt)
         return state.fail(NACK_ERROR_NO_BACKEND, "no display backend compiled in");
     state.vt = vt;
@@ -482,6 +496,8 @@ static bool nack__try_init_backends(const nack_win_init_desc *desc)
     return false;
 #endif
 }
+
+} }   /* namespace nack::detail */
 
 bool nack_state::init(const nack_win_init_desc *desc)
 {
@@ -499,7 +515,7 @@ bool nack_state::init(const nack_win_init_desc *desc)
 
     return nack::guarded_win("cannot start the window layer", [&] {
         app_id = local.app_id ? local.app_id : "libnack";
-        if (!nack__try_init_backends(&local)) {
+        if (!try_init_backends(&local)) {
             app_id.clear();
             return false;
         }
@@ -521,7 +537,7 @@ void nack_state::shutdown()
         vt->shutdown();
 
     /* Entry points belong to the driver we are dropping. */
-    nack__proc_cache_clear();
+    proc_cache_clear();
 
     /* Assignment, not memset: the state owns strings and a queue now. */
     *this = nack_state{};
@@ -628,7 +644,7 @@ void nack_window::destroy(nack_window *window)
         state.current_context = nullptr;
     }
 
-    nack__purge_window_events(window);
+    purge_window_events(window);
     window->unregister_self();
     window->vt->window_destroy(window);
     delete window;
@@ -757,10 +773,10 @@ bool nack_state::poll_event(nack_win_event *event)
     NACK_REQUIRE_INIT_RET(false);
     if (!event)
         return false;
-    if (nack__pop(event))
+    if (pop(event))
         return true;
     vt->pump_events(0.0);
-    return nack__pop(event);
+    return pop(event);
 }
 
 bool nack_state::wait_event(nack_win_event *event)
@@ -773,7 +789,7 @@ bool nack_state::wait_event_timeout(nack_win_event *event, double timeout)
     NACK_REQUIRE_INIT_RET(false);
     if (!event)
         return false;
-    if (nack__pop(event))
+    if (pop(event))
         return true;
 
     if (timeout < 0.0) {
@@ -783,18 +799,18 @@ bool nack_state::wait_event_timeout(nack_win_event *event, double timeout)
             if (windows.empty() && queue.empty())
                 return false;   /* nothing left that could wake us */
         }
-        return nack__pop(event);
+        return pop(event);
     }
 
-    double deadline = nack__win_time_seconds() + timeout;
+    double deadline = win_time_seconds() + timeout;
     for (;;) {
-        double remaining = deadline - nack__win_time_seconds();
+        double remaining = deadline - win_time_seconds();
         if (remaining < 0.0)
             remaining = 0.0;
         vt->pump_events(remaining);
-        if (nack__pop(event))
+        if (pop(event))
             return true;
-        if (nack__win_time_seconds() >= deadline)
+        if (win_time_seconds() >= deadline)
             return false;
     }
 }
@@ -829,14 +845,14 @@ bool nack_state::mouse_button_is_down(int button) const
 /* ------------------------------------------------------------------ */
 
 nack_gl_context *nack_gl_context::create(nack_window *window,
-                                                const nack__gl_desc *desc)
+                                                const gl_desc *desc)
 {
     NACK_REQUIRE_INIT_RET(nullptr);
     if (!window) {
         state.fail(NACK_ERROR_INVALID_ARGUMENT, "nack_gl_context::create: null window");
         return nullptr;
     }
-    nack__gl_desc d;
+    gl_desc d;
     if (desc)
         d = *desc;
     return state.vt->gl_create(window, &d);
@@ -882,7 +898,7 @@ void *nack_state::gl_get_proc_address(const char *name)
     if (!initialized || !name)
         return nullptr;
     /* The cache takes a plain function; a capture-less lambda is one. */
-    return nack__proc_cache_get(name, [](const char *symbol) {
+    return proc_cache_get(name, [](const char *symbol) {
         return state.vt->gl_get_proc_address(symbol);
     });
 }

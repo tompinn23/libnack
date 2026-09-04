@@ -62,27 +62,31 @@ struct nack_win32_state {
     BOOL (WINAPI *SetProcessDpiAwarenessContext_)(void *);
 };
 
-extern nack_win32_state nack__win32;
+namespace nack { namespace detail {
 
-static inline nack_win32_window *nack__win32_win(nack_window *w)
+extern nack_win32_state win32;
+
+static inline nack_win32_window *win32_win(nack_window *w)
 {
     return (nack_win32_window *)w->native;
 }
 
 /* nack_wgl.c */
-bool  nack__wgl_init(void);
-void  nack__wgl_terminate(void);
-bool  nack__wgl_choose_pixel_format(nack_window *w, HDC hdc, int *out_format);
-nack_gl_context *nack__wgl_create_context(nack_window *w, const nack__gl_desc *desc,
+bool  wgl_init(void);
+void  wgl_terminate(void);
+bool  wgl_choose_pixel_format(nack_window *w, HDC hdc, int *out_format);
+nack_gl_context *wgl_create_context(nack_window *w, const gl_desc *desc,
                                           nack_backend_vt *vt);
-void  nack__wgl_destroy_context(nack_gl_context *ctx);
-bool  nack__wgl_make_current(nack_window *w, nack_gl_context *ctx);
-void  nack__wgl_swap_buffers(nack_window *w);
-void  nack__wgl_set_swap_interval(int interval);
-void *nack__wgl_get_proc_address(const char *name);
+void  wgl_destroy_context(nack_gl_context *ctx);
+bool  wgl_make_current(nack_window *w, nack_gl_context *ctx);
+void  wgl_swap_buffers(nack_window *w);
+void  wgl_set_swap_interval(int interval);
+void *wgl_get_proc_address(const char *name);
 
 /* Shared helpers */
-std::optional<std::wstring> nack__win32_utf8_to_wide(const char *utf8);
-std::optional<std::string> nack__win32_wide_to_utf8(const WCHAR *wide);
+std::optional<std::wstring> win32_utf8_to_wide(const char *utf8);
+std::optional<std::string> win32_wide_to_utf8(const WCHAR *wide);
+
+} }   /* namespace nack::detail */
 
 #endif /* NACK_WIN32_H_INCLUDED */

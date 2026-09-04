@@ -34,7 +34,9 @@ struct nack_cocoa_state {
     uint32_t modifier_flags;
 };
 
-extern nack_cocoa_state nack__cocoa;
+namespace nack { namespace detail {
+extern nack_cocoa_state cocoa;
+} }   /* namespace nack::detail */
 
 /*
  * Instance variables carry a nack prefix rather than the obvious _window and
@@ -57,23 +59,27 @@ extern nack_cocoa_state nack__cocoa;
 - (instancetype)initWithWindow:(nack_window *)window;
 @end
 
-static inline nack_cocoa_window *nack__cocoa_win(nack_window *w)
+namespace nack { namespace detail {
+
+static inline nack_cocoa_window *cocoa_win(nack_window *w)
 {
     return (nack_cocoa_window *)w->native;
 }
 
 /* nack_nsgl.m */
-nack_gl_context *nack__nsgl_create_context(nack_window *w, const nack__gl_desc *desc,
+nack_gl_context *nsgl_create_context(nack_window *w, const gl_desc *desc,
                                            nack_backend_vt *vt);
-void  nack__nsgl_destroy_context(nack_gl_context *ctx);
-bool  nack__nsgl_make_current(nack_window *w, nack_gl_context *ctx);
-void  nack__nsgl_swap_buffers(nack_window *w);
-void  nack__nsgl_set_swap_interval(int interval);
-void *nack__nsgl_get_proc_address(const char *name);
-void  nack__nsgl_update(nack_window *w);
-void  nack__nsgl_terminate(void);
+void  nsgl_destroy_context(nack_gl_context *ctx);
+bool  nsgl_make_current(nack_window *w, nack_gl_context *ctx);
+void  nsgl_swap_buffers(nack_window *w);
+void  nsgl_set_swap_interval(int interval);
+void *nsgl_get_proc_address(const char *name);
+void  nsgl_update(nack_window *w);
+void  nsgl_terminate(void);
 
 /* nack_cocoa.m */
-void nack__cocoa_update_size(nack_window *w);
+void cocoa_update_size(nack_window *w);
+
+} }   /* namespace nack::detail */
 
 #endif /* NACK_COCOA_H_INCLUDED */

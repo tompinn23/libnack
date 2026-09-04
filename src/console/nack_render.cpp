@@ -13,18 +13,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-static bool nack__reserve_vertices(size_t cells)
+namespace nack { namespace detail {
+
+static bool reserve_vertices(size_t cells)
 {
     size_t needed = cells * NACK_VERTICES_PER_CELL * NACK_FLOATS_PER_VERTEX;
 
-    if (needed <= nack__c.vertices.size())
+    if (needed <= console_state.vertices.size())
         return true;
     return nack::guarded("cannot size the console vertex buffer",
-                         [&] { nack__c.vertices.resize(needed); return true; },
+                         [&] { console_state.vertices.resize(needed); return true; },
                          false);
 }
 
-static void nack__emit_quad(float **cursor, float x0, float y0, float x1,
+static void emit_quad(float **cursor, float x0, float y0, float x1,
                             float y1, float u0, float v0, float u1, float v1,
                             nack_color fg, nack_color bg)
 {
@@ -59,10 +61,10 @@ static void nack__emit_quad(float **cursor, float x0, float y0, float x1,
  * tiles pixel-exact, which matters more for pixel art than filling the window
  * does; the remainder becomes letterbox.
  */
-void nack__render_update_viewport(void)
+void render_update_viewport(void)
 {
-    const nack_console *console = nack__c.root;
-    const nack_tileset *font = nack__c.font;
+    const nack_console *console = console_state.root;
+    const nack_tileset *font = console_state.font;
     int console_w, console_h;
 
     if (!console || !font)
@@ -73,44 +75,44 @@ void nack__render_update_viewport(void)
     if (console_w < 1 || console_h < 1)
         return;
 
-    switch (nack__c.scaling) {
+    switch (console_state.scaling) {
     case NACK_SCALE_STRETCH:
-        nack__c.viewport_x = 0;
-        nack__c.viewport_y = 0;
-        nack__c.viewport_w = nack__c.fb_width;
-        nack__c.viewport_h = nack__c.fb_height;
+        console_state.viewport_x = 0;
+        console_state.viewport_y = 0;
+        console_state.viewport_w = console_state.fb_width;
+        console_state.viewport_h = console_state.fb_height;
         break;
 
     case NACK_SCALE_FIT: {
-        double sx = (double)nack__c.fb_width / console_w;
-        double sy = (double)nack__c.fb_height / console_h;
+        double sx = (double)console_state.fb_width / console_w;
+        double sy = (double)console_state.fb_height / console_h;
         double scale = sx < sy ? sx : sy;
-        nack__c.viewport_w = (int)(console_w * scale);
-        nack__c.viewport_h = (int)(console_h * scale);
-        nack__c.viewport_x = (nack__c.fb_width - nack__c.viewport_w) / 2;
-        nack__c.viewport_y = (nack__c.fb_height - nack__c.viewport_h) / 2;
+        console_state.viewport_w = (int)(console_w * scale);
+        console_state.viewport_h = (int)(console_h * scale);
+        console_state.viewport_x = (console_state.fb_width - console_state.viewport_w) / 2;
+        console_state.viewport_y = (console_state.fb_height - console_state.viewport_h) / 2;
         break;
     }
 
     case NACK_SCALE_INTEGER:
     default: {
-        int sx = nack__c.fb_width / console_w;
-        int sy = nack__c.fb_height / console_h;
+        int sx = console_state.fb_width / console_w;
+        int sy = console_state.fb_height / console_h;
         int scale = sx < sy ? sx : sy;
         if (scale < 1)
             scale = 1;   /* smaller than one tile per pixel is unreadable */
-        nack__c.viewport_w = console_w * scale;
-        nack__c.viewport_h = console_h * scale;
-        nack__c.viewport_x = (nack__c.fb_width - nack__c.viewport_w) / 2;
-        nack__c.viewport_y = (nack__c.fb_height - nack__c.viewport_h) / 2;
+        console_state.viewport_w = console_w * scale;
+        console_state.viewport_h = console_h * scale;
+        console_state.viewport_x = (console_state.fb_width - console_state.viewport_w) / 2;
+        console_state.viewport_y = (console_state.fb_height - console_state.viewport_h) / 2;
         break;
     }
     }
 }
 
-void nack__render_console(const nack_console *console)
+void render_console(const nack_console *console)
 {
-    const nack_tileset *font = nack__c.font;
+    const nack_tileset *font = console_state.font;
     float cell_w, cell_h;
     size_t cell_count, pass;
     int x, y;
@@ -119,36 +121,36 @@ void nack__render_console(const nack_console *console)
         return;
 
     cell_count = (size_t)console->columns * (size_t)console->rows;
-    if (!nack__reserve_vertices(cell_count))
+    if (!reserve_vertices(cell_count))
         return;
 
-    cell_w = (float)nack__c.viewport_w / (float)console->columns;
-    cell_h = (float)nack__c.viewport_h / (float)console->rows;
+    cell_w = (float)console_state.viewport_w / (float)console->columns;
+    cell_h = (float)console_state.viewport_h / (float)console->rows;
 
     /* Pass one: every cell's background, in a single draw. */
     {
-        float *cursor = nack__c.vertices.data();
+        float *cursor = console_state.vertices.data();
         for (y = 0; y < console->rows; ++y) {
             for (x = 0; x < console->columns; ++x) {
                 const nack_cell *cell =
                     &console->cells[(size_t)y * console->columns + x];
                 if (cell->bg.a == 0)
                     continue;
-                nack__emit_quad(&cursor, x * cell_w, y * cell_h,
+                emit_quad(&cursor, x * cell_w, y * cell_h,
                                 (x + 1) * cell_w, (y + 1) * cell_h,
                                 0.0f, 0.0f, 0.0f, 0.0f, cell->fg, cell->bg);
             }
         }
-        nack__gfx_draw(nack__c.vertices.data(),
-                       (size_t)(cursor - nack__c.vertices.data()) /
+        gfx_draw(console_state.vertices.data(),
+                       (size_t)(cursor - console_state.vertices.data()) /
                            NACK_FLOATS_PER_VERTEX,
                        0, nullptr);
     }
 
     /* Then one pass per atlas, so mixed glyph and tile consoles stay cheap. */
-    for (pass = 0; pass < nack__c.tilesets.size(); ++pass) {
-        nack_tileset *atlas = nack__c.tilesets[pass];
-        float *cursor = nack__c.vertices.data();
+    for (pass = 0; pass < console_state.tilesets.size(); ++pass) {
+        nack_tileset *atlas = console_state.tilesets[pass];
+        float *cursor = console_state.vertices.data();
         float du, dv;
 
         if (!atlas || atlas->count <= 0 || !atlas->texture)
@@ -185,15 +187,17 @@ void nack__render_console(const nack_console *console)
                 u0 = (float)(index % atlas->columns) * du;
                 v0 = (float)(index / atlas->columns) * dv;
 
-                nack__emit_quad(&cursor, x * cell_w, y * cell_h,
+                emit_quad(&cursor, x * cell_w, y * cell_h,
                                 (x + 1) * cell_w, (y + 1) * cell_h,
                                 u0, v0, u0 + du, v0 + dv, cell->fg, cell->bg);
             }
         }
 
-        nack__gfx_draw(nack__c.vertices.data(),
-                       (size_t)(cursor - nack__c.vertices.data()) /
+        gfx_draw(console_state.vertices.data(),
+                       (size_t)(cursor - console_state.vertices.data()) /
                            NACK_FLOATS_PER_VERTEX,
                        1, atlas->texture);
     }
 }
+
+} }   /* namespace nack::detail */

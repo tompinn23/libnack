@@ -6,7 +6,9 @@
 NACK_GL_FUNCTIONS(NACK_GL_DEFINE)
 #undef NACK_GL_DEFINE
 
-bool nack__gl_load(const char **error)
+namespace nack { namespace detail {
+
+bool gl_load(const char **error)
 {
     const char *missing = nullptr;
 
@@ -24,3 +26,5 @@ bool nack__gl_load(const char **error)
     }
     return true;
 }
+
+} }   /* namespace nack::detail */

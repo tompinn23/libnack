@@ -191,62 +191,66 @@ struct nack_wayland_state {
     bool primary_offer_has_text;
 };
 
-extern nack_wayland_state nack__wl;
+namespace nack { namespace detail {
 
-static inline nack_wl_window *nack__wl_win(nack_window *w)
+extern nack_wayland_state wl;
+
+static inline nack_wl_window *wl_win(nack_window *w)
 {
     return (nack_wl_window *)w->native;
 }
 
 /* nack_wayland_input.c */
-void nack__wl_seat_bind(uint32_t name, uint32_t version);
-void nack__wl_seat_release(void);
-void nack__wl_input_shutdown(void);
-void nack__wl_pump_key_repeat(void);
-double nack__wl_next_repeat_timeout(void);
-void nack__wl_set_cursor_shape(nack_window *w, nack_cursor_shape shape);
+void wl_seat_bind(uint32_t name, uint32_t version);
+void wl_seat_unbind(void);
+void wl_input_shutdown(void);
+void wl_pump_key_repeat(void);
+double wl_next_repeat_timeout(void);
+void wl_set_cursor_shape(nack_window *w, nack_cursor_shape shape);
 /* Sets the pointer image directly, regardless of which window has focus; the
  * decorations use it to show resize cursors while over a border. */
-void nack__wl_apply_cursor_shape(nack_cursor_shape shape);
-void nack__wl_set_cursor_mode(nack_window *w, nack_cursor_mode mode);
-void nack__wl_update_cursor(nack_window *w);
-void nack__wl_load_cursor_theme(int scale);
+void wl_apply_cursor_shape(nack_cursor_shape shape);
+void wl_set_cursor_mode(nack_window *w, nack_cursor_mode mode);
+void wl_update_cursor(nack_window *w);
+void wl_load_cursor_theme(int scale);
 
 /* nack_wayland_clipboard.c */
-void nack__wl_data_device_bind(void);
-void nack__wl_clipboard_shutdown(void);
-bool nack__wl_clipboard_set(const char *utf8);
-const char *nack__wl_clipboard_get(void);
-bool nack__wl_primary_set(const char *utf8);
-const char *nack__wl_primary_get(void);
+void wl_data_device_bind(void);
+void wl_clipboard_shutdown(void);
+bool wl_clipboard_set(const char *utf8);
+const char *wl_clipboard_get(void);
+bool wl_primary_set(const char *utf8);
+const char *wl_primary_get(void);
 
 /* nack_wayland_decor.c */
-bool nack__wl_shm_buffer_alloc(nack_wl_shm_buffer *buf, int width,
+bool wl_shm_buffer_alloc(nack_wl_shm_buffer *buf, int width,
                                int height);
-void nack__wl_shm_buffer_release(nack_wl_shm_buffer *buf);
+void wl_shm_buffer_release(nack_wl_shm_buffer *buf);
 
 /* Commits a blank frame so the surface maps before the client has drawn. */
-void nack__wl_present_placeholder(nack_window *w);
-void nack__wl_drop_placeholder(nack_window *w);
+void wl_present_placeholder(nack_window *w);
+void wl_drop_placeholder(nack_window *w);
 
-bool nack__wl_decor_enable(nack_window *w);
-void nack__wl_decor_destroy(nack_window *w);
-void nack__wl_decor_resize(nack_window *w);
-void nack__wl_decor_redraw(nack_window *w);
+bool wl_decor_enable(nack_window *w);
+void wl_decor_destroy(nack_window *w);
+void wl_decor_resize(nack_window *w);
+void wl_decor_redraw(nack_window *w);
 /* Returns true when the surface belongs to this window's decorations. */
-bool nack__wl_decor_find(struct wl_surface *surface, nack_window **out_window,
+bool wl_decor_find(struct wl_surface *surface, nack_window **out_window,
                          nack_wl_decor_part *out_part);
-void nack__wl_decor_pointer_motion(nack_window *w, double x, double y);
-bool nack__wl_decor_pointer_button(nack_window *w, int button, bool down,
+void wl_decor_pointer_motion(nack_window *w, double x, double y);
+bool wl_decor_pointer_button(nack_window *w, int button, bool down,
                                    uint32_t serial);
-void nack__wl_decor_pointer_leave(nack_window *w);
+void wl_decor_pointer_leave(nack_window *w);
 /* Recomputes the decoration scale after a DPI change. */
-void nack__wl_decor_update_scale(nack_window *w, int scale);
-int  nack__wl_decor_titlebar_height(const nack_window *w);
-int  nack__wl_decor_border(const nack_window *w);
+void wl_decor_update_scale(nack_window *w, int scale);
+int  wl_decor_titlebar_height(const nack_window *w);
+int  wl_decor_border(const nack_window *w);
 
 /* nack_wayland.c */
-void nack__wl_window_update_scale(nack_window *w);
-void nack__wl_resize_egl(nack_window *w);
+void wl_window_update_scale(nack_window *w);
+void wl_resize_egl(nack_window *w);
+
+} }   /* namespace nack::detail */
 
 #endif /* NACK_WAYLAND_H_INCLUDED */

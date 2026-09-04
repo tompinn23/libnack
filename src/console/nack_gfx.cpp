@@ -16,7 +16,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-static nack_gfx_backend *nack__gfx;
+namespace nack { namespace detail {
+
+static nack_gfx_backend *gfx;
 
 /*
  * A backend that always fails to start, so the fallback below is covered by
@@ -38,13 +40,13 @@ public:
     bool init(nack_window *window) override
     {
         (void)window;
-        return nack__c.set_error("this renderer fails on purpose");
+        return console_state.set_error("this renderer fails on purpose");
     }
     void shutdown() override {}
 
     nack_texture *texture_create(const uint8_t *, int, int) override
     {
-        nack__c.set_error("the test-fail renderer draws nothing");
+        console_state.set_error("the test-fail renderer draws nothing");
         return nullptr;
     }
     void texture_destroy(nack_texture *) override {}
@@ -55,11 +57,11 @@ public:
     void set_vsync(bool) override {}
 };
 
-failing_backend nack__gfx_fail_backend;
+failing_backend gfx_fail_backend;
 
 }   /* namespace */
 
-bool nack__gfx_init(nack_window *window)
+bool gfx_init(nack_window *window)
 {
     nack_gfx_backend *candidates[3];
     const char *preferred = getenv("NACK_RENDERER");
@@ -72,11 +74,11 @@ bool nack__gfx_init(nack_window *window)
         preferred = nullptr;
 
     if (preferred && strcmp(preferred, "test-fail") == 0)
-        candidates[count++] = &nack__gfx_fail_backend;
+        candidates[count++] = &gfx_fail_backend;
 #if defined(__APPLE__) && !defined(NACK_MACOS_OPENGL_ONLY)
-    candidates[count++] = nack__gfx_backend_metal();
+    candidates[count++] = gfx_backend_metal();
 #endif
-    candidates[count++] = nack__gfx_backend_gl();
+    candidates[count++] = gfx_backend_gl();
 
     /* A named renderer goes first; the rest stay as fallbacks behind it. */
     if (preferred) {
@@ -100,120 +102,122 @@ bool nack__gfx_init(nack_window *window)
 
         if (!candidates[i])
             continue;
-        nack__gfx = candidates[i];
-        if (nack__gfx->init(window)) {
+        gfx = candidates[i];
+        if (gfx->init(window)) {
             /*
              * A renderer we then fell back from left its complaint behind;
              * the caller only cares that one of them worked.
              */
-            nack__c.clear_error();
-            nack_log("nack: rendering with %s", nack__gfx->name());
+            console_state.clear_error();
+            nack_log("nack: rendering with %s", gfx->name());
             return true;
         }
 
-        why = nack__c.last_error();
-        nack_log("nack: the %s renderer is unavailable: %s", nack__gfx->name(),
+        why = console_state.last_error();
+        nack_log("nack: the %s renderer is unavailable: %s", gfx->name(),
                   why ? why : "no reason given");
         /*
          * Keep the last renderer's complaint. If every candidate fails, that
          * is the only account of why anywhere, and "no renderer could be
          * started" on its own tells a user nothing they can act on.
          */
-        snprintf(reason, sizeof reason, "%s: %s", nack__gfx->name(),
+        snprintf(reason, sizeof reason, "%s: %s", gfx->name(),
                  why ? why : "no reason given");
         /*
          * Every backend's shutdown copes with a half-built state, and has to
          * put the window back as it found it so the next one can have it.
          */
-        nack__gfx->shutdown();
-        nack__gfx = nullptr;
+        gfx->shutdown();
+        gfx = nullptr;
     }
 
-    return nack__c.set_error("no renderer could be started (%s)",
+    return console_state.set_error("no renderer could be started (%s)",
                        reason[0] ? reason : "none were compiled in");
 }
 
-void nack__gfx_shutdown(void)
+void gfx_shutdown(void)
 {
-    if (nack__gfx)
-        nack__gfx->shutdown();
-    nack__gfx = nullptr;
+    if (gfx)
+        gfx->shutdown();
+    gfx = nullptr;
 }
 
-const char *nack__gfx_name(void)
+const char *gfx_name(void)
 {
-    return nack__gfx ? nack__gfx->name() : "none";
+    return gfx ? gfx->name() : "none";
 }
 
-static int nack__gfx_failed_textures;
+static int gfx_failed_textures;
 
-void nack__debug_fail_next_textures(int count)
+void debug_fail_next_textures(int count)
 {
-    nack__gfx_failed_textures = count;
+    gfx_failed_textures = count;
 }
 
-nack_texture *nack__gfx_texture_create(const uint8_t *rgba, int width,
+nack_texture *gfx_texture_create(const uint8_t *rgba, int width,
                                               int height)
 {
-    if (nack__gfx_failed_textures > 0) {
-        --nack__gfx_failed_textures;
-        nack__c.set_error("texture creation failed on purpose");
+    if (gfx_failed_textures > 0) {
+        --gfx_failed_textures;
+        console_state.set_error("texture creation failed on purpose");
         return nullptr;
     }
-    if (!nack__gfx) {
-        nack__c.set_error("no renderer is active");
+    if (!gfx) {
+        console_state.set_error("no renderer is active");
         return nullptr;
     }
-    return nack__gfx->texture_create(rgba, width, height);
+    return gfx->texture_create(rgba, width, height);
 }
 
-void nack__gfx_texture_destroy(nack_texture *texture)
+void gfx_texture_destroy(nack_texture *texture)
 {
-    if (nack__gfx && texture)
-        nack__gfx->texture_destroy(texture);
+    if (gfx && texture)
+        gfx->texture_destroy(texture);
 }
 
-void nack__gfx_begin_frame(nack_color clear, int fb_width, int fb_height,
+void gfx_begin_frame(nack_color clear, int fb_width, int fb_height,
                            int viewport_x, int viewport_y, int viewport_w,
                            int viewport_h)
 {
-    if (nack__gfx)
-        nack__gfx->begin_frame(clear, fb_width, fb_height, viewport_x,
+    if (gfx)
+        gfx->begin_frame(clear, fb_width, fb_height, viewport_x,
                                viewport_y, viewport_w, viewport_h);
 }
 
-void nack__gfx_draw(const float *vertices, size_t vertex_count, int mode,
+void gfx_draw(const float *vertices, size_t vertex_count, int mode,
                     nack_texture *texture)
 {
-    if (nack__gfx)
-        nack__gfx->draw(vertices, vertex_count, mode, texture);
+    if (gfx)
+        gfx->draw(vertices, vertex_count, mode, texture);
 }
 
-void nack__gfx_end_frame(void)
+void gfx_end_frame(void)
 {
-    if (nack__gfx)
-        nack__gfx->end_frame();
+    if (gfx)
+        gfx->end_frame();
 }
 
-void nack__gfx_resize(int fb_width, int fb_height)
+void gfx_resize(int fb_width, int fb_height)
 {
-    if (nack__gfx)
-        nack__gfx->resize(fb_width, fb_height);
+    if (gfx)
+        gfx->resize(fb_width, fb_height);
 }
 
-void nack__gfx_set_vsync(bool vsync)
+void gfx_set_vsync(bool vsync)
 {
-    if (nack__gfx)
-        nack__gfx->set_vsync(vsync);
+    if (gfx)
+        gfx->set_vsync(vsync);
 }
 
-void nack__gfx_set_capture(bool capture)
+void gfx_set_capture(bool capture)
 {
-    if (nack__gfx)
-        nack__gfx->set_capture(capture);
+    if (gfx)
+        gfx->set_capture(capture);
 }
 
-bool nack__gfx_read_pixel(int x, int y, uint8_t rgba[4])
+bool gfx_read_pixel(int x, int y, uint8_t rgba[4])
 {
-    return nack__gfx ? nack__gfx->read_pixel(x, y, rgba) : false;
+    return gfx ? gfx->read_pixel(x, y, rgba) : false;
 }
+
+} }   /* namespace nack::detail */

@@ -18,7 +18,9 @@
  * linked together, so each keeps its own type rather than two definitions of
  * one tag. Only the backend that made a texture ever looks inside it.
  */
-struct nack__gl_texture {
+namespace nack { namespace detail {
+
+struct gl_texture {
     nack_gluint id;
 };
 
@@ -31,15 +33,15 @@ struct nack_gl_backend {
     int viewport_w, viewport_h;
     int fb_width, fb_height;
 
-    /* The last frame, kept only when capture is on. See nack__glr_end_frame. */
+    /* The last frame, kept only when capture is on. See glr_end_frame. */
     bool capture;
     std::vector<uint8_t> frame;
     int frame_width, frame_height;
 };
 
-static nack_gl_backend nack__gl;
+static nack_gl_backend gl;
 
-static const char *nack__vertex_source =
+static const char *vertex_source =
     "#version 330 core\n"
     "layout(location = 0) in vec2 a_position;\n"
     "layout(location = 1) in vec2 a_uv;\n"
@@ -57,7 +59,7 @@ static const char *nack__vertex_source =
     "    v_bg = a_bg;\n"
     "}\n";
 
-static const char *nack__fragment_source =
+static const char *fragment_source =
     "#version 330 core\n"
     "in vec2 v_uv;\n"
     "in vec4 v_fg;\n"
@@ -77,7 +79,7 @@ static const char *nack__fragment_source =
     "    if (frag_colour.a <= 0.0) discard;\n"
     "}\n";
 
-static nack_gluint nack__compile(nack_glenum stage, const char *source)
+static nack_gluint compile(nack_glenum stage, const char *source)
 {
     nack_gluint shader = glCreateShader(stage);
     nack_glint status = 0;
@@ -88,72 +90,72 @@ static nack_gluint nack__compile(nack_glenum stage, const char *source)
     if (!status) {
         char log[1024];
         glGetShaderInfoLog(shader, sizeof log, nullptr, log);
-        nack__c.set_error("console shader failed to compile: %s", log);
+        console_state.set_error("console shader failed to compile: %s", log);
         glDeleteShader(shader);
         return 0;
     }
     return shader;
 }
 
-static bool nack__glr_init(nack_window *window)
+static bool glr_init(nack_window *window)
 {
-    nack__gl_desc desc;
+    gl_desc desc;
     const char *missing = nullptr;
     nack_gluint vertex, fragment;
     nack_glint status = 0;
 
-    nack__gl = nack_gl_backend{};
-    nack__gl.window = window;
+    gl = nack_gl_backend{};
+    gl.window = window;
 
     desc.major = 3;
     desc.minor = 3;
     desc.profile = NACK__GL_PROFILE_CORE;
 
-    nack__gl.context = nack_gl_context::create(window, &desc);
-    if (!nack__gl.context) {
+    gl.context = nack_gl_context::create(window, &desc);
+    if (!gl.context) {
         const char *message = nullptr;
         state.last_error(&message);
-        return nack__c.set_error("cannot create an OpenGL 3.3 context: %s",
+        return console_state.set_error("cannot create an OpenGL 3.3 context: %s",
                            message ? message : "unknown");
     }
-    state.gl_make_current(window, nack__gl.context);
+    state.gl_make_current(window, gl.context);
 
-    if (!nack__gl_load(&missing))
-        return nack__c.set_error("this OpenGL driver is missing %s",
+    if (!gl_load(&missing))
+        return console_state.set_error("this OpenGL driver is missing %s",
                            missing ? missing : "required entry points");
 
-    vertex = nack__compile(GL_VERTEX_SHADER, nack__vertex_source);
+    vertex = compile(GL_VERTEX_SHADER, vertex_source);
     if (!vertex)
         return false;
-    fragment = nack__compile(GL_FRAGMENT_SHADER, nack__fragment_source);
+    fragment = compile(GL_FRAGMENT_SHADER, fragment_source);
     if (!fragment) {
         glDeleteShader(vertex);
         return false;
     }
 
-    nack__gl.program = glCreateProgram();
-    glAttachShader(nack__gl.program, vertex);
-    glAttachShader(nack__gl.program, fragment);
-    glLinkProgram(nack__gl.program);
-    glGetProgramiv(nack__gl.program, GL_LINK_STATUS, &status);
+    gl.program = glCreateProgram();
+    glAttachShader(gl.program, vertex);
+    glAttachShader(gl.program, fragment);
+    glLinkProgram(gl.program);
+    glGetProgramiv(gl.program, GL_LINK_STATUS, &status);
     glDeleteShader(vertex);
     glDeleteShader(fragment);
     if (!status) {
         char log[1024];
-        glGetProgramInfoLog(nack__gl.program, sizeof log, nullptr, log);
-        glDeleteProgram(nack__gl.program);
-        nack__gl.program = 0;
-        return nack__c.set_error("console shader failed to link: %s", log);
+        glGetProgramInfoLog(gl.program, sizeof log, nullptr, log);
+        glDeleteProgram(gl.program);
+        gl.program = 0;
+        return console_state.set_error("console shader failed to link: %s", log);
     }
 
-    nack__gl.uniform_viewport = glGetUniformLocation(nack__gl.program, "u_viewport");
-    nack__gl.uniform_atlas = glGetUniformLocation(nack__gl.program, "u_atlas");
-    nack__gl.uniform_mode = glGetUniformLocation(nack__gl.program, "u_mode");
+    gl.uniform_viewport = glGetUniformLocation(gl.program, "u_viewport");
+    gl.uniform_atlas = glGetUniformLocation(gl.program, "u_atlas");
+    gl.uniform_mode = glGetUniformLocation(gl.program, "u_mode");
 
-    glGenVertexArrays(1, &nack__gl.vao);
-    glBindVertexArray(nack__gl.vao);
-    glGenBuffers(1, &nack__gl.vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, nack__gl.vbo);
+    glGenVertexArrays(1, &gl.vao);
+    glBindVertexArray(gl.vao);
+    glGenBuffers(1, &gl.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, gl.vbo);
 
     {
         const nack_glsizei stride =
@@ -177,19 +179,19 @@ static bool nack__glr_init(nack_window *window)
     return true;
 }
 
-static void nack__glr_shutdown(void)
+static void glr_shutdown(void)
 {
-    if (nack__gl.vbo) glDeleteBuffers(1, &nack__gl.vbo);
-    if (nack__gl.vao) glDeleteVertexArrays(1, &nack__gl.vao);
-    if (nack__gl.program) glDeleteProgram(nack__gl.program);
-    if (nack__gl.context) nack_gl_context::destroy(nack__gl.context);
-    nack__gl = nack_gl_backend{};
+    if (gl.vbo) glDeleteBuffers(1, &gl.vbo);
+    if (gl.vao) glDeleteVertexArrays(1, &gl.vao);
+    if (gl.program) glDeleteProgram(gl.program);
+    if (gl.context) nack_gl_context::destroy(gl.context);
+    gl = nack_gl_backend{};
 }
 
-static nack_texture *nack__glr_texture_create(const uint8_t *rgba,
+static nack_texture *glr_texture_create(const uint8_t *rgba,
                                                      int width, int height)
 {
-    nack__gl_texture *texture = new nack__gl_texture{};
+    gl_texture *texture = new gl_texture{};
 
     glGenTextures(1, &texture->id);
     glBindTexture(GL_TEXTURE_2D, texture->id);
@@ -204,9 +206,9 @@ static nack_texture *nack__glr_texture_create(const uint8_t *rgba,
     return (nack_texture *)texture;
 }
 
-static void nack__glr_texture_destroy(nack_texture *handle)
+static void glr_texture_destroy(nack_texture *handle)
 {
-    nack__gl_texture *texture = (nack__gl_texture *)handle;
+    gl_texture *texture = (gl_texture *)handle;
 
     if (!texture)
         return;
@@ -215,15 +217,15 @@ static void nack__glr_texture_destroy(nack_texture *handle)
     delete texture;
 }
 
-static void nack__glr_begin_frame(nack_color clear, int fb_width,
+static void glr_begin_frame(nack_color clear, int fb_width,
                                   int fb_height, int viewport_x,
                                   int viewport_y, int viewport_w,
                                   int viewport_h)
 {
-    nack__gl.viewport_w = viewport_w;
-    nack__gl.viewport_h = viewport_h;
-    nack__gl.fb_width = fb_width;
-    nack__gl.fb_height = fb_height;
+    gl.viewport_w = viewport_w;
+    gl.viewport_h = viewport_h;
+    gl.fb_width = fb_width;
+    gl.fb_height = fb_height;
 
     glViewport(0, 0, fb_width, fb_height);
     glClearColor(clear.r / 255.0f, clear.g / 255.0f, clear.b / 255.0f, 1.0f);
@@ -233,23 +235,23 @@ static void nack__glr_begin_frame(nack_color clear, int fb_width,
     glViewport(viewport_x, fb_height - viewport_y - viewport_h,
                viewport_w, viewport_h);
 
-    glUseProgram(nack__gl.program);
-    glUniform2f(nack__gl.uniform_viewport, (float)viewport_w, (float)viewport_h);
-    glUniform1i(nack__gl.uniform_atlas, 0);
-    glBindVertexArray(nack__gl.vao);
-    glBindBuffer(GL_ARRAY_BUFFER, nack__gl.vbo);
+    glUseProgram(gl.program);
+    glUniform2f(gl.uniform_viewport, (float)viewport_w, (float)viewport_h);
+    glUniform1i(gl.uniform_atlas, 0);
+    glBindVertexArray(gl.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, gl.vbo);
     glActiveTexture(GL_TEXTURE0);
 }
 
-static void nack__glr_draw(const float *vertices, size_t vertex_count,
+static void glr_draw(const float *vertices, size_t vertex_count,
                            int mode, nack_texture *handle)
 {
-    nack__gl_texture *texture = (nack__gl_texture *)handle;
+    gl_texture *texture = (gl_texture *)handle;
 
     if (vertex_count == 0)
         return;
 
-    glUniform1i(nack__gl.uniform_mode, mode);
+    glUniform1i(gl.uniform_mode, mode);
     if (texture)
         glBindTexture(GL_TEXTURE_2D, texture->id);
 
@@ -268,77 +270,77 @@ static void nack__glr_draw(const float *vertices, size_t vertex_count,
  * to leave the frame intact. Reading after the swap therefore worked by luck
  * rather than by rule.
  */
-static void nack__glr_capture_frame(void)
+static void glr_capture_frame(void)
 {
     size_t bytes;
 
-    if (nack__gl.fb_width <= 0 || nack__gl.fb_height <= 0)
+    if (gl.fb_width <= 0 || gl.fb_height <= 0)
         return;
 
-    if (nack__gl.frame_width != nack__gl.fb_width ||
-        nack__gl.frame_height != nack__gl.fb_height) {
-        nack__gl.frame.clear();
-        nack__gl.frame_width = 0;
-        nack__gl.frame_height = 0;
+    if (gl.frame_width != gl.fb_width ||
+        gl.frame_height != gl.fb_height) {
+        gl.frame.clear();
+        gl.frame_width = 0;
+        gl.frame_height = 0;
     }
-    if (nack__gl.frame.empty()) {
-        bytes = (size_t)nack__gl.fb_width * (size_t)nack__gl.fb_height * 4;
+    if (gl.frame.empty()) {
+        bytes = (size_t)gl.fb_width * (size_t)gl.fb_height * 4;
         try {
-            nack__gl.frame.resize(bytes);
+            gl.frame.resize(bytes);
         } catch (const std::exception &) {
             return;
         }
-        nack__gl.frame_width = nack__gl.fb_width;
-        nack__gl.frame_height = nack__gl.fb_height;
+        gl.frame_width = gl.fb_width;
+        gl.frame_height = gl.fb_height;
     }
 
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glReadPixels(0, 0, nack__gl.frame_width, nack__gl.frame_height, GL_RGBA,
-                 GL_UNSIGNED_BYTE, nack__gl.frame.data());
+    glReadPixels(0, 0, gl.frame_width, gl.frame_height, GL_RGBA,
+                 GL_UNSIGNED_BYTE, gl.frame.data());
 }
 
-static void nack__glr_end_frame(void)
+static void glr_end_frame(void)
 {
-    if (nack__gl.capture)
-        nack__glr_capture_frame();
-    state.gl_swap_buffers(nack__gl.window);
+    if (gl.capture)
+        glr_capture_frame();
+    state.gl_swap_buffers(gl.window);
 }
 
-static void nack__glr_resize(int fb_width, int fb_height)
+static void glr_resize(int fb_width, int fb_height)
 {
     (void)fb_width;
-    nack__gl.fb_height = fb_height;
+    gl.fb_height = fb_height;
 }
 
-static void nack__glr_set_vsync(bool vsync)
+static void glr_set_vsync(bool vsync)
 {
     state.gl_set_swap_interval(vsync ? 1 : 0);
 }
 
-static void nack__glr_set_capture(bool capture)
+static void glr_set_capture(bool capture)
 {
-    nack__gl.capture = capture;
+    gl.capture = capture;
     if (!capture) {
-        nack__gl.frame.clear();
-        nack__gl.frame_width = 0;
-        nack__gl.frame_height = 0;
+        gl.frame.clear();
+        gl.frame_width = 0;
+        gl.frame_height = 0;
     }
 }
 
-static bool nack__glr_read_pixel(int x, int y, uint8_t rgba[4])
+static bool glr_read_pixel(int x, int y, uint8_t rgba[4])
 {
     const uint8_t *pixel;
     int row;
 
-    if (nack__gl.frame.empty())
+    if (gl.frame.empty())
         return false;
-    if (x < 0 || y < 0 || x >= nack__gl.frame_width ||
-        y >= nack__gl.frame_height)
+    if (x < 0 || y < 0 || x >= gl.frame_width ||
+        y >= gl.frame_height)
         return false;
 
     /* The capture is in GL's bottom-left order; callers count from the top. */
-    row = nack__gl.frame_height - 1 - y;
-    pixel = nack__gl.frame.data() + ((size_t)row * nack__gl.frame_width + x) * 4;
+    row = gl.frame_height - 1 - y;
+    pixel = gl.frame.data() + ((size_t)row * gl.frame_width + x) * 4;
     rgba[0] = pixel[0];
     rgba[1] = pixel[1];
     rgba[2] = pixel[2];
@@ -359,52 +361,54 @@ public:
 
     bool init(nack_window *window) override
     {
-        return nack__glr_init(window);
+        return glr_init(window);
     }
-    void shutdown() override { nack__glr_shutdown(); }
+    void shutdown() override { glr_shutdown(); }
 
     nack_texture *texture_create(const uint8_t *rgba, int width,
                                         int height) override
     {
-        return nack__glr_texture_create(rgba, width, height);
+        return glr_texture_create(rgba, width, height);
     }
     void texture_destroy(nack_texture *texture) override
     {
-        nack__glr_texture_destroy(texture);
+        glr_texture_destroy(texture);
     }
 
     void begin_frame(nack_color clear, int fb_width, int fb_height,
                      int viewport_x, int viewport_y, int viewport_w,
                      int viewport_h) override
     {
-        nack__glr_begin_frame(clear, fb_width, fb_height, viewport_x,
+        glr_begin_frame(clear, fb_width, fb_height, viewport_x,
                               viewport_y, viewport_w, viewport_h);
     }
     void draw(const float *vertices, size_t vertex_count, int mode,
               nack_texture *texture) override
     {
-        nack__glr_draw(vertices, vertex_count, mode, texture);
+        glr_draw(vertices, vertex_count, mode, texture);
     }
-    void end_frame() override { nack__glr_end_frame(); }
+    void end_frame() override { glr_end_frame(); }
 
     void resize(int fb_width, int fb_height) override
     {
-        nack__glr_resize(fb_width, fb_height);
+        glr_resize(fb_width, fb_height);
     }
-    void set_vsync(bool vsync) override { nack__glr_set_vsync(vsync); }
+    void set_vsync(bool vsync) override { glr_set_vsync(vsync); }
 
-    void set_capture(bool capture) override { nack__glr_set_capture(capture); }
+    void set_capture(bool capture) override { glr_set_capture(capture); }
     bool read_pixel(int x, int y, uint8_t rgba[4]) override
     {
-        return nack__glr_read_pixel(x, y, rgba);
+        return glr_read_pixel(x, y, rgba);
     }
 };
 
-gl_backend nack__gl_backend_instance;
+gl_backend gl_backend_instance;
 
 }   /* namespace */
 
-nack_gfx_backend *nack__gfx_backend_gl(void)
+nack_gfx_backend *gfx_backend_gl(void)
 {
-    return &nack__gl_backend_instance;
+    return &gl_backend_instance;
 }
+
+} }   /* namespace nack::detail */

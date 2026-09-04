@@ -219,7 +219,7 @@ int main()
 
     /* Tilesets are handles too. The built-in font is not one we own. */
     {
-        nack_tileset *font = nack__c.font;
+        nack_tileset *font = console_state.font;
         auto size = nack::tileset::dimensions{ font->tile_width,
                                                font->tile_height,
                                                font->count };

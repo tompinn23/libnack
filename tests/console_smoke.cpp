@@ -41,7 +41,7 @@ static int failures;
  */
 #if defined(NACK_X11_SELECTION_PEER)
 
-static FILE *nack__test_peer_start(const char *mode)
+static FILE *test_peer_start(const char *mode)
 {
     char command[4096];
 
@@ -56,7 +56,7 @@ static FILE *nack__test_peer_start(const char *mode)
  * peer is waiting on us for the whole transfer, so a blocking read here would
  * deadlock: it cannot finish until we answer, and we would not be answering.
  */
-static bool nack__test_peer_line(const nack::app &app, FILE *pipe, char *out,
+static bool test_peer_line(const nack::app &app, FILE *pipe, char *out,
                                  size_t size, double timeout)
 {
     int fd = fileno(pipe);
@@ -145,9 +145,9 @@ int main()
         std::fprintf(stderr, "nack::app failed: %s\n", why.c_str());
         return 1;
     }
-    std::printf("rendering with the %s backend\n", nack__gfx_name());
+    std::printf("rendering with the %s backend\n", gfx_name());
     /* Frames are gone once presented unless the renderer is told to keep one. */
-    nack__debug_capture_frames(true);
+    debug_capture_frames(true);
     check(true, "app constructed with the built-in font");
     /*
      * Under NACK_RENDERER=test-fail the preferred renderer refuses to start,
@@ -155,14 +155,14 @@ int main()
      * real one. Either way, what ends up active must be a renderer that
      * works.
      */
-    check(std::strcmp(nack__gfx_name(), "test-fail") != 0,
+    check(std::strcmp(gfx_name(), "test-fail") != 0,
           "a working renderer is active");
 
     auto [columns, rows] = app->console().size();
     check(columns == 40 && rows == 20, "root console has the requested size");
 
     {
-        nack_tileset *font = nack__c.font;
+        nack_tileset *font = console_state.font;
         check(font->tile_width == 8 && font->tile_height == 8 &&
               font->count == 256,
               "built-in font is 256 8x8 tiles");
@@ -274,7 +274,7 @@ int main()
     {
         uint8_t sheet[16 * 16 * 4];
         std::memset(sheet, 0, sizeof sheet);
-        nack__debug_fail_next_textures(1);
+        debug_fail_next_textures(1);
         nack_tileset *doomed = nack_tileset::from_rgba(
             sheet, 16, 16, 8, 8, NACK_LAYOUT_CP437);
         check(doomed == NULL, "a tileset with no texture is not handed out");
@@ -314,7 +314,7 @@ int main()
     app->present();
     {
         uint8_t pixel[4] = { 0, 0, 0, 0 };
-        check(nack__debug_read_pixel(5, 5, pixel), "framebuffer readable");
+        check(debug_read_pixel(5, 5, pixel), "framebuffer readable");
         checkpx(pixel[0] > 10 && pixel[0] < 32 && pixel[2] > 64 && pixel[2] < 96,
                 "cell background rendered to the framebuffer", pixel,
                 "r 10..32, b 64..96");
@@ -326,7 +326,7 @@ int main()
     app->present();
     {
         uint8_t pixel[4] = { 0, 0, 0, 0 };
-        nack__debug_read_pixel(10, 10, pixel);
+        debug_read_pixel(10, 10, pixel);
         checkpx(pixel[1] > 200 && pixel[0] < 60,
                 "full block glyph rendered in its foreground colour", pixel,
                 "g > 200, r < 60");
@@ -337,7 +337,7 @@ int main()
     app->present();
     {
         uint8_t pixel[4] = { 0, 0, 0, 0 };
-        nack__debug_read_pixel(20, 10, pixel);
+        debug_read_pixel(20, 10, pixel);
         checkpx(pixel[0] > 200 && pixel[1] < 60,
                 "blank cell shows its background", pixel, "r > 200, g < 60");
     }
@@ -377,7 +377,7 @@ int main()
                                            nack_color{ 255, 255, 255, 255 },
                                            nack_color{ 0, 0, 0, 255 });
         app->present();
-        nack__debug_read_pixel(20, 10, pixel);
+        debug_read_pixel(20, 10, pixel);
         checkpx(pixel[0] > 200 && pixel[1] < 60,
                 "and the twentieth one actually draws", pixel,
                 "r > 200, g < 60");
@@ -459,10 +459,10 @@ int main()
              * The payload is unlike anything we put on the clipboard
              * ourselves, so a read served locally would not match it.
              */
-            FILE *peer = nack__test_peer_start("own");
+            FILE *peer = test_peer_start("own");
             check(peer != NULL, "the selection peer starts");
             if (peer) {
-                check(nack__test_peer_line(*app, peer, line, sizeof line, 5.0) &&
+                check(test_peer_line(*app, peer, line, sizeof line, 5.0) &&
                       std::strncmp(line, "ready", 5) == 0,
                       "another client owns the clipboard");
 
@@ -486,13 +486,13 @@ int main()
              * then has to answer each property delete with the next chunk.
              */
             check(app->set_clipboard(payload.data()), "clipboard accepts 300K");
-            peer = nack__test_peer_start("read");
+            peer = test_peer_start("read");
             check(peer != NULL, "the selection peer starts again");
             if (peer) {
                 unsigned long length = 0;
                 unsigned sum = 0;
                 int incremental = 0;
-                bool parsed = nack__test_peer_line(*app, peer, line,
+                bool parsed = test_peer_line(*app, peer, line,
                                                    sizeof line, 10.0) &&
                               sscanf(line, "len=%lu sum=%x incr=%d", &length,
                                      &sum, &incremental) == 3;

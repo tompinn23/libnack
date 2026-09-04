@@ -150,7 +150,9 @@ enum nack_mouse_button {
     NACK_MOUSE_BUTTON_COUNT = 8
 };
 
-const char *nack__key_name(nack_key key);
+namespace nack { namespace detail {
+const char *key_name(nack_key key);
+} }   /* namespace nack::detail */
 
 /* -------------------------------------------------------------------------- */
 /* Events                                                                     */

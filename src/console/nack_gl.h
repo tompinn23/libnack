@@ -171,7 +171,9 @@ NACK_GL_FUNCTIONS(NACK_GL_DECLARE)
 #define glTexImage2D             nack_glTexImage2D
 #define glReadPixels             nack_glReadPixels
 
+namespace nack { namespace detail {
 /* Resolves everything above; a context must be current. */
-bool nack__gl_load(const char **error);
+bool gl_load(const char **error);
+} }   /* namespace nack::detail */
 
 #endif /* NACK_GL_H_INCLUDED */
