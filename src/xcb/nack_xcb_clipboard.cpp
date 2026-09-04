@@ -76,12 +76,12 @@ static std::optional<std::string> *xcb_owned_slot(xcb_atom_t selection)
 #define NACK_INCR_SENDS 4
 
 struct nack_incr_send {
+    size_t sent;
+    double deadline;
+    std::string data;
     xcb_window_t requestor;
     xcb_atom_t property;
     xcb_atom_t type;
-    std::string data;
-    size_t sent;
-    double deadline;
     bool active;
 };
 

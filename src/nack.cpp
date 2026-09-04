@@ -480,7 +480,7 @@ static bool try_init_backends(const nack_win_init_desc *desc)
         if (order[i]->init(desc))
             return true;
         nack_log("nack: backend '%s' unavailable: %s", order[i]->name(),
-                  state.error_message);
+                  state.error_message.c_str());
         state.vt = nullptr;
     }
     return state.fail(NACK_ERROR_NO_BACKEND,
