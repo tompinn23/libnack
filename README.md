@@ -148,9 +148,8 @@ can fail has a `try_create` counterpart returning `std::optional`. Compiled
 with `-fno-exceptions` (or the MSVC equivalent), the throwing paths abort with
 the message instead.
 
-{fmt} is vendored under `third_party/fmt` and built header-only; it is
-compiled into whoever includes `<nack/nack.hpp>`, which now means libnack
-itself as well as its callers.
+{fmt} is vendored under `third_party/fmt` — see [Building](#building) for
+where that copy comes from and how to use a different one.
 
 ## Building
 
@@ -174,7 +173,15 @@ Either Unix backend can be turned off with `-DNACK_ENABLE_XCB=OFF` or
 overrides the run-time choice.
 
 {fmt} is vendored under `third_party/fmt` (the real upstream project, not a
-stripped-down copy), so building libnack needs nothing installed.
+stripped-down copy), so building libnack needs nothing installed. A project
+that embeds libnack via `add_subdirectory` and already has its own
+`fmt::fmt` target — its own `add_subdirectory` or `FetchContent`, added
+before it adds libnack — can point libnack at that one instead with
+`-DNACK_FMT_EXTERNAL=ON`, the same idea as spdlog's `SPDLOG_FMT_EXTERNAL`:
+one copy of {fmt} in the final binary rather than two. libnack skips its own
+`install()` rules when this is on, since a target the including project
+defined itself cannot be expressed in an installed package's exported
+targets file.
 
 ## Examples
 

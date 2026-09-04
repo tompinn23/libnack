@@ -41,6 +41,10 @@ cmake_dependent_option(NACK_XCB_XLIB_FALLBACK
     "Allow falling back to an Xlib Display for EGL when EGL_EXT_platform_xcb is missing (needed for the NVIDIA driver)"
     ON "NACK_ENABLE_XCB" OFF)
 
+option(NACK_FMT_EXTERNAL
+    "Link against a fmt::fmt target the including project already provides (its own add_subdirectory or FetchContent), instead of vendoring a copy - same idea as spdlog's SPDLOG_FMT_EXTERNAL"
+    OFF)
+
 # --------------------------------------------------------------------------
 # Sources
 # --------------------------------------------------------------------------
@@ -74,14 +78,30 @@ endif()
 add_subdirectory(third_party/stb)
 
 #
-# {fmt}, for <nack/nack.hpp>'s formatting. Vendored (the real upstream
-# project, under third_party/fmt) so building libnack needs nothing
+# {fmt}, for <nack/nack.hpp>'s formatting. Vendored by default (the real
+# upstream project, under third_party/fmt) so building libnack needs nothing
 # installed. FMT_INSTALL is turned on so it exports itself properly, which is
 # what lets libnack's own install() below export nack without CMake
 # complaining that nack's dependency on fmt::fmt cannot be expressed.
 #
-set(FMT_INSTALL ON CACHE BOOL "" FORCE)
-add_subdirectory(third_party/fmt)
+# A project that embeds libnack via add_subdirectory and already has its own
+# fmt::fmt target - its own add_subdirectory or FetchContent, added before it
+# adds libnack - can point libnack at that one instead with
+# -DNACK_FMT_EXTERNAL=ON, the same idea as spdlog's SPDLOG_FMT_EXTERNAL: one
+# copy of {fmt} in the final binary rather than two. install() is skipped
+# entirely in that case (see the Install section below) - a target the
+# including project defined itself cannot be expressed in an exported
+# Targets file, and nothing embedded via add_subdirectory installs itself
+# anyway.
+#
+if(NACK_FMT_EXTERNAL)
+    if(NOT TARGET fmt::fmt)
+        find_package(fmt REQUIRED)
+    endif()
+else()
+    set(FMT_INSTALL ON CACHE BOOL "" FORCE)
+    add_subdirectory(third_party/fmt)
+endif()
 
 set(NACK_LIBRARIES "")
 # Its objects go straight into libnack rather than being a separate archive a
@@ -478,13 +498,16 @@ endif()
 # Install
 # --------------------------------------------------------------------------
 
-install(TARGETS nack
-    EXPORT nackTargets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(DIRECTORY include/nack DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(EXPORT nackTargets
-    FILE nackTargets.cmake
-    NAMESPACE nack::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/nack)
+# Skipped under NACK_FMT_EXTERNAL: see the {fmt} comment above.
+if(NOT NACK_FMT_EXTERNAL)
+    install(TARGETS nack
+        EXPORT nackTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(DIRECTORY include/nack DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+    install(EXPORT nackTargets
+        FILE nackTargets.cmake
+        NAMESPACE nack::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/nack)
+endif()
